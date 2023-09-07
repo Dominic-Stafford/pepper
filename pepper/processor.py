@@ -182,7 +182,10 @@ class Processor(coffea.processor.ProcessorABC):
                 raise RuntimeError(f"Output named 'mask{key}' already present "
                                    "but need this key for storing the mask")
             ret["mask" + key] = ~ak.is_none(array)
-            ret[key] = ak.fill_none(array, 0)
+            if len(array.fields) > 0:
+                ret[key] = ak.fill_none(array, {k: 0 for k in array.fields})
+            else:
+                ret[key] = ak.fill_none(array, 0)
         return ret
 
     def _save_per_event_info_root(self, dsname, selector, identifier,
