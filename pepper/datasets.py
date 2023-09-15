@@ -122,8 +122,11 @@ def resolve_lfn(lfn, store=None, xrootddomain=None):
         client = XRootD.client.FileSystem("root://" + xrootddomain)
         # The flag PrefName (to get domain names instead of IP addresses) does
         # not exist in the Python bidings. However, MAKEPATH has the same value
-        locations = client.locate(lfn, XRootD.client.flags.OpenFlags.MAKEPATH)
-        domains = [r.address for r in locations[1]]
+        status, loc = client.locate(
+            lfn, XRootD.client.flags.OpenFlags.MAKEPATH)
+        if loc is None:
+            raise OSError("XRootD error: " + status.message)
+        domains = [r.address for r in loc]
         pfns.extend(f"root://{d}/{lfn}" for d in domains)
     return pfns
 
