@@ -1,3 +1,4 @@
+from pepper.hist_collection import HistCollection
 from pepper.hist_defns import HistDefinition
 from pepper import datasets
 from pepper.hdffile import HDF5File
@@ -16,6 +17,7 @@ from pepper.processor_ttbarll import Processor as ProcessorTTbarLL
 from pepper import scale_factors
 
 __all__ = [
+    "HistCollection",
     "HistDefinition",
     "datasets",
     "HDF5File",

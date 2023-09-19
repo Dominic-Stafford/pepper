@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 
 import uproot
 
-from pepper.misc import HistCollection
+from pepper import HistCollection
 
 
 parser = ArgumentParser(
@@ -37,18 +37,21 @@ with open(args.histsfile) as f:
     hists = HistCollection.from_json(f)
 
 with uproot.recreate(args.output) as f:
-    for key, histpath in hists[dict(cut=args.cut, hist=args.histname)].items():
-        hist = hists.load(key)
+    full_hist = hists.load({"cut": args.cut, "hist": args.histname})
+    for sysname in full_hist.axes["sys"]:
+        hist = full_hist[{"sys": sysname}]
         hist = hist[{"dataset": sum, "channel": sum}]
         eff = hist[{"btagged": "yes"}] / hist[{"btagged": sum}].values()
-        if key.variation is None:
+        if sysname == "nominal":
             f["central"] = eff
+            print("Nominal scale factors:")
+            print(eff.values())
         elif args.central:
             continue
-        elif any(key.variation.endswith(x) for x in (
+        elif any(sysname.endswith(x) for x in (
                 "XS_down", "XS_up", "lumi_down", "lumi_up")):
             # These aren't shape uncertainties and also do not have much effect
             # on the efficiency
             continue
         else:
-            f[key[2]] = eff
+            f[sysname] = eff
