@@ -9,6 +9,7 @@ Inside the string values of a configuration variable the following placeholders 
 
 ## General
 - `year`: String. Indicates the year. Things like b-tag working points depend on this.
+- `sqrt_s`: Optional, float. Center-of-mass energy in GeV.
 - `rng_seed_file`: Optional, path. A text file to save to and load (if it exists) an integer from which is used as a seed for the random number generator. This seed will be combined with a number unique to the chunk of events being processed, so that the randomness is still different from chunk to chunk.
 - `blinding_denom`: Optional, float. Only use `1/blinding_denom` of the data events, MC is scaled accordingly.
 - `compute_systematics`: Boolean, if true compute all systematic uncertainties.
@@ -71,8 +72,14 @@ These determine various calibrations and weightings. In case they are optional a
 - `histogram_format`: Optional, either `"hist"`, `"coffea"` or `"root"`. This decides the format which will be used for saving the histograms. Defaults to `"hist"`.
 ### Histogram definition
 Elements of the `hists` object are objects themselves. They have these keys:
-- `bins`: Optional, array of objects, each defining a binned axis. The object keys and its values agree with the parameters of `coffea.hist.Bin`, except for the optional `"unit"` parameter. If `"unit"` is present, it should be a string to be automatically appended to the axis label to indicate the unit. It may also be used in the `label`.
-- `cats`: Optional, array of objects, each defining a category axis. The purpose of a category axis is to group events by some criteria, like for example data set. The object keys and its values agree with the parameters of `coffea.hist.Cat`. In addition there is an optional key `default_key`, with a string as value, which if present defines a value for all events for which the fill can not be evaluated from the data present. If `default_key` is not given and the fill is not present, the histogram will not be filled. Note that category axes for data set and channel are automatically created and should not be specified here.
+- `bins`: Optional, array of objects, each defining a binned axis. It has the following elements:
+  - `name`: Name of the axis
+  - `label`: Label of the axis, to be displayed when plotting. You can put Latex expressions within dollar signs.
+  - `n_or_arr`: Number of bins (if the spacing is regular) or an array with bin edges.
+  - `lo`: Only if regular bin spacing, position of the lowest bin edge.
+  - `hi`: Only if regular bin spacing, position of the highest bin edge.
+  - `unit`: Optional, a string specifying the unit of the axis (for example "GeV"). Used during plotting.
+- `cats`: Optional, array of objects, each defining a category axis. The purpose of a category axis is to group events by some criteria. Similar to `bins` it also has a `name` and a `label`. In addition there is an optional key `default_key`, with a string as value, which if present defines a value for all events for which the fill can not be evaluated from the data present. If `default_key` is not given and the fill is not present, the histogram will not be filled. Note that category axes for data set and channel are automatically created and should not be specified here.
 - `fill`: Object, each of its keys must be either a key in `bins` or in `cats`. In latter case, it its elements are objects, where each key names a category and where the value is a data picker defining which events belong to this category. In the former case it is just a data picker, defining the observable to use for the binned axes. If the fill is not present in the data, the histogram will not be filled.
 - `step_requirement`: Optional, string. The histogram will only be created once a specific step is done. This can be either `"cut:"` followed by a cut name, or `"column:"` followed by a column name. The latter requires that a specific column has been set during the processing.
 - `weight`: Optional, data picker. Specifies a customs event weight using a data picker. If it is not present, the event weight will be used.
@@ -139,3 +146,11 @@ Data pickers are arrays, specifying to use something from the `data` array of th
 ### DY Scale factors
 - `fast_dy_sfs`: Optional, bool. Specifies if DYprocessor should run over just DY and observed data; not relevant for other processors.
 - `bin_dy_sfs`: Optional, data picker defining a variable in which DY SFs are binned, used by the Processor when applying them.
+
+### Plotting
+- `plot_dataset_groups`: Optional, array. Each element is an object describing a group. These group several data sets and make them appear as one on the plot. The order of the objects describes the order of stacked bars from bottom to top. Each object has the following:
+  - `label`: Label to be used on the plot for the group. Must be unique.
+  - `color`: Color to be used for the group. Any valid Matplotlib colors are allowed
+  - `datasets`: Array of data set names
+- `plot_datasets_ignore`: Optional, list. A list of data sets to not plot.
+- `plot_scale_sysuncertainty`: Optional, array. Factors to be multiplied to the scale of a systematic uncertainty. The keys are the systematic names, without the suffix (e.g. '_up').

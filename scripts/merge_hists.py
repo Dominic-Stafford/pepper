@@ -19,7 +19,7 @@ denom = 0
 numerator = None
 for in_hist in args.input:
     with uproot.open(in_hist[1]) as f:
-        hist = f[in_hist[2]].to_hist()
+        hist = f[in_hist[2]]
     weight = int(in_hist[0])
     denom += weight
     if numerator is None:

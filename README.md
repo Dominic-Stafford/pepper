@@ -58,8 +58,7 @@ The scripts directory of this repository contains several helper scripts to obta
  - `get_bad_local_files.py`: Find NanoAOD files that exist in the store directory but are not accessible, possibly due to technical issues
  - `hdf5_to_ttree.py`: Merge and convert Pepper HDF5 files to Root files containing TTrees
  - `merge_hists.py`: Caluclate weighted average of two SF histograms
- - `plot_control.py`: Create control plots from Coffea histograms
- - `plotter.py`: Create control plots from Coffea histograms
+ - `plot_histograms.py`: Plot histograms in a ratioplot style
  - `produce_met_xy_nums.py`: Convert MET-xy correction numbers from the C++ headers provided centrally to json files
  - `rucio_create_rules.py`: Creates Rucio rules for all data sets specified in a Pepper config. Once the rules are approved, the data sets will be transfered to the local site.
  - `ttbarll_dy_sf_calculate.py`: Calculate scale factors for DY reweighting from the output of ttbarll_dy_sf_produce.py

@@ -1,14 +1,12 @@
-import os
 import json
 from argparse import ArgumentParser
 import copy
 import logging
 
 import uproot
-import coffea
 import numpy as np
 
-from pepper.misc import HistCollection
+from pepper import HistCollection
 
 
 def safe_div(num, denom):
@@ -62,11 +60,9 @@ with open(args.config) as f:
 
 with open(args.histsfile) as f:
     hists = HistCollection.from_json(f)
-hist = coffea.util.load(os.path.join(hists._path, hists[{
-    "cut": args.cut,
-    "hist": args.histname,
-    "variation": None
-}])).to_hist()
+hist = hists.load({"cut": args.cut, "hist": args.histname})
+if "sys" in [ax.name for ax in hist.axes]:
+    hist = hist[{"sys": "nominal"}]
 
 sel = {"njet": sum, "nPV": sum, "MET": sum, "MET triggers": "yes"}
 data_sel = {"dataset": list(config["MET_trigger_datasets"].keys())}

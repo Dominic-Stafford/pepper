@@ -5,7 +5,7 @@ import itertools
 import hjson
 import numpy as np
 import sympy
-import coffea.util
+from pepper import HistCollection
 
 
 logger = logging.getLogger(__name__)
@@ -66,25 +66,19 @@ class SFEquations():
     def get_subs(self, n, hist, bins=False, err=False):
         if err:
             err_n = "_err"
-            err_idx = 1
         else:
             err_n = ""
-            err_idx = 0
         ret_dict = {}
         for ch, Zinout, btag in itertools.product(
                 self.chs, self.Z_win_regs, self.btags):
             h = hist.integrate("channel", "is_" + ch)
             h = h.integrate("in_Z_window", Zinout + "_Z_win")
             h = h.integrate("btags", btag)
-            if () in h.values():
-                vals = h.values(True)[()][err_idx]
+            # If no axes are left, h is a WeightedSum now, otherwise its a Hist
+            if err:
+                vals = h.variance if hasattr(h, "variance") else h.variances()
             else:
-                print(f"Warning! {ch}, {Zinout}, {btag} not found in hist, "
-                      f"assuming zero events")
-                if bins:
-                    vals = np.zeros(len(bins))
-                else:
-                    vals = 0
+                vals = h.value if hasattr(h, "value") else h.values()
             if bins:
                 for i, b in enumerate(self.bins):
                     ret_dict[f"{n}{ch}_{Zinout}_{btag}{b}{err_n}"] = vals[i]
@@ -171,12 +165,18 @@ parser = argparse.ArgumentParser(
     "ttbarll_dy_sf_produce.py. (Currently only works for 1d histograms)")
 parser.add_argument("config", help="JSON configuration file (same as used "
                     "by ttbarll_dy_sf_produce.py)")
-parser.add_argument(
-    "hist", help="Path to a histogram filled by ttbarll_dy_sf_produce.py, "
-    "containing the cutflows for this calculation, e.g. after the jet cut")
+parser.add_argument("histsfile", help="A JSON file specifying the histograms, "
+                                      "e.g. 'hists.json'")
 parser.add_argument("output", help="Path to the output file")
 parser.add_argument(
-    "-v", "--variation", help="Histogram for an alternate working point at "
+    "--cut", default="Has jet(s)", help="Name of the cut after which to"
+    "calculate the SFs. (Default 'Has jet(s)')")
+parser.add_argument(
+    "--histname", default="Leptonpt", help="Name of the histgoram to use for "
+    "computation. The binning does not matter if --integrate, otherwise need "
+    "one pt axis. (Default 'Leptonpt')")
+parser.add_argument(
+    "-v", "--variation", help="Variation for an alternate working point at "
     "which to calculate scale factors to  estimate systematic error, e.g. "
     "after the reco cut")
 parser.add_argument(
@@ -187,18 +187,20 @@ args = parser.parse_args()
 with open(args.config, "r") as f:
     config = hjson.load(f)
 
-hist = coffea.util.load(args.hist)
+with open(args.histsfile) as f:
+    hists = HistCollection.from_json(f)
+hist = hists.load({"cut": args.cut, "hist": args.histname})
+if args.variation:
+    var_hist = hist[{"sys": args.variation}]
+if "sys" in [ax.name for ax in hist.axes]:
+    hist = hist[{"sys": "nominal"}]
 
-# ToDo: get this from hist
 if args.integrate:
     bins = {"channel": [0, 1, 2, 3]}
     bin_names = None
-    hist = hist.project("dataset", "channel", "in_Z_window", "btags",
-                        overflow="allnan")
+    hist = hist.project("dataset", "channel", "in_Z_window", "btags")
 else:
-    if len(hist.dense_axes()) != 1:
-        raise NotImplementedError("Can only compute 1d SFs!")
-    edges = hist.dense_axes()[0].edges()
+    edges = hist.axes["pt"].edges
     bins = {"axis": list(edges), "channel": [0, 1, 2, 3]}
     bin_names = [str(edges[i]).replace(".", "p") + "_to_"
                  + str(edges[i + 1]).replace(".", "p")
@@ -211,10 +213,9 @@ sf_eq.calculate_errs()
 stat_errs = sf_eq.evaluate_errs(hist)
 
 if args.variation:
-    var_hist = coffea.util.load(args.variation)
     if args.integrate:
         var_hist = var_hist.project("dataset", "channel", "in_Z_window",
-                                    "btags", overflow="allnan")
+                                    "btags")
     var_sfs = sf_eq.evaluate(var_hist)
     sys_errs = [[np.abs(sfs[ch_i][bin_i] - var_sfs[ch_i][bin_i])
                  for bin_i in range(len(sfs[ch_i]))] for ch_i in range(3)]
