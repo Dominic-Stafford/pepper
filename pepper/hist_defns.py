@@ -8,6 +8,10 @@ def not_arr(arr):
     return ~arr
 
 
+def equal(arr, other):
+    return arr == other
+
+
 def leaddiff(quantity):
     """Returns the difference in quantity of the two leading particles."""
     if isinstance(quantity, np.ndarray):
@@ -51,6 +55,7 @@ func_dict = {
     "sign": np.sign,
 
     "not": not_arr,
+    "equal": equal,
     "leaddiff": leaddiff,
     "concatenate": concatenate,
 
