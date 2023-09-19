@@ -66,25 +66,19 @@ class SFEquations():
     def get_subs(self, n, hist, bins=False, err=False):
         if err:
             err_n = "_err"
-            err_idx = 1
         else:
             err_n = ""
-            err_idx = 0
         ret_dict = {}
         for ch, Zinout, btag in itertools.product(
                 self.chs, self.Z_win_regs, self.btags):
             h = hist.integrate("channel", "is_" + ch)
             h = h.integrate("in_Z_window", Zinout + "_Z_win")
             h = h.integrate("btags", btag)
-            if () in h.values():
-                vals = h.values(True)[()][err_idx]
+            # If no axes are left, h is a WeightedSum now, otherwise its a Hist
+            if err:
+                vals = h.variance if hasattr(h, "variance") else h.variances()
             else:
-                print(f"Warning! {ch}, {Zinout}, {btag} not found in hist, "
-                      f"assuming zero events")
-                if bins:
-                    vals = np.zeros(len(bins))
-                else:
-                    vals = 0
+                vals = h.value if hasattr(h, "value") else h.values()
             if bins:
                 for i, b in enumerate(self.bins):
                     ret_dict[f"{n}{ch}_{Zinout}_{btag}{b}{err_n}"] = vals[i]
@@ -189,16 +183,12 @@ with open(args.config, "r") as f:
 
 hist = coffea.util.load(args.hist)
 
-# ToDo: get this from hist
 if args.integrate:
     bins = {"channel": [0, 1, 2, 3]}
     bin_names = None
-    hist = hist.project("dataset", "channel", "in_Z_window", "btags",
-                        overflow="allnan")
+    hist = hist.project("dataset", "channel", "in_Z_window", "btags")
 else:
-    if len(hist.dense_axes()) != 1:
-        raise NotImplementedError("Can only compute 1d SFs!")
-    edges = hist.dense_axes()[0].edges()
+    edges = hist.axes["pt"].edges
     bins = {"axis": list(edges), "channel": [0, 1, 2, 3]}
     bin_names = [str(edges[i]).replace(".", "p") + "_to_"
                  + str(edges[i + 1]).replace(".", "p")
@@ -214,7 +204,7 @@ if args.variation:
     var_hist = coffea.util.load(args.variation)
     if args.integrate:
         var_hist = var_hist.project("dataset", "channel", "in_Z_window",
-                                    "btags", overflow="allnan")
+                                    "btags")
     var_sfs = sf_eq.evaluate(var_hist)
     sys_errs = [[np.abs(sfs[ch_i][bin_i] - var_sfs[ch_i][bin_i])
                  for bin_i in range(len(sfs[ch_i]))] for ch_i in range(3)]

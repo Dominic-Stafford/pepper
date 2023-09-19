@@ -8,7 +8,6 @@ from collections.abc import Mapping
 from itertools import product
 from functools import wraps, partial
 from concurrent.futures import ThreadPoolExecutor
-import warnings
 
 import numpy as np
 import awkward as ak
@@ -95,94 +94,9 @@ def hist_split_strcat(hist):
     return ret
 
 
-def coffeahist2hist(hist):
-    warnings.warn(
-        "coffeahist2hist is deprecated, use coffea.hist.Hist.to_hist instead",
-        DeprecationWarning
-    )
-    axes = []
-    cat_pos = []
-    for i, axis in enumerate(hist.axes()):
-        if isinstance(axis, coffea.hist.Cat):
-            identifiers = [idn.name for idn in axis.identifiers()]
-            axes.append(hi.axis.StrCategory(identifiers, name=axis.name,
-                                            label=axis.label, growth=True))
-            cat_pos.append(i)
-        elif isinstance(axis, coffea.hist.Bin):
-            edges = axis.edges()
-            is_uniform = np.unique(np.diff(edges)).size == 1
-            if is_uniform:
-                axes.append(hi.axis.Regular(
-                    edges.size - 1, edges[0], edges[-1], name=axis.name,
-                    label=axis.label, overflow=True, underflow=True))
-            else:
-                axes.append(hi.axis.Variable(
-                    edges, name=axis.name, label=axis.label, overflow=True,
-                    underflow=True))
-        else:
-            raise ValueError(f"Axis of unknown type: {axis}")
-    ret = hi.Hist(*axes, storage=hi.storage.Weight())
-    idx = [slice(None)] * len(axes)
-    for key, (sumw, sumw2) in hist.values(
-            overflow="allnan", sumw2=True).items():
-        for i, idn in zip(cat_pos, key):
-            idx[i] = idn
-        # Sum NaN bins to overflow bins
-        for i in range(len(axes) - len(cat_pos)):
-            sumw[(np.s_[:],) * i + (-2,)] += sumw[(np.s_[:],) * i + (-1,)]
-            sumw2[(np.s_[:],) * i + (-2,)] += sumw2[(np.s_[:],) * i + (-1,)]
-        # Remove NaN bins
-        sumw = sumw[(np.s_[:-1],) * sumw.ndim]
-        sumw2 = sumw2[(np.s_[:-1],) * sumw2.ndim]
-
-        ret[tuple(idx)] = np.stack([sumw, sumw2], axis=-1)
-    return ret
-
-
-def hist2coffeahist(hist, strip=False):
-    """Converts a hist.Hist to a coffea.hist.Hist.
-    For backwards compatibility with old scripts using coffea histograms
-    """
-    import coffea.hist
-
-    axes = []
-    cats = {}
-    for axis in hist.axes:
-        if isinstance(axis, hi.axis.StrCategory):
-            cofaxis = coffea.hist.Cat(axis.name, axis.label)
-            for cat in axis:
-                # Add all identifiers to the coffea axis
-                cofaxis.index(cat)
-            axes.append(cofaxis)
-            cats[axis.name] = tuple(axis)
-        elif isinstance(axis, hi.axis.Regular):
-            axes.append(coffea.hist.Bin(axis.name, axis.label,
-                                        axis.size, axis[0][0], axis[-1][-1]))
-        elif isinstance(axis, hi.axis.Variable) \
-                or isinstance(axis, hi.axis.Integer):
-            axes.append(coffea.hist.Bin(axis.name, axis.label, axis.edges))
-    ret = coffea.hist.Hist(hist.label, *axes)
-    if hist.variances() is not None:
-        ret._init_sumw2()
-
-    pad_slice = (slice(1, None),) * (hist.ndim - len(cats))
-    for sparse_idx in product(*cats.values()):
-        cof_idx = tuple(coffea.hist.StringBin(i) for i in sparse_idx)
-        hist_idx = {ax: pos for ax, pos in zip(cats.keys(), sparse_idx)}
-        values = hist[hist_idx].values(flow=True)
-        variances = hist[hist_idx].variances(flow=True)
-        if strip and np.all(values == 0) and (
-                variances is None or np.all(variances == 0)):
-            continue
-        ret._sumw[cof_idx] = np.pad(values, 1)[pad_slice]
-        if variances is not None:
-            ret._sumw2[cof_idx] = np.pad(variances, 1)[pad_slice]
-    return ret
-
-
 def get_hist_cat_values(hist):
     """Return a map from the different categories of a hist histogram
-    to the values (in the same way hist.values does for a coffea hist).
+    to the values (in the same way hist.values did for a coffea hist).
     Will hopefully be superseded in the near future by a dedicated hist
     function."""
     axs = [ax for ax in hist.axes if isinstance(ax, hi.axis.StrCategory)]
@@ -200,52 +114,29 @@ def get_hist_cat_values(hist):
 
 
 def hist_divide(num, denom):
-    """Return a histogram with bin heights = num / denum and errors set
-    accordingly"""
-    if not num.compatible(denom):
-        raise ValueError("Cannot divide this histogram {} with histogram {} "
-                         "of dissimilar dimensions".format(num, denom))
+    """Return a histogram with bin heights = num / denom and errors set
+    accordinging to error propagation. The result will have zeros where num and
+    denom both have zero bin heights."""
     hout = num.copy()
+
+    num_val = num.values()
+    denom_val = denom.values()
+    both_zero = (num_val == 0) & (denom_val == 0)
+    denom_val = np.where(both_zero, 1, denom_val)
+    ratio = num_val / denom_val
+    if issubclass(hout.storage_type, hi.storage.Weight):
+        num_var = num.variances(flow=True)
+        denom_var = denom.variances(flow=True)
+        var = (num_var * denom_val ** 2
+               + denom_var * num_val ** 2) / denom_val ** 4
+        var[both_zero] = np.nan
+        hout[:] = np.stack([ratio, var], axis=-1)
+    else:
+        hout[:] = ratio
+
     hout.label = "Ratio"
 
-    raxes = denom.sparse_axes()
-
-    def div(a, b):
-        out = np.zeros_like(a)
-        nz = b != 0
-        out[nz] = a[nz] / b[nz]
-        return out
-
-    def diverr2(a, b, da2, db2):
-        out = np.zeros_like(a)
-        nz = b != 0
-        out[nz] = (da2[nz] * b[nz]**2 + db2[nz] * a[nz]**2) / b[nz]**4
-        return out
-
-    denomsumw2 = denom._sumw2 if denom._sumw2 is not None else denom._sumw
-    for rkey in denom._sumw.keys():
-        lkey = tuple(num.axis(rax).index(rax[ridx])
-                     for rax, ridx in zip(raxes, rkey))
-        if lkey in hout._sumw:
-            hout._sumw2[lkey] = diverr2(hout._sumw[lkey],
-                                        denom._sumw[rkey],
-                                        hout._sumw2[lkey],
-                                        denomsumw2[rkey])
-            hout._sumw[lkey] = div(hout._sumw[lkey], denom._sumw[rkey])
-        else:
-            hout._sumw2[lkey] = np.zeros_like(denomsumw2[rkey])
-            hout._sumw[lkey] = np.zeros_like(denom._sumw[rkey])
     return hout
-
-
-def hist_counts(hist):
-    """Get the number of entries in a histogram, including all overflow and
-    nan
-    """
-    values = hist.sum(*hist.axes(), overlow="allnan").values()
-    if len(values) == 0:
-        return 0
-    return next(iter(values.values()))
 
 
 def chunked_calls(array_param, returns_multiple=False, chunksize=10000,

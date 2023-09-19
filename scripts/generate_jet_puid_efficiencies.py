@@ -5,7 +5,6 @@ import sys
 from argparse import ArgumentParser
 
 import uproot
-import coffea.hist
 
 from pepper.misc import HistCollection
 
@@ -36,8 +35,6 @@ with open(args.histsfile) as f:
 with uproot.recreate(args.output) as f:
     hist = hists.load(
         {"cut": args.cut, "hist": args.histname, "variation": None})
-    if isinstance(hist, coffea.hist.Hist):
-        hist = hist.to_hist()
     hist = hist.project("pt", "eta", "has_gen_jet", "pass_pu_id")
     eff_hist = hist[{"has_gen_jet": "yes"}]
     f["eff"] = (eff_hist[{"pass_pu_id": "yes"}]

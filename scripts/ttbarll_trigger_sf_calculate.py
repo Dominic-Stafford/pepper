@@ -66,7 +66,7 @@ hist = coffea.util.load(os.path.join(hists._path, hists[{
     "cut": args.cut,
     "hist": args.histname,
     "variation": None
-}])).to_hist()
+}]))
 
 sel = {"njet": sum, "nPV": sum, "MET": sum, "MET triggers": "yes"}
 data_sel = {"dataset": list(config["MET_trigger_datasets"].keys())}
