@@ -183,6 +183,8 @@ def run_processor(processor_class=None, description=None, mconly=False):
             "Please set X509_USER_PROXY and run voms-proxy-init --voms "
             "cms --out $X509_USER_PROXY")
 
+    processor = Processor(config, args.eventdir)
+
     datasets = {}
     if args.file is None:
         if not config["compute_systematics"]:
@@ -232,7 +234,6 @@ def run_processor(processor_class=None, description=None, mconly=False):
         mtime = datetime.fromtimestamp(os.stat(args.statedata).st_mtime)
         print(f"Loading old processor state made on {mtime}")
 
-    processor = Processor(config, args.eventdir)
     datasets = processor.preprocess(datasets)
     if args.condor is not None:
         executor_class_pre = partial(
