@@ -393,34 +393,6 @@ class Processor(coffea.processor.ProcessorABC):
         return {key: fname}
 
     @staticmethod
-    def _save_coffea_hists(key, histdict, dest, cuts):
-        hists = {}
-        for dataset, hist in histdict.items():
-            if "sys" in [ax.name for ax in hist.axes]:
-                for sysname in hist.axes["sys"]:
-                    cofhist = pepper.misc.hist2coffeahist(
-                        hist[{"sys": sysname}])
-                    new_key = key if sysname == "nominal" else key + (sysname,)
-                    if new_key in hists:
-                        hists[new_key].add(cofhist)
-                    else:
-                        hists[new_key] = cofhist
-            else:
-                cofhist = pepper.misc.hist2coffeahist(hist)
-                if key in hists:
-                    hists[key].add(cofhist)
-                else:
-                    hists[key] = cofhist
-        cutnum = cuts.index(key[0])
-        fnames = {}
-        for new_key, hist in hists.items():
-            fname = "Cut {:03} {}.coffea".format(cutnum, "_".join(new_key))
-            fname = fname.replace("/", "")
-            coffea.util.save(hist, os.path.join(dest, fname))
-            fnames[new_key] = fname
-        return fnames
-
-    @staticmethod
     def _save_root_hists(key, histdict, dest):
         fnames = {}
         outputs = defaultdict(list)
@@ -463,14 +435,12 @@ class Processor(coffea.processor.ProcessorABC):
                 for key, histdict in hists.items():
                     futures.append(executor.submit(
                         cls._save_hist_hists, key, histdict, dest, cuts))
-            elif format == "coffea":
-                for key, histdict in hists.items():
-                    futures.append(executor.submit(
-                        cls._save_coffea_hists, key, histdict, dest, cuts))
             elif format == "root":
                 for key, histdict in hists.items():
                     futures.append(executor.submit(
                         cls._save_root_hists, key, histdict, dest))
+            else:
+                raise ValueError("Invalid hist format: " + format)
 
             hist_names = {}
             for future in tqdm(concurrent.futures.as_completed(futures),

@@ -4,7 +4,6 @@ import os
 import numpy as np
 import awkward as ak
 import uproot
-import coffea
 
 import pepper
 
@@ -18,56 +17,62 @@ class Processor(pepper.ProcessorTTbarLL):
         if "blinding_denom" in config:
             del config["blinding_denom"]
         config["compute_systematics"] = False
+        config["histogram_format"] = "hist"
+        config["hists"] = {
+            "mlb": self._make_hist(
+                "mlb", r"$m_{\mathrm{lb}}$ (GeV)", 200, 0, 200, "mlb"),
+            "mw": self._make_hist(
+                "mw", r"$m_{\mathrm{W}}$ (GeV)", 160, 40, 120, "mw"),
+            "mt": self._make_hist(
+                "mt", r"$m_{\mathrm{t}}$ (GeV)", 60, 160, 190, "mt"),
+            "alphal": self._make_hist(
+                "alpha", r"$\alpha$ (rad)", 20, 0, 0.02, "alphal"),
+            "alphaj": self._make_hist(
+                "alpha", r"$\alpha$ (rad)", 100, 0, 0.2, "alphaj"),
+            "energyfl": self._make_hist(
+                "energyf", r"$E_{\mathrm{gen}} / E_{\mathrm{reco}}$", 200, 0.5,
+                1.5, "energyfl"),
+            "energyfj": self._make_hist(
+                "energyf", r"$E_{\mathrm{gen}} / E_{\mathrm{reco}}$", 200, 0,
+                3, "energyfj"),
+        }
+
         super().__init__(config, None)
+
+    @staticmethod
+    def _make_hist(name, label, n_or_arr, lo, hi, fill):
+        return pepper.HistDefinition({
+            "bins": [
+                {
+                    "name": name,
+                    "label": label,
+                    "n_or_arr": n_or_arr,
+                    "lo": lo,
+                    "hi": hi
+                }
+            ],
+            "fill": {
+                name: [
+                    fill
+                ]
+            }
+        })
 
     def preprocess(self, datasets):
         return {"TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8":
                 datasets["TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8"]}
 
-    @property
-    def accumulator(self):
-        mlb_axis = coffea.hist.Bin(
-            "mlb", r"$m_{\mathrm{lb}}$ (GeV)", 200, 0, 200)
-        mlb = coffea.hist.Hist("Counts", mlb_axis)
-        # W mass resolution in NanoAOD seems to be 0.25
-        mw_axis = coffea.hist.Bin(
-            "mw", r"$m_{\mathrm{W}}$ (GeV)", 160, 40, 120)
-        mw = coffea.hist.Hist("Counts", mw_axis)
-        mt_axis = coffea.hist.Bin(
-            "mt", r"$m_{\mathrm{t}}$ (GeV)", 60, 160, 190)
-        mt = coffea.hist.Hist("Counts", mt_axis)
-        alphal_axis = coffea.hist.Bin("alpha", r"$\alpha$ (rad)", 20, 0, 0.02)
-        alphal = coffea.hist.Hist("Counts", alphal_axis)
-        alphaj_axis = coffea.hist.Bin("alpha", r"$\alpha$ (rad)", 100, 0, 0.2)
-        alphaj = coffea.hist.Hist("Counts", alphaj_axis)
-        energyfl_axis = coffea.hist.Bin(
-            "energyf", r"$E_{\mathrm{gen}} / E_{\mathrm{reco}}$", 200, 0.5,
-            1.5)
-        energyfl = coffea.hist.Hist("Counts", energyfl_axis)
-        energyfj_axis = coffea.hist.Bin(
-            "energyf", r"$E_{\mathrm{gen}} / E_{\mathrm{reco}}$", 200, 0, 3)
-        energyfj = coffea.hist.Hist("Counts", energyfj_axis)
-        return coffea.processor.dict_accumulator(
-            {"mlb": mlb, "mw": mw, "mt": mt, "alphal": alphal,
-             "alphaj": alphaj, "energyfl": energyfl, "energyfj": energyfj})
-
-    def setup_outputfiller(self, data, dsname):
-        return pepper.DummyOutputFiller(self.accumulator.identity())
-
-    def setup_selection(self, data, dsname, is_mc, filler):
-        return pepper.Selector(data, data["genWeight"])
-
     def process_selection(self, selector, dsname, is_mc, filler):
         selector.set_multiple_columns(self.build_gen_columns)
         selector.add_cut("Has gen particles", self.has_gen_particles)
-
-        self.fill_before_selection(
-            selector.data, selector.systematics, filler.output)
+        selector.set_column("mlb", self.mlb)
+        selector.set_column("mw", self.mw)
+        selector.set_column("mt", self.mt)
 
         super().process_selection(selector, dsname, is_mc, filler)
 
-        self.fill_after_selection(
-            selector.final, selector.final_systematics, filler.output)
+        selector.set_multiple_columns(self.lepton_recogen)
+        selector.set_multiple_columns(self.jet_recogen)
 
     @staticmethod
     def sortby(data, field):
@@ -112,21 +117,14 @@ class Processor(pepper.ProcessorTTbarLL):
                 & (ak.num(data["genw"]) == 2)
                 & (ak.num(data["gent"]) == 2))
 
-    def fill_before_selection(self, data, sys, output):
-        lep = data["genlepton"][:, 0]
-        antilep = data["genlepton"][:, 1]
-        b = data["genb"][:, 0]
-        antib = data["genb"][:, 1]
-        w = data["genw"]
-        t = data["gent"]
-        weight = np.asarray(sys["weight"])
+    def mlb(self, data):
+        return (data["genlepton"][:, ::-1] + data["genb"]).mass
 
-        mlbarb = (antilep + b).mass
-        mlbbar = (lep + antib).mass
-        output["mlb"].fill(mlb=mlbarb, weight=weight)
-        output["mlb"].fill(mlb=mlbbar, weight=weight)
-        output["mw"].fill(mw=ak.flatten(w.mass), weight=np.repeat(weight, 2))
-        output["mt"].fill(mt=ak.flatten(t.mass), weight=np.repeat(weight, 2))
+    def mw(self, data):
+        return data["genw"].mass
+
+    def mt(self, data):
+        return data["gent"].mass
 
     def match_leptons(self, data):
         recolep = self.sortby(data["Lepton"][:, :2], "pdgId")
@@ -150,35 +148,32 @@ class Processor(pepper.ProcessorTTbarLL):
         mrecojet = ak.concatenate(mrecojet, axis=1)
         return genb[ak.any(is_matched, axis=2)], mrecojet
 
-    @staticmethod
-    def fill_alpha_energyf(gen, reco, weight, alphahist, energyfhist):
-        deltaphi = gen.delta_phi(reco)
+    def lepton_recogen(self, data):
+        gen, reco = self.match_leptons(data)
         energyf = gen.energy / reco.energy
-        # axis=None to remove eventual masking
-        rep = ak.fill_none(ak.num(deltaphi[~ak.is_none(deltaphi)]), 0)
-        alphahist.fill(alpha=ak.flatten(deltaphi, axis=None),
-                       weight=np.repeat(weight, rep))
-        rep = ak.fill_none(ak.num(energyf[~ak.is_none(energyf)]), 0)
-        energyfhist.fill(energyf=ak.flatten(energyf, axis=None),
-                         weight=np.repeat(weight, rep))
+        deltaphi = gen.delta_phi(reco)
+        return {"energyfl": energyf, "alphal": deltaphi}
 
-    def fill_after_selection(self, data, sys, output):
-        weight = np.asarray(ak.flatten(sys["weight"], axis=None))
-
-        genlep, recolep = self.match_leptons(data)
-        self.fill_alpha_energyf(
-            genlep, recolep, weight, output["alphal"], output["energyfl"])
-
-        genjet, recojet = self.match_jets(data)
-        self.fill_alpha_energyf(
-            genjet, recojet, weight, output["alphaj"], output["energyfj"])
+    def jet_recogen(self, data):
+        gen, reco = self.match_jets(data)
+        energyf = gen.energy / reco.energy
+        deltaphi = gen.delta_phi(reco)
+        return {"energyfj": energyf, "alphaj": deltaphi}
 
     def save_output(self, output, dest):
+        output = output["hists"]["TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8"]
+        items = ("mlb", "mw", "mt", "alphal", "energyfl", "alphaj",
+                 "energyfj")
+        cuts = ("Has gen particles", "Req MET")
         with uproot.recreate(os.path.join(dest, "kinreco.root")) as f:
-            items = ("mlb", "mw", "mt", "alphal", "energyfl", "alphaj",
-                     "energyfj")
-            for key in items:
-                f[key] = output[key].to_hist()
+            for item in items:
+                for cut in cuts:
+                    if (cut, item) in output:
+                        axname = item[:-1] if item[-1] in "jl" else item
+                        f[item] = output[(cut, item)].project(axname)
+                        break
+                else:
+                    raise RuntimeError(f"No histogram for {item}")
 
 
 if __name__ == "__main__":

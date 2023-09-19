@@ -13,7 +13,7 @@ parser.add_argument(
     "statedata", help="Path to the state file, for example "
     "'pepper_state.coffea'")
 parser.add_argument(
-    "format", choices=["hist", "root", "coffea"],
+    "format", choices=["hist", "root"],
     help="Histogram output format")
 parser.add_argument(
     "-t", "--threads", type=int, default=10,

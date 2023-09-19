@@ -71,8 +71,14 @@ These determine various calibrations and weightings. In case they are optional a
 - `histogram_format`: Optional, either `"hist"`, `"coffea"` or `"root"`. This decides the format which will be used for saving the histograms. Defaults to `"hist"`.
 ### Histogram definition
 Elements of the `hists` object are objects themselves. They have these keys:
-- `bins`: Optional, array of objects, each defining a binned axis. The object keys and its values agree with the parameters of `coffea.hist.Bin`, except for the optional `"unit"` parameter. If `"unit"` is present, it should be a string to be automatically appended to the axis label to indicate the unit. It may also be used in the `label`.
-- `cats`: Optional, array of objects, each defining a category axis. The purpose of a category axis is to group events by some criteria, like for example data set. The object keys and its values agree with the parameters of `coffea.hist.Cat`. In addition there is an optional key `default_key`, with a string as value, which if present defines a value for all events for which the fill can not be evaluated from the data present. If `default_key` is not given and the fill is not present, the histogram will not be filled. Note that category axes for data set and channel are automatically created and should not be specified here.
+- `bins`: Optional, array of objects, each defining a binned axis. It has the following elements:
+  - `name`: Name of the axis
+  - `label`: Label of the axis, to be displayed when plotting. You can put Latex expressions within dollar signs.
+  - `n_or_arr`: Number of bins (if the spacing is regular) or an array with bin edges.
+  - `lo`: Only if regular bin spacing, position of the lowest bin edge.
+  - `hi`: Only if regular bin spacing, position of the highest bin edge.
+  - `unit`: Optional, a string specifying the unit of the axis (for example "GeV"). Used during plotting.
+- `cats`: Optional, array of objects, each defining a category axis. The purpose of a category axis is to group events by some criteria. Similar to `bins` it also has a `name` and a `label`. In addition there is an optional key `default_key`, with a string as value, which if present defines a value for all events for which the fill can not be evaluated from the data present. If `default_key` is not given and the fill is not present, the histogram will not be filled. Note that category axes for data set and channel are automatically created and should not be specified here.
 - `fill`: Object, each of its keys must be either a key in `bins` or in `cats`. In latter case, it its elements are objects, where each key names a category and where the value is a data picker defining which events belong to this category. In the former case it is just a data picker, defining the observable to use for the binned axes. If the fill is not present in the data, the histogram will not be filled.
 - `step_requirement`: Optional, string. The histogram will only be created once a specific step is done. This can be either `"cut:"` followed by a cut name, or `"column:"` followed by a column name. The latter requires that a specific column has been set during the processing.
 - `weight`: Optional, data picker. Specifies a customs event weight using a data picker. If it is not present, the event weight will be used.

@@ -38,7 +38,7 @@ with open(args.histsfile) as f:
 
 with uproot.recreate(args.output) as f:
     for key, histpath in hists[dict(cut=args.cut, hist=args.histname)].items():
-        hist = hists.load(key).to_hist()
+        hist = hists.load(key)
         hist = hist[{"dataset": sum, "channel": sum}]
         eff = hist[{"btagged": "yes"}] / hist[{"btagged": sum}].values()
         if key.variation is None:
