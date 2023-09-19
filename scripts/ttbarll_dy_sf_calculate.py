@@ -5,7 +5,7 @@ import itertools
 import hjson
 import numpy as np
 import sympy
-import coffea.util
+from pepper import HistCollection
 
 
 logger = logging.getLogger(__name__)
@@ -165,12 +165,18 @@ parser = argparse.ArgumentParser(
     "ttbarll_dy_sf_produce.py. (Currently only works for 1d histograms)")
 parser.add_argument("config", help="JSON configuration file (same as used "
                     "by ttbarll_dy_sf_produce.py)")
-parser.add_argument(
-    "hist", help="Path to a histogram filled by ttbarll_dy_sf_produce.py, "
-    "containing the cutflows for this calculation, e.g. after the jet cut")
+parser.add_argument("histsfile", help="A JSON file specifying the histograms, "
+                                      "e.g. 'hists.json'")
 parser.add_argument("output", help="Path to the output file")
 parser.add_argument(
-    "-v", "--variation", help="Histogram for an alternate working point at "
+    "--cut", default="Has jet(s)", help="Name of the cut after which to"
+    "calculate the SFs. (Default 'Has jet(s)')")
+parser.add_argument(
+    "--histname", default="Leptonpt", help="Name of the histgoram to use for "
+    "computation. The binning does not matter if --integrate, otherwise need "
+    "one pt axis. (Default 'Leptonpt')")
+parser.add_argument(
+    "-v", "--variation", help="Variation for an alternate working point at "
     "which to calculate scale factors to  estimate systematic error, e.g. "
     "after the reco cut")
 parser.add_argument(
@@ -181,7 +187,13 @@ args = parser.parse_args()
 with open(args.config, "r") as f:
     config = hjson.load(f)
 
-hist = coffea.util.load(args.hist)
+with open(args.histsfile) as f:
+    hists = HistCollection.from_json(f)
+hist = hists.load({"cut": args.cut, "hist": args.histname})
+if args.variation:
+    var_hist = hist[{"sys": args.variation}]
+if "sys" in [ax.name for ax in hist.axes]:
+    hist = hist[{"sys": "nominal"}]
 
 if args.integrate:
     bins = {"channel": [0, 1, 2, 3]}
@@ -201,7 +213,6 @@ sf_eq.calculate_errs()
 stat_errs = sf_eq.evaluate_errs(hist)
 
 if args.variation:
-    var_hist = coffea.util.load(args.variation)
     if args.integrate:
         var_hist = var_hist.project("dataset", "channel", "in_Z_window",
                                     "btags")

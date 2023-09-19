@@ -379,76 +379,49 @@ class Processor(coffea.processor.ProcessorABC):
         return output
 
     @staticmethod
-    def _save_hist_hists(key, histdict, dest, cuts):
+    def _save_histograms_inner(key, histdict, cuts, hist_col, format):
         hist_sum = None
+        cats_present = set()
         for dataset, hist in histdict.items():
+            cats_present |= hist_col.get_cats_present(hist)
             if hist_sum is None:
                 hist_sum = hist.copy()
             else:
                 hist_sum += hist
         cutnum = cuts.index(key[0])
-        fname = "Cut {:03} {}.coffea".format(cutnum, "_".join(key))
+        if format == "root":
+            ext = ".root"
+        elif format == "hist":
+            ext = ".coffea"
+        else:
+            raise ValueError(f"Invalid hist format: {format}")
+        fname = f"Cut {cutnum:03} {'_'.join(key)}{ext}"
         fname = fname.replace("/", "")
-        coffea.util.save(hist_sum, os.path.join(dest, fname))
-        return {key: fname}
-
-    @staticmethod
-    def _save_root_hists(key, histdict, dest):
-        fnames = {}
-        outputs = defaultdict(list)
-        for dataset, hist in histdict.items():
-            if "sys" in [ax.name for ax in hist.axes]:
-                sysnames = hist.axes["sys"]
-            else:
-                sysnames = [None]
-            for sysname in sysnames:
-                if sysname is not None:
-                    histsys = hist[{"sys": sysname}]
-                else:
-                    histsys = hist
-                if sysname is None or sysname == "nominal":
-                    fullkey = key
-                else:
-                    fullkey = key + (sysname,)
-                fname = '_'.join(fullkey).replace('/', '_') + ".root"
-                outputs[fname].append(histsys)
-                fnames[fullkey] = fname
-        for fname, contents in outputs.items():
-            with uproot.recreate(os.path.join(dest, fname)) as f:
-                for histsys in contents:
-                    histsplits = pepper.misc.hist_split_strcat(histsys)
-                    for catkey, hist in histsplits.items():
-                        catkey = "_".join(catkey).replace("/", "_")
-                        f[catkey] = hist
-        return fnames
+        key = key + (None,) * (len(hist_col.key_fields) - len(key))
+        hist_col.save(key, hist_sum, fname, format, cats_present=cats_present)
+        return hist_col
 
     @classmethod
     def save_histograms(cls, format, output, dest, threads=10):
         cuts = cls._get_cuts(output)
         hists = defaultdict(dict)
+        data = {"cuts": cuts}
+        hist_col = pepper.HistCollection(dest, ["cut", "hist"], userdata=data)
         for dataset, hists_per_ds in output["hists"].items():
             for key, hist in hists_per_ds.items():
                 hists[key][dataset] = hist
         with ProcessPoolExecutor(max_workers=threads) as executor:
             futures = []
-            if format == "hist":
-                for key, histdict in hists.items():
-                    futures.append(executor.submit(
-                        cls._save_hist_hists, key, histdict, dest, cuts))
-            elif format == "root":
-                for key, histdict in hists.items():
-                    futures.append(executor.submit(
-                        cls._save_root_hists, key, histdict, dest))
-            else:
-                raise ValueError("Invalid hist format: " + format)
+            for key, histdict in hists.items():
+                futures.append(executor.submit(
+                    cls._save_histograms_inner, key, histdict, cuts, hist_col,
+                    format))
 
-            hist_names = {}
             for future in tqdm(concurrent.futures.as_completed(futures),
                                desc="Saving histograms", total=len(futures)):
-                hist_names.update(future.result())
+                hist_col += future.result()
         with open(os.path.join(dest, "hists.json"), "w") as f:
-            json.dump([[tuple(k) for k in hist_names.keys()],
-                       list(hist_names.values())], f, indent=4)
+            hist_col.save_metadata_json(f)
 
     def save_output(self, output, dest):
         # Save cutflows

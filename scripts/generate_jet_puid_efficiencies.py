@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 
 import uproot
 
-from pepper.misc import HistCollection
+from pepper import HistCollection
 
 
 parser = ArgumentParser(
@@ -34,7 +34,9 @@ with open(args.histsfile) as f:
 
 with uproot.recreate(args.output) as f:
     hist = hists.load(
-        {"cut": args.cut, "hist": args.histname, "variation": None})
+        {"cut": args.cut, "hist": args.histname})
+    if "sys" in [ax.name for ax in hist.axes]:
+        hist = hist[{"sys": "nominal"}]
     hist = hist.project("pt", "eta", "has_gen_jet", "pass_pu_id")
     eff_hist = hist[{"has_gen_jet": "yes"}]
     f["eff"] = (eff_hist[{"pass_pu_id": "yes"}]
