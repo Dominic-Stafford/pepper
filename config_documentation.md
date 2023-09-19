@@ -9,6 +9,7 @@ Inside the string values of a configuration variable the following placeholders 
 
 ## General
 - `year`: String. Indicates the year. Things like b-tag working points depend on this.
+- `sqrt_s`: Optional, float. Center-of-mass energy in GeV.
 - `rng_seed_file`: Optional, path. A text file to save to and load (if it exists) an integer from which is used as a seed for the random number generator. This seed will be combined with a number unique to the chunk of events being processed, so that the randomness is still different from chunk to chunk.
 - `blinding_denom`: Optional, float. Only use `1/blinding_denom` of the data events, MC is scaled accordingly.
 - `compute_systematics`: Boolean, if true compute all systematic uncertainties.
@@ -145,3 +146,11 @@ Data pickers are arrays, specifying to use something from the `data` array of th
 ### DY Scale factors
 - `fast_dy_sfs`: Optional, bool. Specifies if DYprocessor should run over just DY and observed data; not relevant for other processors.
 - `bin_dy_sfs`: Optional, data picker defining a variable in which DY SFs are binned, used by the Processor when applying them.
+
+### Plotting
+- `plot_dataset_groups`: Optional, array. Each element is an object describing a group. These group several data sets and make them appear as one on the plot. The order of the objects describes the order of stacked bars from bottom to top. Each object has the following:
+  - `label`: Label to be used on the plot for the group. Must be unique.
+  - `color`: Color to be used for the group. Any valid Matplotlib colors are allowed
+  - `datasets`: Array of data set names
+- `plot_datasets_ignore`: Optional, list. A list of data sets to not plot.
+- `plot_scale_sysuncertainty`: Optional, array. Factors to be multiplied to the scale of a systematic uncertainty. The keys are the systematic names, without the suffix (e.g. '_up').
