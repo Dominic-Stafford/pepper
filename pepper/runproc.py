@@ -2,15 +2,14 @@
 
 import os
 import sys
-from functools import partial
 import importlib
-import parsl
 import argparse
 import logging
 from datetime import datetime
 
 import pepper
 import pepper.executor
+import pepper.htcondor
 
 
 BUILTIN_PROCESSORS = {
@@ -236,36 +235,22 @@ def run_processor(processor_class=None, description=None, mconly=False):
 
     datasets = processor.preprocess(datasets)
     if args.condor is not None:
-        executor_class_pre = partial(
-            pepper.executor.ParslExecutor, allow_scalein=False)
-        executor_class = partial(
-            pepper.executor.ParslExecutor, allow_scalein=True)
-        if args.condorinit is not None:
-            with open(args.condorinit) as f:
-                condorinit = f.read()
-        else:
-            condorinit = None
-        if args.condorsubmit is not None:
-            with open(args.condorsubmit) as f:
-                condorsubmit = f.read()
-        else:
-            condorsubmit = None
-        logdir = pepper.misc.get_enumerated_dir(args.condorlogdir)
-        print("Spawning jobs. This can take a while")
-        parsl_config = pepper.misc.get_parsl_config(
-            args.condor,
-            retries=args.retries,
-            condor_submit=condorsubmit,
-            condor_init=condorinit,
-            workers_per_job=args.condorworkers,
-            logdir=logdir)
-    else:
-        if args.condorinit is not None or args.condorsubmit is not None:
-            print(
-                "Ignoring condor parameters because --condor is not specified")
-        executor_class = executor_class_pre = pepper.executor.IterativeExecutor
-    pre_executor = executor_class_pre(state_file_name=args.metadata)
-    executor = executor_class(state_file_name=args.statedata)
+        pepper.htcondor.Cluster.set_global_config()
+    cluster = pepper.htcondor.Cluster(
+        args.condor,
+        condorsubmitfile=args.condorsubmit,
+        condorinit=args.condorinit,
+        retries=args.retries,
+        logdir=args.condorlogdir
+    )
+    pre_executor = pepper.executor.ClusterExecutor(
+        state_file_name=args.metadata,
+        cluster=cluster
+    )
+    executor = pepper.executor.ClusterExecutor(
+        state_file_name=args.statedata,
+        cluster=cluster
+    )
 
     try:
         pre_executor.load_state()
@@ -293,7 +278,7 @@ def run_processor(processor_class=None, description=None, mconly=False):
     userdata["chunksize"] = args.chunksize
 
     if args.condor is not None:
-        parsl.load(parsl_config)
+        print(f"Dashboard available at {cluster.dashboard_link}")
 
     runner = pepper.executor.Runner(
         executor, pre_executor, chunksize=chunksize, maxchunks=maxchunks,

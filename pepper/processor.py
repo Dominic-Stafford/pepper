@@ -18,6 +18,7 @@ from tqdm import tqdm
 import pepper
 from pepper import Selector, OutputFiller, HDF5File
 import pepper.config
+import pepper.htcondor
 
 
 logger = logging.getLogger(__name__)
@@ -243,7 +244,7 @@ class Processor(coffea.processor.ProcessorABC):
     def process(self, data):
         pepper_logger = logging.getLogger("pepper")
         try:
-            jobad = pepper.misc.get_htcondor_jobad()
+            jobad = pepper.htcondor.get_htcondor_jobad()
         except OSError:
             pass
         else:
