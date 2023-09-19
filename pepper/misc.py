@@ -9,15 +9,11 @@ from itertools import product
 from functools import wraps, partial
 from concurrent.futures import ThreadPoolExecutor
 import warnings
-import traceback
 
 import numpy as np
 import awkward as ak
 import coffea
 import hist as hi
-import parsl
-import parsl.addresses
-import pepper.parsl_high_throughput
 
 
 XROOTDTIMEOUT = 10  # 10 s, no need to bother with slow sites
@@ -250,136 +246,6 @@ def hist_counts(hist):
     if len(values) == 0:
         return 0
     return next(iter(values.values()))
-
-
-def get_enumerated_dir(parentdir):
-    """Get a path to a newly made directory within parentdir. """
-    i = 0
-    while os.path.exists(os.path.join(parentdir, str(i).zfill(3))):
-        i += 1
-    path = os.path.join(parentdir, str(i).zfill(3))
-    os.makedirs(path)
-    return path
-
-
-def get_parsl_config(num_jobs, runtime=3*60*60, memory=None, retries=None,
-                     *, condor_submit=None, condor_init=None,
-                     workers_per_job=1, logdir=None):
-    """Get a parsl HTCondor config for a host.
-
-    Arguments:
-    num_jobs -- Number of jobs/processes to run in parallel
-    runtime -- Requested runtime in seconds. If None, do not request a runtime
-    memory -- Request memory in MB. If None, do not request memory
-    retries -- The number of times to retry a failed task. If None, the task is
-               retried until it stops failing
-    condor_submit -- String that gets appended to the Condor submit file
-    condor_init -- String containing Shell commands to be executed by every job
-                   upon startup to setup an envrionment. If None, try to read
-                   the file pointed at by the local environment variable
-                   PEPPER_CONDOR_ENV and its contents instead. If
-                   PEPPER_CONDOR_ENV is also not set, no futher environment
-                   will be set up.
-    logdir -- Directory where to store stdout and stderr logs
-    workers_per_job -- Number of workers (processes) the job on Condor will
-                       simultaneously run.
-    """
-    def retry_handler(e, task_record):
-        # Simply print the exception to inform the user
-        traceback.print_exception(type(e), e, e.__traceback__)
-        return 1
-
-    hostname = parsl.addresses.address_by_hostname()
-    if retries is None:
-        # Actually parsl doesn't support infinite retries so set it very high
-        retries = 1000000
-    condor_config = ""
-    if runtime is not None:
-        if hostname.endswith(".desy.de"):
-            condor_config += f"+RequestRuntime = {runtime}\n"
-        elif hostname.endswith(".cern.ch"):
-            condor_config += f"+MaxRuntime = {runtime}\n"
-        else:
-            raise NotImplementedError(
-                    f"runtime on unknown host {hostname}")
-    if memory is not None:
-        condor_config += f"RequestMemory = {memory}\n"
-    # stream_{output,error} make condor transfer logs immediately, instead of
-    # waiting for the job to finish
-    condor_config += "stream_output = True\n"
-    condor_config += "stream_error = True\n"
-    if logdir is not None:
-        condor_config += \
-            f"output = {logdir}/$(ClusterId).$(Process)_stdout.log\n"
-        condor_config += f"error = {logdir}/$(Cluster).$(Process)_stderr.log\n"
-    if condor_submit is not None:
-        condor_config += condor_submit
-    if condor_init is None and "PEPPER_CONDOR_ENV" in os.environ:
-        with open(os.environ["PEPPER_CONDOR_ENV"]) as f:
-            condor_init = f.read()
-    provider = parsl.providers.CondorProvider(
-        init_blocks=min(5, num_jobs),
-        max_blocks=num_jobs,
-        parallelism=1,
-        scheduler_options=condor_config,
-        worker_init=condor_init,
-        launcher=parsl.launchers.SingleNodeLauncher(debug=False),
-    )
-    launch_cmd = ("python3 "
-                  "~/.local/bin/process_worker_pool.py "
-                  "{debug} "
-                  "{max_workers} "
-                  "-a {addresses} "
-                  "-p {prefetch_capacity} "
-                  "-c {cores_per_worker} "
-                  "-m {mem_per_worker} "
-                  "--poll {poll_period} "
-                  "--task_port={task_port} "
-                  "--result_port={result_port} "
-                  "--logdir={logdir} "
-                  "--block_id={{block_id}} "
-                  "--hb_period={heartbeat_period} "
-                  "{address_probe_timeout_string} "
-                  "--hb_threshold={heartbeat_threshold} "
-                  "--cpu-affinity {cpu_affinity} "
-                  "--available-accelerators {accelerators} "
-                  "--start-method {start_method}")
-    parsl_executor = pepper.parsl_high_throughput.HighThroughputExecutor(
-        label="HTCondor",
-        launch_cmd=launch_cmd,
-        address=parsl.addresses.address_by_route(),
-        max_workers=workers_per_job,
-        provider=provider,
-        worker_debug=False,
-    )
-    config = dict(
-        executors=[parsl_executor],
-        strategy="htex_auto_scale",
-        # Set retries to a large number to retry infinitely
-        retries=retries,
-        retry_handler=retry_handler
-    )
-    if logdir is not None:
-        config["run_dir"] = os.path.join(logdir, "parsl_runinfo")
-    parsl_config = parsl.config.Config(**config)
-    return parsl_config
-
-
-def get_htcondor_jobad():
-    """Get the HTCondor job AD as a dict of the job currently running in.
-    If not running within a job, an OSError will be raised.
-    For details on job AD see
-    https://htcondor.readthedocs.io/en/latest/classad-attributes/job-classad-attributes.html
-    """
-    if "_CONDOR_JOB_AD" not in os.environ:
-        raise OSError("Not inside HTCondor job")
-    with open(os.environ["_CONDOR_JOB_AD"]) as f:
-        jobad = f.readlines()
-    ret = {}
-    for line in jobad:
-        k, v = line.split("=", 1)
-        ret[k.strip()] = v.strip()
-    return ret
 
 
 def chunked_calls(array_param, returns_multiple=False, chunksize=10000,

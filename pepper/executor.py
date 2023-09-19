@@ -1,22 +1,20 @@
 import os
 import abc
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Optional
+import threading
+import queue
 from copy import deepcopy
 from functools import partial
 import time
 import logging
-import parsl
-from parsl.app.app import python_app
 import uproot
-from coffea.processor.parsl.timeout import timeout
 import coffea.processor
 import coffea.util
 from coffea.processor import set_accumulator
 from coffea.processor.executor import (
-    _compression_wrapper, _decompress, _futures_handler, UprootMissTreeError,
-    FileMeta)
-from coffea.processor.accumulator import (add as accum_add, iadd as accum_iadd)
+    _compression_wrapper, _decompress, UprootMissTreeError, FileMeta)
+from coffea.processor.accumulator import iadd as accum_iadd
 from coffea.processor import ProcessorABC
 from coffea.nanoevents import NanoEventsFactory
 import cloudpickle
@@ -55,17 +53,58 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
 
     state_file_name: Optional[str] = None
     remove_state_at_end: bool = False
-    save_interval: int = 300
+    save_interval: int = 60  # seconds
 
     def __post_init__(self):
         self.state = {"items_done": [], "accumulator": None,
                       "version": STATEFILE_VERSION, "userdata": {}}
+        # Thread to manage accumulation and state saving
+        self._state_manager = threading.Thread(target=self._manage_state)
+        # To communicate with the thread
+        self._state_manager_queue = queue.Queue()
+        self._is_running = threading.Event()
+        self._has_exception = threading.Event()
+        # tqdm progress bar
+        self._progress = None
+
+    def _manage_state(self):
+        items_done = self.state["items_done"]
+        accumulator = self.state["accumulator"]
+        nextstatebackup = time.time() + self.save_interval
+        while not self._has_exception.is_set():
+            try:
+                result = self._state_manager_queue.get(timeout=0.1)
+            except queue.Empty:
+                if not self._is_running.is_set():
+                    break
+            else:
+                self._accumulate([result], items_done, accumulator)
+                self._state_manager_queue.task_done()
+                if self._progress is not None:
+                    self._progress.update(1)
+            if nextstatebackup <= time.time():
+                self.save_state()
+                nextstatebackup = time.time() + self.save_interval
+        self.save_state()
+
+    def _accumulate(self, results, items_done=None, accumulator=None):
+        if items_done is None:
+            items_done = []
+        for result in results:
+            if self.compression is not None:
+                result = _decompress(result)
+            item, res = result
+            items_done.append(item)
+            if accumulator is None:
+                self.state["accumulator"] = accumulator = res
+            else:
+                accum_iadd(accumulator, res)
+        return items_done, accumulator
 
     def copy(self, **kwargs):
-        # Same as ExecutorBase.copy, just handling self.state correctly
-        tmp = self.__dict__.copy()
+        # Same as ExecutorBase.copy, plus handling of additional private fields
+        tmp = {f.name: getattr(self, f.name) for f in fields(self)}
         tmp.update(kwargs)
-        tmp.pop("state")
         instance = type(self)(**tmp)
         # Need deep copy here to not modify the accumulator later
         instance.state = deepcopy(self.state)
@@ -96,6 +135,8 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
     def __call__(self, items, function, accumulator):
         items_done = set(self.state["items_done"])
         items = [item for item in items if item not in items_done]
+        if len(items) == 0:
+            return self.state["accumulator"], 0
 
         if accumulator is not None and self.state["accumulator"] is not None:
             accumulator.add(self.state["accumulator"])
@@ -105,44 +146,41 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
         elif self.state["accumulator"] is not None:
             accumulator = self.state["accumulator"]
 
-        res = self._execute(items, partial(_wrap_execution, function),
-                            accumulator)
+        function = partial(_wrap_execution, function)
+        if self.compression is not None:
+            function = _compression_wrapper(self.compression, function)
+
+        gen = self._submit(items, function)
+        with tqdm(
+            total=len(items),
+            desc=self.desc,
+            unit=self.unit,
+            disable=not self.status
+        ) as self._progress:
+            self._is_running.set()
+            self._state_manager.start()
+            try:
+                while True:
+                    result = next(gen)
+                    self._state_manager_queue.put(result)
+            except StopIteration:
+                pass
+            except (Exception, KeyboardInterrupt):
+                self._has_exception.set()
+                raise
+            finally:
+                gen.close()
+            self._is_running.clear()
+            self._state_manager.join()
         if (self.state_file_name is not None
                 and self.remove_state_at_end
                 and os.path.exists(self.state_file_name)):
             os.remove(self.state_file_name)
+        res = self.state["accumulator"]
         return res, 0
 
-    def _track_done_items(self, gen):
-        for item, result in gen:
-            self.state["items_done"].append(item)
-            yield result
-
-    def _accumulate(self, gen, accum=None):
-        # In addition to fullfilling the same ask as coffea's accumulate
-        # this also keeps track of done items and saves the state
-        gen = self._track_done_items(gen)
-        gen = (x for x in gen if x is not None)
-        nextstatebackup = time.time() + self.save_interval
-        try:
-            if accum is None:
-                # Set the accumulator to the first result
-                self.state["accumulator"] = accum = next(gen)
-                # If there is more to do, add up results in another accumulator
-                # instance
-                self.state["accumulator"] = accum = accum_add(accum, next(gen))
-            while True:
-                if nextstatebackup <= time.time():
-                    self.save_state()
-                    nextstatebackup = time.time() + self.save_interval
-                accum_iadd(accum, next(gen))
-        except StopIteration:
-            pass
-        self.save_state()
-        return accum
-
     @abc.abstractmethod
-    def _execute(self, items, function, accumulator, **kwargs):
+    def _submit(self, items, function):
         return
 
     def save_state(self):
@@ -160,54 +198,27 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
         os.replace(output, self.state_file_name)
 
 
-class IterativeExecutor(ResumableExecutor):
-    """Same as coffea.processor.iterative_executor while being resumable"""
-    def _execute(self, items, function, accumulator):
-        if len(items) == 0:
-            return accumulator
-        gen = tqdm(items, disable=not self.status, unit=self.unit,
-                   total=len(items), desc=self.desc)
-        gen = map(function, gen)
-        return self._accumulate(gen, accumulator)
+# This data class allows us to put the cluster parameter first in
+# ClusterExecutor.__init__
+@dataclass
+class _WithCluster:
+    cluster: pepper.htcondor.Cluster
 
 
 @dataclass
-class ParslExecutor(ResumableExecutor):
-    """Same as coffea.processor.parsl_executor while being resumable"""
+class ClusterExecutor(ResumableExecutor, _WithCluster):
+    @staticmethod
+    def get_taskname(item, i):
+        if hasattr(item, "entrystart"):
+            return (f"{item.dataset[:40]}/{os.path.basename(item.filename)}/"
+                    f"{item.entrystart}:{item.entrystop}/chunk{i:06}")
+        else:
+            return (f"{item.dataset[:40]}/{os.path.basename(item.filename)}/"
+                    f"/chunk{i:06}")
 
-    tailtimeout: int = None
-    allow_scalein: bool = True
-
-    def _execute(self, items, function, accumulator):
-        if len(items) == 0:
-            return accumulator
-
-        if self.compression is not None:
-            function = _compression_wrapper(self.compression, function)
-
-        dfk = parsl.dfk()
-        for exec in dfk.config.executors:
-            if hasattr(exec, "allow_scalein"):
-                exec.allow_scalein = self.allow_scalein
-
-        app = timeout(python_app(function))
-
-        gen = _futures_handler(map(app, items), self.tailtimeout)
-        try:
-            accumulator = self._accumulate(
-                tqdm(
-                    gen if self.compression is None else map(_decompress, gen),
-                    disable=not self.status,
-                    unit=self.unit,
-                    total=len(items),
-                    desc=self.desc,
-                ),
-                accumulator,
-            )
-        finally:
-            gen.close()
-
-        return accumulator
+    def _submit(self, items, function):
+        tasknames = list(map(self.get_taskname, items, range(len(items))))
+        yield from self.cluster.process(function, items, key=tasknames)
 
 
 class Runner(coffea.processor.Runner):

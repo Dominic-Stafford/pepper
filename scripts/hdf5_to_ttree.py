@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-from parsl import python_app
+import os
+from collections import defaultdict
+from argparse import ArgumentParser
+from functools import partial
+import numpy as np
+import awkward as ak
+import uproot
+from tqdm import tqdm
+
+import pepper
+from pepper import HDF5File
 
 
 def process(directory, titles, mergesys, ignore, maskval=999,
             max_size_bytes=400000000):
-    import os
-    from collections import defaultdict
-    import numpy as np
-    import awkward as ak
-    import uproot
-    from pepper import HDF5File
-    from tqdm import tqdm
 
     def create_or_extend_tree(f, treename, tree):
         if treename in f:
@@ -94,13 +97,6 @@ def process(directory, titles, mergesys, ignore, maskval=999,
 
 
 if __name__ == "__main__":
-    import os
-    from argparse import ArgumentParser
-    from tqdm import tqdm
-    import pepper
-    import parsl
-    import concurrent.futures
-
     parser = ArgumentParser(
         description="Merge and convert Pepper HDF5 files to Root files "
         "containing TTrees")
@@ -128,13 +124,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "-s", "--skip", action="store_true",
         help="Skip recreating existing output files")
+    parser.add_argument(
+        "--condorlogdir", help="Directory to store stdout and stderr logs "
+        "running on HTCondor. Default is pepper_logs", default="pepper_logs")
     args = parser.parse_args()
-
-    if args.condor > 0:
-        process = python_app(process)
-        parsl_config = pepper.misc.get_parsl_config(
-            args.condor, retries=args.retries)
-        parsl.load(parsl_config)
 
     if args.title is not None:
         titles = {c: title for c, title in args.title}
@@ -149,13 +142,22 @@ if __name__ == "__main__":
             continue
         directories.append(directory)
 
-    result_funcs = []
-    for directory in directories:
-        result_funcs.append(process(
-            directory, titles, args.mergesys, args.ignore_column))
-
-    if args.condor > 0:
-        for func in tqdm(concurrent.futures.as_completed(result_funcs),
-                         total=len(result_funcs)):
-            # Raise error if there are some
-            func.result()
+    process = partial(
+        process,
+        titles=titles,
+        mergesys=args.mergesys,
+        ignore=args.ignore_column
+    )
+    with pepper.htcondor.Cluster(
+        args.condor,
+        condorsubmitfile=args.condorsubmit,
+        condorinit=args.condorinit,
+        retries=args.retries,
+        logdir=args.condorlogdir
+    ) as cluster:
+        cluster.set_global_config()
+        for result in tqdm(cluster.process(
+            process,
+            directories
+        ), total=len(directories)):
+            pass
