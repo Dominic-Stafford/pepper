@@ -243,7 +243,7 @@ class Cluster:
         idx = tasks_to_itemidx[task]
         item = (list(args)[idx] for args in iterables)
         if key is not None:
-            key = key[idx] + "-retry-" + uuid.uuid4()
+            key = key[idx] + "-retry-" + str(uuid.uuid4())
         new_task = self.client.submit(function, *item, pure=False, key=key)
         tasks_to_itemidx[new_task] = idx
         return new_task
