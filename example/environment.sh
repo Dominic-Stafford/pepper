@@ -1,7 +1,9 @@
 #!/bin/bash
 
-# Load CMS grid environment
-source /cvmfs/grid.desy.de/etc/profile.d/grid-ui-env.sh > /dev/null
+# Load CMS grid environment - only on DESY NAF
+if [ -f "/cvmfs/grid.desy.de/etc/profile.d/grid-ui-env.sh" ]; then
+    source /cvmfs/grid.desy.de/etc/profile.d/grid-ui-env.sh > /dev/null
+fi
 # Set custom VOMS proxy path. This needs to be accessible from Condor
 # Please do not forget to run voms-proxy-init --voms cms --out $X509_USER_PROXY
 export X509_USER_PROXY=~/.globus/x509up

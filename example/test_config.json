@@ -1,0 +1,46 @@
+{
+
+    "year": "2018",
+    "datadir": ".",
+    "store": ".",
+    "rng_seed_file": "$CONFDIR/seed.txt",
+    "compute_systematics": false,
+    "lumimask": "$CONFDIR/Cert_314472-325175_13TeV_17SeptEarlyReReco2018ABC_PromptEraD_Collisions18_JSON.txt",
+    "luminosity": 59.74,
+    "crosssections": "$CONFDIR/crosssections.json",
+    "exp_datasets": {
+        "MuonEG": [
+            "./nanoAOD_test_MuonEG.root"
+        ]
+    },
+    "mc_datasets": {
+        "TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8": [
+            "./nanoAOD_test_TTTo2L2Nu.root"
+        ]
+    },
+    "dataset_for_systematics": {
+    },
+    "dataset_trigger_order": [
+        "MuonEG"
+    ],
+    "dataset_trigger_map": {
+        "MuonEG": [
+            "HLT_Mu8_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ",
+            "HLT_Mu12_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ",
+            "HLT_Mu23_TrkIsoVVL_Ele12_CaloIdL_TrackIdL_IsoVL",
+            "HLT_Mu23_TrkIsoVVL_Ele12_CaloIdL_TrackIdL_IsoVL_DZ",
+            "HLT_Mu27_Ele37_CaloIdL_MW",
+            "HLT_Mu37_Ele27_CaloIdL_MW"
+        ]
+    },
+
+    "ele_eta_min": -2.4,
+    "ele_eta_max": 2.4,
+    "good_ele_pt_min": 20.0,
+
+    "muon_eta_min": -2.4,
+    "muon_eta_max": 2.4,
+    "good_muon_pt_min": 20.0,
+
+    "hists": "$CONFDIR/example_histograms.json",
+}
