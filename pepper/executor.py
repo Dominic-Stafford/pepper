@@ -69,6 +69,7 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
 
     def _manage_state(self):
         state = self.state
+        state_changed = False
         nextstatebackup = time.time() + self.save_interval
         while not self._has_exception.is_set():
             try:
@@ -79,13 +80,16 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
             else:
                 state["items_done"], state["accumulator"] = self._accumulate(
                     [result], state["items_done"], state["accumulator"])
+                state_changed = True
                 self._state_manager_queue.task_done()
                 if self._progress is not None:
                     self._progress.update(1)
-            if nextstatebackup <= time.time():
+            if nextstatebackup <= time.time() and state_changed:
                 self.save_state()
+                state_changed = False
                 nextstatebackup = time.time() + self.save_interval
-        self.save_state()
+        if state_changed:
+            self.save_state()
 
     def _accumulate(self, results, items_done=None, accumulator=None):
         if items_done is None:
