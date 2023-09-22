@@ -10,11 +10,32 @@ logger = logging.getLogger(__name__)
 
 
 class Selection:
+    """Keep track of weighted cuts
+
+    Attributes
+    ----------
+    names
+        Name of the cuts
+    cuts
+        Record array of the cut weights
+    """
     def __init__(self):
         self.names = []
         self.cuts = ak.Array({})
 
     def all(self, names=None):
+        """Get the product of all cuts' weights
+
+        Paramters
+        ---------
+        names
+            Only use the cuts named in this list
+
+        Returns
+        -------
+        total
+            Product of all cuts
+        """
         if names is None:
             names = self.names
         total = None
@@ -26,17 +47,30 @@ class Selection:
         return total
 
     def add_cut(self, name, accept):
+        """Add a cut to the selection
+
+        Parameters
+        ----------
+        name
+            Name of the cut
+        accept
+            Array whether an event passes a cut. Unweighted cuts can be
+            specified as bools and weighted cuts as floats
+        """
         self.cuts[name] = accept
         self.names.append(name)
 
     def clear(self):
+        """Remove all cuts from the selection"""
         self.names = []
         self.cuts = ak.Array({})
 
     def __len__(self):
+        """Number of cuts"""
         return len(self.names)
 
     def __copy__(self):
+        """Copy, also creating copies of the class attributes"""
         s = self.__class__.__new__(self.__class__)
         s.__dict__.update(self.__dict__)
         s.names = copy(self.names)
@@ -45,24 +79,52 @@ class Selection:
 
 
 class Selector:
-    """Keeps track of the current event selection and data"""
+    """Keeps track of the current event selection and data
+
+    Attributes
+    ----------
+    data
+        Event data for events passing the applied cuts
+    metadata
+        Event meta data such as file name
+    systematics
+        Record array of systematic weights
+    cutnames
+        Names of applied and possibly unapplied cuts
+    cut_systematic_map
+        Tells what systematic weights were added at which cut
+    done_steps
+        Tells which steps (cuts and column additions) where performed
+    rng
+        A random number generator that was seeded according to ``rng_seed``
+        in the class constructor and that should be used throughout the
+        selection
+    cats
+        Currently known categorizations. Maps names of categorizations to their
+        categories.
+    """
 
     def __init__(self, data, weight=None, on_update=None, applying_cuts=True,
                  rng_seed=None):
-        """Create a new Selector
-
-        Arguments:
-        data -- An `ak.Array` holding the events' data
-        weight -- A 1d array of size equal to `data` size, describing
-                  the events' weight or None
-        on_update -- callable or list of callables that get called after a
-                     call to `add_cut` or `set_column`. The callable should
-                     accept the keyword argument data, systematics and cut.
-        applying_cuts -- bool, wether to apply cuts added with `add_cut`. If
-                         False, cuts will be kept at `unapplied_cuts`
-        rng_seed -- int or tuple of ints to seed the random number generator
-                    with. If None, a random seed will be used. For defailts
-                    see the parameter of numpy.random.default_rng().
+        """
+        Parameters
+        ----------
+        data
+            Array holding the events' data
+        weight
+            One dimensional array of size equal to ``data`` size, describing
+            the events' weight. ``None`` if unweighted events
+        on_update
+            callable or list of callables that get called after a
+            call to ``add_cut`` or ``set_column``. The callable should accept
+            the keyword argument data, systematics and cut.
+        applying_cuts
+            Wether to apply cuts added with ``add_cut``. If ``False`, cuts will
+            be kept at ``unapplied_cuts``
+        rng_seed
+            int or tuple of ints to seed the random number generator
+            with. If ``None``, a random seed will be used. For details
+            see the parameter of ``numpy.random.default_rng()``.
         """
         self.data = data
         if hasattr(self.data, "metadata"):
@@ -143,9 +205,24 @@ class Selector:
             return ak.sum(self.unapplied_product != 0)
 
     def set_cat(self, name, categories):
+        """Set a categorization
+
+        A categorization is for example the decay channel of an event.
+        Categories inside this categorization would be the ee-decay or the
+        µµ-decay.
+
+        Parameters
+        ----------
+        name
+            Name of the categorization
+        categories
+            Categories inside the categorization. Each category must also be
+            a field in ``data``
+        """
         self.cats[name] = categories
 
     def _invoke_callbacks(self):
+        """Execute the callbacks in ``on_update`` on the final data"""
         data = self.final
         systematics = self.final_systematics
         for cb in self.on_update:
@@ -153,6 +230,8 @@ class Selector:
                done_steps=self.done_steps, cats=self.cats)
 
     def _get_category_mask(self, categories):
+        """Get a mask that is only true if an event is contained in all
+        categories named by ``categories``"""
         num = self.num
         mask = np.full(num, True)
         for cat, regs in categories.items():
@@ -170,34 +249,40 @@ class Selector:
         the cut will be stored in `self.unapplied_cuts`. Applying in this
         context means that rows of `self.data` are discarded accordingly.
 
-        Argument:
-        name -- Name of the cut
-        accept -- An array of bools or floats or a tuple of the former and a
-                  systematics dict or a callable returning any of the former.
-                  In the array a value of 0 or `False` means that the
-                  event corresponding to the row is discarded. Any other value
-                  will get multiplied into the event weight. Here a value of
-                  `True` corresponds to a 1.
-                  The systematics dict is a mapping of systematics name ->
-                  values, where name and values have the same meaning as in
-                  `self.set_systematic`. The values arrays of lengths equal
-                  `self.num` either before or after the cut is applied.
-                  Systematics given for cut evets are ignored.
-                  In case this is a callable, the callable will be called and
-                  its return value will be used as the new value for this
-                  parameter.
-        systematics -- A dict of name and values and has the same effect has
-                       calling `self.set_systematic` on every item. Will be
-                       ignored if a systematics dict is given with `accept`.
-        no_callback -- A bool whether not to call the callbacks, which usually
-                       fill histograms etc.
-        categories -- If not None, ignore events that are not part of any of
-                      the specified categorizations. This is done by specifying
-                      a dict of lists. A key gives the name of the
-                      categorization, while the list contains field names
-                      of `self.data`. These fields needs to be flat bool
-                      arrays. An event is considered to be part of a
-                      categorization if any of the fields are True.
+        Parameters
+        ----------
+        name
+            Name of the cut
+        accept
+            An array of bools or floats or a tuple of the former and a
+            systematics dict or a callable returning any of the former.
+            In the array a value of ``0`` or ``False`` means that the
+            event corresponding to the row is discarded. Any other value
+            will get multiplied into the event weight. Here a value of
+            ``True`` corresponds to a ``1``.
+            The systematics dict is a mapping of systematics name ->
+            values, where name and values have the same meaning as in
+            ``self.set_systematic``. The values arrays of lengths equal
+            ``self.num`` either before or after the cut is applied.
+            Systematics given for cut evets are ignored.
+            In the case this is a callable, the callable will be called and
+            its return value will be used as the new value for this
+            parameter.
+        systematics
+            A dict of name and values and has the same effect has
+            calling ``self.set_systematic`` on every item. Will be
+            ignored if a systematics dict is given with ``accept``.
+        no_callback
+            A bool whether not to call the callbacks, which usually
+            fill histograms etc.
+        categories
+            If not None, ignore events that are not part of any of
+            the specified categorizations. This is done by specifying
+            a dict of lists. A key gives the name of the
+            categorization, while the list contains field names
+            of ``self.data``. These fields needs to be flat bool
+            arrays. An event is considered to be part of a
+            categorization if any of the fields are True.
         """
         def pad_cats(mask, arr):
             full_arr = np.full(self.num, 1, dtype=arr.dtype)
@@ -260,8 +345,9 @@ class Selector:
             self._invoke_callbacks()
 
     def apply_all_cuts(self):
-        """Applies all unapplied cuts, discarding rows of `self.data` where the
-        resulting weight is 0 and modifies the event weight accordingly."""
+        """Apply all unapplied cuts, discarding rows of ``self.data`` where
+        the resulting weight is ``0`` and modify the event weight
+        accordingly."""
         weighted = self.unapplied_product
         mask = weighted != 0
         self.data = self.data[mask]
@@ -271,26 +357,36 @@ class Selector:
         self.unapplied_cuts.clear()
 
     def set_systematic(self, name, *values, scheme=None, cut=None):
-        """Set the systematic variation for an uncertainty. These will be
+        """Set the systematic weights for an uncertainty. These will be
         found in the `self.systematics`.
 
-        Arguments:
-        name -- Name of the systematic to set.
-        values -- Arrays. Each array gives the ratio of a systematic
-                  variation and the central value of the event weight.
-        scheme -- One of 'updown', 'numeric', 'single' or None. Determines the
-                  column (of the systematics table) the values will appear in.
-                  'updown': Requires `values` to have length 2. Column will
-                  be `name` + _up and _down.
-                  'numeric' column will be `name` + _i where i is determined by
-                  enumerating `values`
-                  'single': Requires `values` to have length 1. Column will be
-                  `name`
-                  None: scheme will be decided based on `values` length, where
-                  numeric will be used for lengths > 2.
-        cut -- Name of the cut after which the systematic needs to be accounted
-               for. If not None, a corresponding item will be found in
-               `self.cut_systematic_map`.
+        Notes
+        -----
+        Please make sure to provide your systematic weights in form of a ratio
+        over the nominal weight.
+
+        Parameters
+        ----------
+        name
+            Name of the systematic
+        values
+            Each of these arrays gives the ratio of a systematic
+            variation and the central value of the event weight
+        scheme
+            One of 'updown', 'numeric', 'single' or None. Determines the
+            column (of the systematics table) the values will appear in.
+            'updown': Requires ``values`` to have length 2. Column will
+            be ``name`` + _up and _down
+            'numeric' column will be ``name`` + _i where i is determined by
+            enumerating ``values``
+            'single': Requires ``values`` to have length 1. Column will be
+            ``name``
+            None: scheme will be decided based on ``values`` length, where
+            numeric will be used for lengths > 2
+        cut
+            Name of the cut after which the systematic needs to be accounted
+            for. If not None, a corresponding item will be found in
+            ``self.cut_systematic_map``
         """
 
         if name == "weight":
@@ -330,26 +426,33 @@ class Selector:
 
     def set_column(self, column_name, column, all_cuts=False,
                    no_callback=False, lazy=False, categories=None):
-        """Sets a column of `self.data`.
+        """Sets a column of ``self.data``
 
-        Arguments:
-        column_name -- The name of the column to set
-        column -- Column data or a callable that returns it.
-                  The callable that will be called with `self.data` as argument
-        all_cuts -- The callable from `column` will be called only on events
-                    passing all cuts (including unapplied cuts).
-        no_callback -- A bool whether not to call the callbacks, which usually
-                       fill histograms etc.
-        lazy -- If True, column must be a callable and the column will be
-                inserted as a virtual array, making the callable only called
-                when the data array determines it has to.
-        categories -- If not None, ignore events that are not part of any of
-                      the specified categorizations. This is done by specifying
-                      a dict of lists. A key gives the name of the
-                      categorization, while the list contains field names
-                      of `self.data`. These fields needs to be flat bool
-                      arrays. An event is considered to be part of a
-                      categorization if any of the fields are True.
+        Parameters
+        ----------
+        column_name
+            Name of the column to set
+        column
+            Column data or a callable that returns it.
+            The callable that will be called with ``self.data`` as argument
+        all_cuts
+            The callable from ``column`` will be called only on events
+            passing all cuts (including unapplied cuts).
+        no_callback
+            Whether not to call the callbacks. These callbacks usually fill
+            histograms etc.
+        lazy
+            If True, column must be a callable and the column will be
+            inserted as a virtual array, making the callable only called
+            when the data array determines it has to.
+        categories
+            If not ``None``, ignore events that are not part of any of
+            the specified categorizations. This is done by specifying
+            a dict of lists. A key gives the name of the
+            categorization, while the list contains field names
+            of ``self.data``. These fields needs to be flat bool
+            arrays. An event is considered to be part of a
+            categorization if any of the fields are ``True``.
         """
 
         logger.info(
@@ -391,23 +494,28 @@ class Selector:
 
     def set_multiple_columns(self, columns, all_cuts=False, no_callback=False,
                              categories=None):
-        """Sets multiple columns of `self.data` at once.
+        """Sets multiple columns of ``self.data`` at once.
 
-        Arguments:
-        columns -- A dict of column names and data or a callable returning
-                   the former. The callable will be called with `self.data`
-                   as argument.
-        all_cuts -- The callables from `columns` will be called only on events
-                    passing all cuts (including unapplied cuts).
-        no_callback -- A bool whether not to call the callbacks, which usually
-                       fill histograms etc.
-        categories -- If not None, ignore events that are not part of any of
-                      the specified categorizations. This is done by specifying
-                      a dict of lists. A key gives the name of the
-                      categorization, while the list contains field names
-                      of `self.data`. These fields needs to be flat bool
-                      arrays. An event is considered to be part of a
-                      categorization if any of the fields are True.
+        Parameters
+        ----------
+        columns
+            A dict of column names and data or a callable returning
+            the former. The callable will be called with `self.data`
+            as argument.
+        all_cuts
+            The callables from `columns` will be called only on events
+            passing all cuts (including unapplied cuts).
+        no_callback
+            A bool whether not to call the callbacks, which usually
+            fill histograms etc.
+        categories
+            If not ``None``, ignore events that are not part of any of
+            the specified categorizations. This is done by specifying
+            a dict of lists. A key gives the name of the
+            categorization, while the list contains field names
+            of ``self.data``. These fields needs to be flat bool
+            arrays. An event is considered to be part of a
+            categorization if any of the fields are ``True``.
         """
         if callable(columns):
             if all_cuts and not self.applying_cuts:

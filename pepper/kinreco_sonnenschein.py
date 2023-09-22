@@ -121,29 +121,45 @@ def sonnenschein(lep, antilep, b, antib, met, mwp=80.3, mwm=80.3, mt=172.5,
                  alphal=None, alphaj=None, hist_mlb=None, rng=None):
     """Full kinematic reconstruction for dileptonic ttbar using Sonnenschein's
     method https://arxiv.org/pdf/hep-ph/0603011.pdf
-    Arguments:
-    lep -- TLorentzVectorArray holding one negativly charged lepton per event
-    antilep -- TLorentzVectorArray holding one positively charged lepton per
-               event
-    b -- TLorentzVectorArray holding one negativly charged bottom quark per
-         event
-    antib -- TLorentzVectorArray holding one positively changed bottom quark
-             per event
-    met -- TLorentzVectorArray holding with one entry per event, yielding
-           the MET pt and phi
-    mwp, mwm -- Mass of the W+ and W- bosons. Either a number, an array with a
-                number for each event or a histogram, to sample from
-    mt, mat  -- Same as mwp/mwm for the top quark and antiquark
-    num_smear -- Number of times an event is smeared. If None, smearing is off
-    energyfl -- Histogram giving Ereco/Egen for the leptons. If None, lepton
-                energy won't be smeared
-    energyfj -- Same as energyfl for bottom quarks
-    alphal -- Histogram giving the angle between reco and gen leptons. If None,
-              lepton angles won't be smeared
-    alphaj -- Same as alphal for bottom quarks
-    hist_mlb -- uproot histogram of the lepton-bottom-quark-mass distribution.
-                Is needed, if num_smear is not None
-    rng -- A numpy.random.BitGenerator, if None a new one will be used
+
+    Parameters
+    ----------
+    lep
+        Array holding one negativly charged lepton per event
+    antilep
+        Array holding one positively charged lepton per event
+    b
+        Array holding one negativly charged bottom quark per event
+    antib
+        Array holding one positively changed bottom quark per event
+    met
+        Array holding with one entry per event, yielding the MET pt and phi
+    mwp
+        Mass of the W+ boson. Either a number, an array with a
+        number for each event or a histogram, to sample from
+    mwm
+        Same as ``mwp`` for the W- boson
+    mt
+        Same as ``mwp`` for the top quark
+    mat
+        Same as ``mwp`` for the top antiquark
+    num_smear
+        Number of times an event is smeared. If None, smearing is off
+    energyfl
+        Histogram in form of an uproot TH1 or numpy array giving Ereco/Egen
+        for the leptons. If None, lepton energy won't be smeared
+    energyfj
+        Same as energyfl for bottom quarks
+    alphal
+        Histogram in form of an uproot TH1 or numpy array giving the angle
+         between reco and gen leptons. If None, lepton angles won't be smeared
+    alphaj
+        Same as ``alphal`` for bottom quarks
+    hist_mlb
+        uproot TH1 of the lepton-bottom-quark-mass distribution.
+        Is needed, if num_smear is not None
+    rng
+        A numpy.random.BitGenerator, if None a new one will be used
     """
 
     if rng is None:

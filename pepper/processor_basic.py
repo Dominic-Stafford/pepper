@@ -16,6 +16,21 @@ import pepper.config
 
 @dataclass
 class VariationArg:
+    """Holds information on a systematic variation of the jet energies
+
+    Attributes
+    ----------
+    name
+        Name of the variation
+    junc
+        First element names the jet energy uncertinty source, second element
+        names the direction in which it is varied
+    jer
+        Direction into which the jet energy resolution is varied. Can also be
+        "central" for no variation, but smearing still being applied
+    met
+        Direction into which the MET uncertainty is varied
+    """
     name: Optional[str] = None
     junc: Optional[Tuple[str, str]] = None
     jer: Optional[str] = "central"
@@ -32,17 +47,11 @@ class ProcessorBasicPhysics(pepper.Processor):
     config_class = pepper.ConfigBasicPhysics
 
     def __init__(self, config, eventdir):
-        """Create a new Processor
-
-        Arguments:
-        config -- A Config instance, defining the configuration to use
-        eventdir -- Destination directory, where the event HDF5s are saved.
-                    Every chunk will be saved in its own file. If `None`,
-                    nothing will be saved.
-        """
         super().__init__(config, eventdir)
 
     def get_jetmet_variation_args(self):
+        """Get a list of varations that should be done for the Jet/MET
+        uncertainties"""
         ret = []
         if ("jet_resolution" not in self.config
                 or "jet_ressf" not in self.config):
@@ -75,6 +84,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         return ret
 
     def get_jetmet_nominal_arg(self):
+        """Get a ``VariationArg`` describing the nominal evaluation"""
         if "jet_resolution" in self.config and "jet_ressf" in self.config:
             return VariationArg(None)
         else:
@@ -90,6 +100,9 @@ class ProcessorBasicPhysics(pepper.Processor):
         return part
 
     def do_top_pt_reweighting(self, data):
+        """Top pt reweighting according to
+        https://twiki.cern.ch/twiki/bin/view/CMS/TopPtReweighting
+        """
         pt = data["gent_lc"].pt
         weiter = self.config["top_pt_reweighting"]
         rwght = weiter(pt[:, 0], pt[:, 1])
@@ -105,6 +118,7 @@ class ProcessorBasicPhysics(pepper.Processor):
                 return rwght
 
     def do_pileup_reweighting(self, dsname, data):
+        """Pileup reweighting"""
         ntrueint = data["Pileup"]["nTrueInt"]
         weighter = self.config["pileup_reweighting"]
         weight = weighter(dsname, ntrueint)
@@ -306,6 +320,8 @@ class ProcessorBasicPhysics(pepper.Processor):
         self.add_pdf_uncertainties(selector, data)
 
     def crosssection_scale(self, dsname, data):
+        """Cross section uncertainties. These are values depending only on the
+        data set"""
         num_events = len(data)
         lumifactors = self.config["mc_lumifactors"]
         factor = np.full(num_events, lumifactors[dsname])
@@ -337,6 +353,8 @@ class ProcessorBasicPhysics(pepper.Processor):
             return factor
 
     def blinding(self, is_mc, data):
+        """Skip every nth event in the experimental data. One way to blind your
+        analysis"""
         if not is_mc:
             return np.mod(data["event"], self.config["blinding_denom"]) == 0
         else:
@@ -400,6 +418,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         return triggered
 
     def add_l1_prefiring_weights(self, data):
+        """Prefiring weights needed for 2016 and 2017 data"""
         w = data["L1PreFiringWeight"]
         nom = w["Nom"]
         if self.config["compute_systematics"]:
@@ -864,6 +883,7 @@ class ProcessorBasicPhysics(pepper.Processor):
                 & (pt_min < j_pt))
 
     def has_puid(self, jets):
+        """Whether jets satisfy the configured pileup ID"""
         j_puId = self.config["good_jet_puId"]
         if j_puId == "skip":
             has_puId = True
@@ -917,6 +937,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         return jets
 
     def jets_with_puid(self, data):
+        """Get all jets satisfying the configured pileup ID"""
         jets = data["Jet"]
         return jets[jets.pass_pu_id]
 
@@ -1026,11 +1047,11 @@ class ProcessorBasicPhysics(pepper.Processor):
 
     def in_hem1516(self, phi, eta):
         """Return mask to select objects in faulty sector of hadronic
-           calorimeter encap (HEM 15/16 issue)."""
+           calorimeter encap (HEM 15/16 issue in 2018 data)."""
         return ((-3.0 < eta) & (eta < -1.3) & (-1.57 < phi) & (phi < -0.87))
 
     def hem_cut(self, data):
-        """Keep objects without the HEM 15/16 issue."""
+        """Keep objects without the HEM 15/16 issue in 2018 data."""
         cut_ele = self.config["hem_cut_if_ele"]
         cut_muon = self.config["hem_cut_if_muon"]
         cut_jet = self.config["hem_cut_if_jet"]
@@ -1060,6 +1081,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         return n >= self.config["lep_pt_num_satisfied"]
 
     def good_mass_lepton_pair(self, data):
+        """Which events have lepton pair mass required by the configuration"""
         return data["mll"] > self.config["mll_min"]
 
     def no_additional_leptons(self, is_mc, data):
@@ -1074,11 +1096,14 @@ class ProcessorBasicPhysics(pepper.Processor):
 
     def compute_puid_sys(self, central, weighter, wp, eta, pt,
                          pass_puid, has_gen_jet, sf_type):
+        """Jet pileup ID systematic weights"""
         up = weighter(wp, eta, pt, pass_puid, has_gen_jet, sf_type, "up")
         down = weighter(wp, eta, pt, pass_puid, has_gen_jet, sf_type, "down")
         return (up / central, down / central)
 
     def jet_puid_sfs(self, data):
+        """Compute event weights and systematics, if requested, for the jet
+        pileup ID"""
         # Only apply SFs to jets for which the PU ID cut is applied,
         # i.e. pT < 50 GeV
         jets = data["Jet"][data["Jet"].pt < 50]
@@ -1113,11 +1138,14 @@ class ProcessorBasicPhysics(pepper.Processor):
 
     def compute_btag_sys(self, central, up_name, down_name, weighter, wp, flav,
                          eta, pt, discr, efficiency):
+        """b tagging systematic weights"""
         up = weighter(wp, flav, eta, pt, discr, up_name, efficiency)
         down = weighter(wp, flav, eta, pt, discr, down_name, efficiency)
         return (up / central, down / central)
 
     def compute_weight_btag(self, data, efficiency="central", never_sys=False):
+        """Compute event weights and systematics, if requested, for the b
+        tagging"""
         jets = data["Jet"]
         wp = self.config["btag"].split(":", 1)[1]
         flav = jets["hadronFlavour"]
@@ -1211,11 +1239,15 @@ class ProcessorBasicPhysics(pepper.Processor):
             return accept
 
     def pick_lepton_pair(self, data):
-        # Sort so that we get the order [lepton, antilepton]
+        """Get one pair of leptons of opposite charge per event. The negative
+        lepton comes first"""
         return data["Lepton"][
             ak.argsort(data["Lepton"]["pdgId"], ascending=False)]
 
     def pick_bs_from_lepton_pair(self, data):
+        """Pick a bottom quark and a bottom antiquark that fit best to a pair
+        of leptons assuming they come from a top pair decay. This is using
+        the mlb histogram method"""
         recolepton = data["recolepton"]
         lep = recolepton[:, 0]
         antilep = recolepton[:, 1]
@@ -1247,7 +1279,8 @@ class ProcessorBasicPhysics(pepper.Processor):
                               axis=1)
 
     def ttbar_system(self, reco_alg, rng, data):
-        """Do ttbar reconstruction."""
+        """Do ttbar reconstruction, obtaining four vectors for top pairs
+        from their decay products"""
         lep = data["recolepton"][:, 0]
         antilep = data["recolepton"][:, 1]
         b = data["recob"][:, 0]
@@ -1289,9 +1322,11 @@ class ProcessorBasicPhysics(pepper.Processor):
             raise ValueError(f"Invalid value for reco algorithm: {reco_alg}")
 
     def has_ttbar_system(self, data):
+        """Whether the recontruction of the ttbar system was successful"""
         return ak.num(data["recot"]) > 0
 
     def build_nu_column_ttbar_system(self, data):
+        """Get four momenta for the neutrinos coming from top pair decay"""
         lep = data["recolepton"][:, 0:1]
         antilep = data["recolepton"][:, 1:2]
         b = data["recob"][:, 0:1]

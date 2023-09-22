@@ -5,15 +5,18 @@ from collections import defaultdict
 
 
 def not_arr(arr):
+    """Element wise logical not"""
     return ~arr
 
 
 def equal(arr, other):
+    """Element wise equal, operats can both be arrays or scalars"""
     return arr == other
 
 
 def leaddiff(quantity):
-    """Returns the difference in quantity of the two leading particles."""
+    """Difference in ``quantity`` of the two leading particles (at positiion
+    [:, 0] and [:, 1])"""
     if isinstance(quantity, np.ndarray):
         if quantity.ndim == 1:
             quantity = quantity.reshape((-1, 1))
@@ -23,6 +26,7 @@ def leaddiff(quantity):
 
 
 def concatenate(*arr, axis=0):
+    """Concatenate arrays along an axis"""
     arr_processed = []
     for a in arr:
         if isinstance(a, list):
@@ -76,7 +80,21 @@ class HistFillError(ValueError):
 
 
 class HistDefinition:
+    """Holds a definition of a histogram and creates histograms from it
+
+    The definition is parsed from a dictionary that can easily be saved to
+    JSON. The created histogram can have any number of additional
+    categorizations (``StrCategory`` axes) on top of what is already in the
+    definition."""
+
     def __init__(self, config):
+        """
+        Parameters
+        ----------
+        config
+            The definition of the histogram in form of a dict.
+            Please see the ``config_documentation.md`` of Pepper
+        """
         self._label = config.get("label", None)
         self.dataset_axis = hi.axis.StrCategory(
             [], name="dataset", label="Dataset name", growth=True)
@@ -138,9 +156,22 @@ class HistDefinition:
 
     @staticmethod
     def _prepare_fills(fill_vals, mask=None):
-        """This checks for length consistency across the fill_vals,
+        """Checks for length consistency across the fill_vals,
         removes events where counts do not agree (in case of 2 dims), applies
-        the given mask and flattens everything into numpy arrays"""
+        the given mask and flattens everything into numpy arrays.
+
+        Parameters
+        ----------
+        fill_vals
+            Dict of awkward arrays, no more than 2 dimensions
+        mask
+            Remove values from the result for which this bool array is False
+
+        Returns
+        -------
+        prepared
+            Dict of the prepared values, which can be used to fill a Hist
+        """
         if mask is not None:
             if mask.ndim == 1:
                 mask = ak.fill_none(mask, False)
@@ -188,6 +219,22 @@ class HistDefinition:
         return prepared
 
     def create_hist(self, categorizations, has_systematic=False):
+        """Create a histogram according to the definition of this instance
+
+        Parameters
+        ----------
+        categorizations
+            Add ``StrCategory`` axes to the histogram. The axes will be named
+            and labeled according to the keys of this dict
+        has_systematic
+            If true, add an ``StrCategory`` axis called 'sys' for systematic
+            uncertainties
+
+        Returns
+        -------
+        hist
+            A new, empty histogram according to the definition
+        """
         axes = self.axes.copy()
         for cat in categorizations.keys():
             axes.append(
@@ -201,6 +248,26 @@ class HistDefinition:
 
     def __call__(
             self, data, categorizations, dsname, is_mc, weight):
+        """Create and fill a histogram according to the data given.
+
+        Parameters
+        ----------
+        data
+            Record array, usually the full NanoEvents, from which the data
+            that goes into the histogram is picked
+        categorizations
+            Dict of categories to add to the histogram on top of what is
+            already in the definition. Its keys name the axes, while its values
+            are lists of strings that name the inidivuals bins in the axes and
+            the fields inside ``data`` to take masks from if an event belongs
+            to a category
+        dsname
+            Name of the data set from where the event data is
+        is_mc
+            Whether this is simulation
+        weight
+            Event weight as array
+        """
         has_systematic = self.weight is None and isinstance(weight, dict)
         hist = self.create_hist(categorizations, has_systematic)
 
@@ -269,6 +336,8 @@ class HistDefinition:
 
     @property
     def label(self):
+        """y axis label of the histogram in a format following the CMS
+        style guidelines as close as possible"""
         # Make this a property so that if the axes change, label is updated
         if self._label is not None:
             return self._label
@@ -295,10 +364,32 @@ class HistDefinition:
 
 
 class DataPicker:
+    """Extract and perform operations on specific data inside an Awkward array
+    using only a very basic dict that can be specified in JSON"""
+
     def __init__(self, method):
+        """
+        Parameters
+        ----------
+        method
+            Defines how to pick the data from an array and what operations to
+            perform. Please see the ``config_documentation.md`` of Pepper
+        """
         self._method = method
 
     def __call__(self, data):
+        """Perform the picking on the data
+        Parameters
+        ----------
+        data
+            The array from which data is extracted
+
+        Returns
+        -------
+        data
+            The result of the data picking operation specified in the data
+            picker using the data given
+        """
         method = self._method
         orig_data = data
         if not isinstance(method, list):
@@ -424,6 +515,7 @@ class DataPicker:
 
     @property
     def name(self):
+        """Printiple string identifying the data picker"""
         name = ""
         for sel in self._method:
             if isinstance(sel, str):

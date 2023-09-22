@@ -11,6 +11,7 @@ import hist as hi
 
 
 class _JSONEncoderWithSets(json.JSONEncoder):
+    """Enables encoding of sets to JSON"""
     def default(self, obj):
         if isinstance(obj, set):
             return list(obj)
@@ -19,17 +20,36 @@ class _JSONEncoderWithSets(json.JSONEncoder):
 
 class HistCollection(Mapping):
     """Class that provides access to and writing of a multiple histograms. The
-       histograms can be in stored in different formats (hist and root)."""
+    histograms can be in stored in different formats (hist and root).
+    The class behaves like a dictionary. Its keys are tuples and values are
+    strings, which are paths pointing to the histogram file. Histograms can be
+    loaded with the ``load`` method.
+    """
 
     @staticmethod
     def root_key(idx):
+        """Generated a key for a histogram index to be used inside a Root file
+        """
         return "/".join(idx) + "/hist"
 
     @classmethod
     def rootdir_to_hist(cls, rootdir, infokey="pepper_hist_info"):
         """Convert an uproot directory containing histograms to a single hist
-        histogram using the information given in infokey to merge the
-        histograms along category axes"""
+        histogram
+
+        Parameters
+        ----------
+        rootdir
+            Uproot directory with histograms
+        infokey
+            Name of the string object inside the directory contaiusing axis
+            information
+
+        Returns
+        -------
+        hist
+            The histogram
+        """
         info = json.loads(rootdir[infokey])
         order = info["axis_order"]
         axes = info["cat_axes"]
@@ -68,6 +88,7 @@ class HistCollection(Mapping):
 
     @staticmethod
     def get_cats_present(hist):
+        """Get the category axes present in a histogram"""
         cataxes = [
             ax for ax in hist.axes if isinstance(ax, hi.axis.StrCategory)
         ]
@@ -76,7 +97,23 @@ class HistCollection(Mapping):
     @staticmethod
     def hist_split_strcat(hist, cats_present=None):
         """Split hist along its StrCategory axes, if any, and return a dict of
-        the splits."""
+        the splits
+
+        Parameters
+        ----------
+        hist
+            The histogram
+        cats_present
+            Tuples of categories to to include. If not ``None`` and a
+            combination of categories is not contained within, it will be
+            skipped from the returned value
+
+        Returns
+        -------
+        ret
+            Dict of category combination to sub-histogram. A sub-histogram
+            does not have any category axes anymore.
+        """
         ret = {}
         cats = {}
         for ax in hist.axes:
@@ -117,6 +154,22 @@ class HistCollection(Mapping):
         return info
 
     def __init__(self, path, key_fields, content=None, userdata=None):
+        """
+        Parameters
+        ----------
+        path
+            Directory containing the histograms or where to save them to
+        key_fields
+            Names of the individual parts that make up an index inside the
+            collection
+        content
+            Content of the collection. A dict where keys are tuples of the
+            same length as ``key_fields`` and where the values are
+            the paths to the histogram files. Relative paths are interpreted
+            starting from ``path``
+        userdata
+            Additional data to keep around. JSON serilizable.
+        """
         self.path = path
         self.key_fields = key_fields
         self._content = {} if content is None else content.copy()
@@ -124,6 +177,20 @@ class HistCollection(Mapping):
 
     @classmethod
     def from_json(cls, fileobj, path=None):
+        """Create a new instance using the information given in a JSON file
+
+        Parameters
+        ----------
+        fileobj
+            Opened file that will be read containing the JSON information
+        path
+            Directory containing the histograms. If ``None``, use the directory
+            where the file of ``fileobj`` is contained in
+
+        Returns
+        -------
+            A new instance
+        """
         if path is None:
             path = os.path.dirname(os.path.realpath(fileobj.name))
         data = json.load(fileobj)
@@ -139,6 +206,17 @@ class HistCollection(Mapping):
 
     @classmethod
     def from_single_hist(cls, histpath):
+        """Create a new instance using a single histogram
+
+        Parameters
+        ----------
+        histpath
+            Path to the histogram
+
+        Returns
+        -------
+            A new instance
+        """
         path = os.path.dirname(os.path.realpath(histpath))
         content = {(): os.path.basename(histpath)}
         return cls(
@@ -148,9 +226,11 @@ class HistCollection(Mapping):
         )
 
     def __len__(self):
+        """Number of histograms in the collection"""
         return len(self._content)
 
     def __iter__(self):
+        """Iterator over all histograms in the collection"""
         return iter(self._content)
 
     def __getitem_tuple__(self, key):
@@ -196,6 +276,25 @@ class HistCollection(Mapping):
         return ret
 
     def __getitem__(self, key):
+        """Get a path to a histogram inside the collection or narrow down the
+        collection
+
+        Parameters
+        ----------
+        key
+            In addition to provide a tuple to get a specific histogram, this
+            also takes dicts or keys that only partially define a specific
+            histogram.
+            If a dict, its keys should be part of ``self.key_fields``.
+            A value contained inside the tuple or the dict can be a string,
+            ``None`` or a list. In the latter two cases, the key is partially
+            defined. If partiall defined, a new collection will be returned,
+            with only histograms matching the key. If a value is ``None``, any
+            histogram independent of their key's value at that position will
+            be included. If a value is a list, any histogram with a key's value
+            that is in the list will be included.
+
+        """
         if isinstance(key, tuple):
             return self.__getitem_tuple__(key)
         elif isinstance(key, dict):
@@ -216,6 +315,7 @@ class HistCollection(Mapping):
                 f"{type(key)}")
 
     def __add__(self, other):
+        """Combine two collections"""
         if isinstance(other, HistCollection):
             content = self._content.copy()
             content.update(other._content)
@@ -224,6 +324,7 @@ class HistCollection(Mapping):
             raise ValueError("Can only add HistCollection")
 
     def __iadd__(self, other):
+        """Combine two collections in-place"""
         if isinstance(other, HistCollection):
             self._content.update(other._content)
             return self
@@ -231,6 +332,7 @@ class HistCollection(Mapping):
             raise ValueError("Can only add HistCollection")
 
     def copy(self):
+        """Get a shallow copy"""
         return self.__class__(
             path=self.path,
             key_fields=self.key_fields,
@@ -238,6 +340,10 @@ class HistCollection(Mapping):
         )
 
     def load(self, key):
+        """Return the histogram according to key
+        This is the same as ``__getitem__`` plus opening and loading the
+        histogram inside the file.
+        """
         path = self[key]
         if isinstance(path, self.__class__):
             return {k: path.load(k) for k, v in path.keys()}
@@ -250,6 +356,10 @@ class HistCollection(Mapping):
             return coffea.util.load(path)
 
     def items_loaded(self):
+        """Yield the keys and histograms inside the collection
+        This is the same ``items`` plus opening and loading each histogram
+        inside the files.
+        """
         for key in self.keys():
             yield key, self.load(key)
 
@@ -257,6 +367,29 @@ class HistCollection(Mapping):
         self, key, hist, filename, format, cats_present,
         infokey="pepper_hist_info"
     ):
+        """Save a histogram into a file and add it to the collection
+
+        A histogram can contain dense axes, such as a regular axis, or
+        category axes. As Root does not support categories, when saving in the
+        Root format, the histogram will be split into sub-histograms.
+
+        Parameters
+        ----------
+        key
+            To use for the histogram inside the collection
+        hist
+            Histogram to save
+        filename
+            Path to the file to save the histogram in
+        format
+            Either "hist" or "root", deciding the format in which the histogram
+            is saved. "hist" will generally be faster
+        cats_present
+            Lists combinations of categories. For the "root" format, do not
+            keep sub-histograms of categories which are not included.
+            For the "hist" format, the attribute ``pepper_cats_present``
+            will be set to this parameter's values
+        """
         if len(key) != len(self.key_fields):
             raise ValueError(
                 f"Invalid key length, expected {len(self.key_fields)}, "
@@ -286,6 +419,14 @@ class HistCollection(Mapping):
         self._content[key] = filename
 
     def save_metadata_json(self, fileobj):
+        """Save a JSON file containing the metadata of the collection,
+        such as keys, values and ``key_fields``
+
+        Parameters
+        ----------
+        fileobj
+            Opened file that will get the JSON data written to
+        """
         keys = [list(k) for k in self._content.keys()]
         vals = [v for v in self._content.values()]
         data = {

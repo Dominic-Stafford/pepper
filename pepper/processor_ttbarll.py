@@ -18,14 +18,6 @@ class Processor(pepper.ProcessorBasicPhysics):
     config_class = pepper.ConfigTTbarLL
 
     def __init__(self, config, eventdir):
-        """Create a new Processor
-
-        Arguments:
-        config -- A Config instance, defining the configuration to use
-        eventdir -- Destination directory, where the event HDF5s are saved.
-                    Every chunk will be saved in its own file. If `None`,
-                    nothing will be saved.
-        """
         super().__init__(config, eventdir)
 
     def _check_config_integrity(self, config):
@@ -226,6 +218,9 @@ class Processor(pepper.ProcessorBasicPhysics):
 
     def process_selection_jet_part(self, selector, is_mc, variation, dsname,
                                    filler, era):
+        """Part of the selection that needs to be repeated for
+        every systematic variation done for the jet energy correction,
+        resultion and for MET"""
         logger.debug(f"Running jet_part with variation {variation.name}")
         reapply_jec = ("reapply_jec" in self.config
                        and self.config["reapply_jec"])
@@ -275,6 +270,7 @@ class Processor(pepper.ProcessorBasicPhysics):
                                 lazy=True)
 
     def channel_masks(self, data):
+        """Get the channel masks (bool arrays) for ee, eµ and µµ decays"""
         leps = data["Lepton"]
         channels = {}
         channels["is_ee"] = ((abs(leps[:, 0].pdgId) == 11)
@@ -285,9 +281,12 @@ class Processor(pepper.ProcessorBasicPhysics):
         return channels
 
     def dilep_pt(self, data):
+        """pt of the lepton pair system"""
         return (data["Lepton"][:, 0] + data["Lepton"][:, 1]).pt
 
     def apply_trigger_sfs(self, dsname, data):
+        """Apply the weights due to differences of the triggers between
+        data and simulation"""
         leps = data["Lepton"]
         ones = np.ones(len(data))
         central = ones
@@ -313,6 +312,7 @@ class Processor(pepper.ProcessorBasicPhysics):
         return central
 
     def apply_dy_sfs(self, dsname, data):
+        """Apply scale factors to compensate mismodeling of Drell-Yan"""
         if self.is_dy_dataset(dsname):
             channel = ak.where(data["is_ee"], 0, ak.where(data["is_em"], 1, 2))
             if ("bin_dy_sfs" in self.config and
@@ -335,7 +335,7 @@ class Processor(pepper.ProcessorBasicPhysics):
         return np.full(len(data), True)
 
     def drellyan_sf_columns(self, data, selector):
-        # Dummy function, overwritten when computing DY SFs
+        """Dummy function, overwritten when computing DY SFs"""
         return {}
 
     def channel_trigger_matching(self, era, data):
@@ -363,16 +363,19 @@ class Processor(pepper.ProcessorBasicPhysics):
         return ret
 
     def z_window(self, data):
+        """Cut events that are inside a window around the Z mass"""
         m_min = self.config["z_boson_window_start"]
         m_max = self.config["z_boson_window_end"]
         is_out_window = (data["mll"] <= m_min) | (m_max <= data["mll"])
         return is_out_window
 
     def met_requirement(self, data):
+        """Require a minimum MET"""
         met = data["MET"].pt
         return met > self.config["ee/mm_min_met"]
 
     def build_nu_column(self, data):
+        """Get four momenta for the neutrinos coming from top pair decay"""
         lep = data["recolepton"][:, 0:1]
         antilep = data["recolepton"][:, 1:2]
         b = data["recob"][:, 0:1]
@@ -384,12 +387,15 @@ class Processor(pepper.ProcessorBasicPhysics):
         return ak.concatenate([nu, antinu], axis=1)
 
     def calculate_dark_pt(self, data):
+        """Get the pt of the four vector difference of the MET and the
+        neutrinos"""
         nu = data["reconu"][:, 0]
         antinu = data["reconu"][:, 1]
         met = data["MET"]
         return met - nu - antinu
 
     def calculate_chel(self, data):
+        """Calculate the angle between the leptons in their helicity frame"""
         top = data["recot"]
         lep = data["recolepton"]
         ttbar_boost = -top.sum().boostvec

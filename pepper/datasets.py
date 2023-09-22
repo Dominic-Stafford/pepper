@@ -17,12 +17,18 @@ def dataset_to_lfn_local(dataset, store, ext=".root"):
     """Get the logical file names of the files belonging to a dataset by
     checking the directory contents of the path pointed to by `store`.
 
-    Parameters:
-    dataset -- name of the dataset
-    store -- Path to the store directory, e.g. /pnfs/desy.de/cms/tier2/store/
-    ext -- File extension the files have
+    Parameters
+    ----------
+    dataset
+        Name of the dataset
+    store
+        Path to the store directory, e.g. /pnfs/desy.de/cms/tier2/store/
+    ext
+        File extension the files have
 
-    Returns a list of paths as strings
+    Returns
+    -------
+        List of paths as strings
     """
     primary, processed, tier = dataset.split("/")[1:]
     if tier == "USER":
@@ -42,6 +48,7 @@ def dataset_to_lfn_local(dataset, store, ext=".root"):
 
 
 def lfn_to_local_path(lfn, store):
+    """Convert a logical file name to a local path"""
     len_store = 7  # = len("/store/")
     return os.path.normpath(os.path.join(store, lfn[len_store:]))
 
@@ -95,19 +102,26 @@ def dataset_to_lfn_dbs(dataset):
 
 
 def lfn_to_xrootd_path(lfn, xrootddomain):
+    """Convert a logical file name to an XRootD URL"""
     return f"root://{xrootddomain}/" + lfn
 
 
 def resolve_lfn(lfn, store=None, xrootddomain=None):
     """Get paths and URLs for a file given a specific logical file name (LFN).
 
-    Parameters:
-    lfn -- LFN of the file, normally starts with "/store/". This function
-           ccepts the additional prefix "cmslfn://store/".
-    store -- See expand_datasetdict
-    xrootddomain -- See expand_datasetdict
+    Parameters
+    ----------
+    lfn
+        Logical file name of the file, normally starts with "/store/". This
+        function ccepts the additional prefix "cmslfn://store/".
+    store
+        See ``expand_datasetdict``
+    xrootddomain
+        See ``expand_datasetdict``
 
-    Returns a list of valid paths and URLs for the given LFN.
+    Returns
+    -------
+        List of valid paths and URLs for the given logical file name.
     """
     pfns = []
     if lfn.startswith("cmslfn://"):
@@ -134,13 +148,20 @@ def resolve_lfn(lfn, store=None, xrootddomain=None):
 def dataset_to_lfns(dataset, store=None, ext=".root", mode="local"):
     """Get the logical file names (LFN) of the files belonging to a dataset.
 
-    Parameters:
-    dataset -- name of the dataset
-    store -- See expand_datasetdict
-    ext -- See expand_datasetdict
-    mode -- See expand_datasetdict
+    Parameters
+    ----------
+    dataset
+        Name of the dataset
+    store
+        See ``expand_datasetdict``
+    ext
+        See ``expand_datasetdict``
+    mode
+        See ``expand_datasetdict``
 
-    Returns a list of LFNs as strings
+    Returns
+    -------
+        List of LFNs as strings
     """
 
     if mode not in ("local", "xrootd", "local+xrootd"):
@@ -160,15 +181,22 @@ def read_paths(source, store=None, ext=".root", mode="local"):
     """Get all file names of a dataset, which can be interpreted from a
     source
 
-    Parameters:
-    source -- A glob pattern, dataset name or a path to a text file containing
-              any of the afore mentioned (one per line). If it ends with ext,
-              it will be considered as a glob pattern.
-    store -- See expand_datasetdict
-    ext -- See expand_datasetdict
-    mode -- See expand_datasetdict
+    Parameters
+    ----------
+    source
+        Glob pattern, dataset name or a path to a text file containing
+        any of the afore mentioned (one per line). If it ends with ext,
+        it will be considered as a glob pattern.
+    store
+        See ``expand_datasetdict``
+    ext
+        See ``expand_datasetdict``
+    mode
+        See ``expand_datasetdict``
 
-    Returns a list of paths as strings
+    Returns
+    -------
+        List of paths as strings
     """
     paths = []
     if source.endswith(ext):
@@ -202,24 +230,32 @@ def expand_datasetdict(datasets, store=None, ignore_path=None, ext=".root",
                        mode="local"):
     """Interpred a dict of dataset names or paths
 
-    Parameters:
-    datasets -- A dict whose values are lists of glob patterns, dataset names
-                or files containing any of the afore mentioned
-    store -- Path to the store directory, e.g. /pnfs/desy.de/cms/tier2/store/
-    ignore_path -- Callable of the form file path -> bool. If it evaluates not
-                   to True, the file path is skipped for the output. If None,
-                   no files are skipped
-    ext -- File extension the files have
-    mode -- One of 'local', 'xrootd', 'local+xrootd'. If datasets contain
-            dataset names, this defines how to handle them. With 'local' they
-            will evaluate to local file paths. If 'xrootd' they will evaluate
-            to xrootd URLs. If 'local+xrootd' only files that are not present
-            locally are returned with an xrootd URL, otherwise local file paths
-            are returned.
+    Parameters
+    ----------
+    datasets
+        Dict whose values are lists of glob patterns, dataset names
+        or files containing any of the afore mentioned
+    store
+        Path to the store directory, e.g. /pnfs/desy.de/cms/tier2/store/
+    ignore_path
+        Callable of the form file path -> bool. If it evaluates not
+        to True, the file path is skipped for the output. If None,
+        no files are skipped
+    ext
+        File extension the files have
+    mode
+        One of 'local', 'xrootd', 'local+xrootd'. If datasets contain
+        dataset names, this defines how to handle them. With 'local' they
+        will evaluate to local file paths. If 'xrootd' they will evaluate
+        to xrootd URLs. If 'local+xrootd' only files that are not present
+        locally are returned with an xrootd URL, otherwise local file paths
+        are returned.
 
-    Returns a tuple of two dicts. The first one is a dict mapping the keys of
-    `datasets` to lists of paths for the corresponding files. The second one is
-    the inverse mapping.
+    Returns
+    -------
+        Tuple of two dicts. The first one is a dict mapping the keys of
+        `datasets` to lists of paths for the corresponding files. The second
+        one is the inverse mapping.
     """
     paths2dsname = {}
     datasetpaths = defaultdict(list)

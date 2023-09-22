@@ -18,6 +18,24 @@ logger = logging.getLogger(__name__)
 
 
 def get_evaluator(filename, fileform=None, filetype=None):
+    """Get the Coffea evaluator for a specific type of scale factor
+
+    Parameters
+    ----------
+    filename
+        File name containing the scale factor. The files will be opened and
+        read by a Coffea converter
+    fileform
+        The format of the file. If None, determined by the file extension in
+        ``filename``
+    filetype
+        Specific type of scale factor contained in the file. For example "junc"
+        for jet energy uncertainties
+
+    Returns
+    -------
+        Coffea evaluator loaded with the scale factor
+    """
     if fileform is None:
         fileform = filename.split(".")[-1]
     if filetype is None:
@@ -33,20 +51,24 @@ def get_evaluator(filename, fileform=None, filetype=None):
 
 
 class ScaleFactors:
+    """Scale factor from n-dimensional arrays, for example from histograms"""
     def __init__(self, factors, factors_up, factors_down, bins):
-        """Create a new ScaleFactors instance. Useful for binned scale factors.
-
-        Arguments:
-        factors -- Numpy array with the scale factors for the central variation
-        factors_up -- Numpy array with the scale factors for the up variation
-        factors_down -- Numpy array with the scale factors for the down
-                        variation
-        bins -- A dict whose length is equal to the number of dimensions of
-                factors. Its nth key gives a name to the nth dimension, so
-                that it can be used as a kwarg in the __call__ method of this
-                class. "variation" can not be a key. Its values are Numpy
-                arrays and determine the edges of the binnding used for the
-                factors.
+        """
+        Paramters
+        ---------
+        factors
+            Numpy array with the scale factors for the central variation
+        factors_up
+            Numpy array with the scale factors for the up variation
+        factors_down
+            Numpy array with the scale factors for the down variation
+        bins
+            A dict whose length is equal to the number of dimensions of
+            factors. Its nth key gives a name to the nth dimension, so
+            that it can be used as a kwarg in the __call__ method of this
+            class. "variation" can not be a key. Its values are Numpy
+            arrays and determine the edges of the binnding used for the
+            factors.
         """
         if "variation" in bins:
             raise ValueError("'variation' must not be in bins")
@@ -67,12 +89,26 @@ class ScaleFactors:
 
     @staticmethod
     def _setoverflow(factors, value):
+        """Set the overflow (value to use when events are outside the range)
+        for a given ``factors`` array to a given ``value``"""
         for i in range(factors.ndim):
             factors[tuple([slice(None)] * i + [slice(0, 1)])] = value
             factors[tuple([slice(None)] * i + [slice(-1, None)])] = value
 
     @classmethod
     def from_hist(cls, hist, dimlabels=None):
+        """Create a new instance from a histogram
+
+        This uses the variances found in the histogram as up/down variations.
+
+        Parameters
+        ----------
+        hist
+            The uproot TH1 the scale factors are extracted from
+        dimlabels
+            The names of the variables the scale factor depends on. If
+            ``None``, use the name of the axes of the histogram
+        """
         edges = hist.to_numpy(flow=True)[1:]
         if dimlabels is None:
             dimlabels = []
@@ -138,6 +174,21 @@ class ScaleFactors:
         return cls(factors, factors_up, factors_down, bins)
 
     def __call__(self, variation="central", **kwargs):
+        """Evaluate the scale factor
+
+        Parameters
+        ----------
+        variation
+            Direction of the systematic variation. One of "central", "up"
+            or "down"
+        **kwargs
+            The parameters the scale factor depends on. For example
+            the pt, eta and so on.
+
+        Returns
+        -------
+            Array of scale factors
+        """
         if variation not in ("central", "up", "down"):
             raise ValueError("variation must be one of 'central', 'up', "
                              "'down'")
@@ -171,16 +222,44 @@ class ScaleFactors:
 
     @property
     def dimlabels(self):
+        """The names of the variables the scale factor depends on"""
         return self._bins.keys()
 
 
 class MuonScaleFactor:
+    """Scale factors for muons that come with split statistical and systematic
+    uncertainty sources"""
     def __init__(self, nominal, stat, syst):
+        """
+        Parameters
+        ----------
+        nominal
+            ScaleFactors for nominal weights
+        stat
+            ScaleFactors for deriving weights with statistical variation
+        syst
+            ScaleFactors for deriving weights with systematic variation
+        """
         self.nominal = nominal
         self.stat = stat
         self.syst = syst
 
     def __call__(self, variation="central", **kwargs):
+        """Evaluate the scale factor
+
+        Parameters
+        ----------
+        variation
+            Direction of the systematic variation. One of "central", "up",
+            "down", "syst up", "syst down", "stat up" or "stat_down"
+        **kwargs
+            The parameters the scale factor depends on. For example
+            the pt
+
+        Returns
+        -------
+            Array of scale factors
+        """
         if variation not in ("central", "up", "down", "syst up", "syst down",
                              "stat up", "stat down"):
             raise ValueError(f"Invalid variation '{variation}'")
@@ -196,10 +275,12 @@ class MuonScaleFactor:
 
     @property
     def dimlabels(self):
+        """The names of the variables the scale factor depends on"""
         return self.nominal.dimlabels
 
 
 WpTuple = namedtuple("WpTuple", ("loose", "medium", "tight"))
+"""Working points for the b tagging"""
 
 
 BTAG_WP_CUTS = {
@@ -222,18 +303,54 @@ BTAG_WP_CUTS = {
         "ul2018": WpTuple(0.0490, 0.2783, 0.7100),
     }
 }
+"""Working points for the b tagging by year"""
 
 
 BTAG_TAGGER_NAMES = {
-    # tagger names with capitalization as it appears in the correction JSON
     "deepcsv": "deepCSV",
     "deepjet": "deepJet"
 }
+"""tagger names with capitalization as it appears in the correction JSON"""
 
 
 class BTagWeighter:
+    """Calculate the weights for b tagging
+
+    This implements the methods described in
+    https://twiki.cern.ch/twiki/bin/view/CMS/BTagSFMethods
+
+    Attributes
+    ----------
+    sources
+        List of uncertainty sources available
+    """
     def __init__(self, sf_filename, eff_filename, tagger, year,
                  method="fixedwp", meastype="mujets", ignore_missing=False):
+        """
+        Parameters
+        ----------
+        sf_filename
+            File name of the scale factors made by the POG
+        eff_filename
+            Path to file with efficiencies of the analysis b tagging cut.
+            In Pepper the file can be generated by the
+            generate_btag_efficiencies.py script
+        tagger
+            Name of the tagger. Usually "deepCSV" or "deepJet".
+            Case insensitive
+        year
+            Year of the data
+        method
+            Method to use, eithwe "fixedwp" or "iterativefit". "fixedwp" is
+            used when the analysis is using one of the POG defined working
+            points. "iterativefit" should be used when the b-tagging
+            descriminant itself is used in the analysis.
+        meastype
+            Which type of scale factors provided by the POG should be used.
+        ignore_missing
+            If False, raise error if weight could not be computed, else
+            return 1.
+        """
 
         if isinstance(method, str):
             method = method.lower()
@@ -488,6 +605,32 @@ class BTagWeighter:
     def __call__(
             self, wp, jf, eta, pt, discr, variation="central",
             efficiency="central"):
+        """Evaluate the weight for the b tagging
+
+        Parameters
+        ----------
+        wp
+            Working point of the cut. Ignored if ``self.method``
+            is ``iterativefit``
+        jf
+            Jet flavor, same numbering as the PDG ID, but without sign
+        eta
+            Eta of the jet four momentum
+        pt
+            pt of the jey four momentum
+        discri
+            b-tagging discriminator value of the jets
+        variation
+            Uncertainty variation to do. "central" do derive nominal weights
+        efficiency
+            Efficiency can depend on the systematic variation that is done.
+            This specifies the name of the varition to use the efficiency from.
+            The provided efficieny file must have a histogram named as such.
+
+        Returns
+        -------
+            Array of b-tagging weights
+        """
         if self.method == "fixedwp" and self.filetype == "csv":
             sf = self._fixedwp(
                 wp, jf, eta, pt, discr, variation, efficiency)
@@ -502,11 +645,22 @@ class BTagWeighter:
 
     @property
     def available_efficiencies(self):
+        """Different available efficiencies as found in the provided efficiency
+        file. Efficiencies can depend on the systematic variation"""
         return set(self.eff_evaluator.keys())
 
 
 class JetPuIdWeighter:
+    """Compute weights for the jet pileup ID"""
     def __init__(self, sf_filename, eff_filename=None):
+        """
+        Parameters
+        ----------
+        sf_filename
+            Name of the scale factors probided by the POG in form of a JSON
+        eff_filename
+            File with efficiencies
+        """
         self.sf_evaluator = correctionlib.CorrectionSet.from_file(sf_filename)
         if "PUJetID_mis" in [k for k in self.sf_evaluator.keys()]:
             self.has_mis_prob = True
@@ -521,6 +675,25 @@ class JetPuIdWeighter:
 
     def __call__(self, wp, eta, pt, pass_puid, has_gen_jet,
                  sf_type="eff", variation="nom"):
+        """Compute the jet pileup ID weights for the specified data
+
+        Parameters
+        ----------
+        wp
+            The working point of the used ID cut
+        eta
+            Eta of the jet four vectors
+        pt
+            pt of the jet four vectors
+        pass_puid
+            Whether the jets pass the pileup ID cut
+        has_gen_jet
+            Whether a jet as a generator-level jet associated to it
+        sf_type
+            Type of scale factors to use. Either "eff" or "mis"
+        variation
+            Systematic variation to do. "nom" for nominal weights
+        """
         if sf_type == "eff":
             eta = eta[has_gen_jet]
             pt = pt[has_gen_jet]
@@ -570,7 +743,15 @@ class JetPuIdWeighter:
 
 
 class PileupWeighter:
+    """Compute weights for the pileup reweighting"""
     def __init__(self, rootfile):
+        """
+        Paramteres
+        ----------
+        rootfile
+            Path to a Root file containing the weights. In pepper this file
+            can be generated by the generate_pileup_weights.py script
+        """
         self.central = {}
         self.up = {}
         self.down = {}
@@ -592,6 +773,19 @@ class PileupWeighter:
                 "Missing up/down or central weights for some datasets")
 
     def __call__(self, dsname, ntrueint, variation="central"):
+        """Compute the weights for given events
+
+        Parameters
+        ----------
+        dsname
+            Name of the data set
+        ntrueint
+            Number of true pileup per event. Pileup_ntrueint in NanoAOD
+
+        Returns
+        -------
+            Array of weights
+        """
         # If all_datasets is present, use that instead of per-dataset weights
         if "all_datasets" in self.central:
             key = "all_datasets"
@@ -609,9 +803,24 @@ class PileupWeighter:
 
 
 class TopPtWeigter:
-    # Top pt reweighting according to
-    # https://twiki.cern.ch/twiki/bin/viewauth/CMS/TopPtReweighting
+    """Top pt reweighting according to
+    https://twiki.cern.ch/twiki/bin/viewauth/CMS/TopPtReweighting
+    """
     def __init__(self, method, scale=1.0, sys_only=False, **kwargs):
+        """
+        Parameters
+        ----------
+        method
+            The method to use. Either "datanlo" or "theory"
+        scale
+            An overall scale to multiple the weights by
+        sys_only
+            Whether this reweighting should be used only as a systematic
+            variation and not to scale nominal event weights
+        **kwargs
+            Parameters in the reweighting formulas. See ``datanlo_sf()`` and
+            ``theory_sf``
+        """
         if method.lower() == "datanlo":
             self.sffunc = self.datanlo_sf
         elif method.lower() == "theory":
@@ -623,13 +832,45 @@ class TopPtWeigter:
         self.kwargs = kwargs
 
     def datanlo_sf(self, pt):
+        """Data-NLO method
+
+        Uses the formula ``exp(a + b * pt)``. ``a`` and ``b`` are obtained
+        from the ``kwargs`` attribute.
+
+        Parameters
+        ----------
+        pt
+            pt of the top four momentum
+        """
         return np.exp(self.kwargs["a"] + self.kwargs["b"] * pt)
 
     def theory_sf(self, pt):
+        """Theory method
+
+        Uses the formula ``a * exp(b * pt) + c * pt + d``.
+        ``a``, ``b``, ``c`` and ``d`` are obtained from the ``kwargs``
+        attribute.
+        """
         arg = self.kwargs
         return arg["a"] * np.exp(arg["b"] * pt) + arg["c"] * pt + arg["d"]
 
     def __call__(self, toppt, antitoppt):
+        """Compute the weights for the top pt reweighting
+
+        Weights for top quark and top antiquark are multiplied under square
+        root.
+
+        Parameters
+        ----------
+        toppt
+            pt of the four momentum of the top quarks
+        antitoppt
+            pt of the four momentum of the top antiquarks
+
+        Returns
+        -------
+            Array of one weight per event
+        """
         sf = self.sffunc(toppt)
         antisf = self.sffunc(antitoppt)
         return np.sqrt(sf * antisf) * self.scale

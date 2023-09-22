@@ -26,18 +26,32 @@ logger = logging.getLogger(__name__)
 
 class Processor(coffea.processor.ProcessorABC):
     """Class implementing input/output, setup of histograms, and utility
-    classes"""
+    classes
+
+    It implements many technicalities but no functionality related to physics.
+    Classes deriving from it are supposed to implement cuts or particle
+    definitions.
+
+    Attributes
+    ----------
+    config_class
+        Class to use for config parsing
+    schema_class
+        Class to use as schema for the input data (usually NanoAODSchema)
+    """
     config_class = pepper.Config
     schema_class = NanoAODSchema
 
     def __init__(self, config, eventdir):
-        """Create a new Processor
-
-        Arguments:
-        config -- A Config instance, defining the configuration to use
-        eventdir -- Destination directory, where the event HDF5s are saved.
-                    Every chunk will be saved in its own file. If `None`,
-                    nothing will be saved.
+        """
+        Parameters
+        ----------
+        config
+            Instance of ``config_class``, containing the configuration to use
+        eventdir
+            Path to the destination directory, where the per event output is
+            saved. Every chunk will be saved in its own file. If `None`,
+            nothing will be saved.
         """
         self._check_config_integrity(config)
         self.config = config
@@ -51,11 +65,18 @@ class Processor(coffea.processor.ProcessorABC):
 
     @staticmethod
     def _check_config_integrity(config):
+        """Is called when initialized and is supposed to check the
+        configuration for obvious errors, so that the user has an immediate
+        error message.
+        """
         # Nothing to do here currently. Implemented in subclasses
         pass
 
     @staticmethod
     def _get_hists_from_config(config, key, todokey):
+        """Get all histograms to create from config. The config allows the
+        specification of a list of histograms to do, even if there are more
+        histograms defined in the config."""
         if key in config:
             hists = config[key]
         else:
@@ -71,6 +92,10 @@ class Processor(coffea.processor.ProcessorABC):
         return hists
 
     def _load_rng_seed(self):
+        """Load the random number generator seed. The seed is a large integer
+        saved in a txt file. The location of the txt file is obtained from
+        the configuration. If it does not exists, a new seed is made and saved
+        to the txt file."""
         if "rng_seed_file" not in self.config:
             return np.random.SeedSequence().entropy
         seed_file = self.config["rng_seed_file"]
@@ -90,13 +115,59 @@ class Processor(coffea.processor.ProcessorABC):
             return rng_seed
 
     def preprocess(self, datasets):
+        """Modify the list of data sets that are processed
+
+        The main purpose is method is when subclasses should be run only
+        on specific data sets. These subclasses can enfored this here
+
+        Parameters
+        ----------
+        datasets
+            Dict mapping data set names to list of data set sources. Sources
+            can be path or full CMS data set names.
+
+        Returns
+        -------
+        datasets
+            The same as the ```datasets``` parameters, but modified if needed
+            by the processor.
+        """
         return datasets
 
     @staticmethod
     def postprocess(accumulator):
+        """Modify the output of the produced processor
+
+        This could be overwritten by subclasses if they want to modify the
+        output slightly
+
+        Parameters
+        ----------
+        accumulator
+            The output of the processor
+
+        Returns
+        -------
+        accumulator
+            Modified, if nessecary, version of the input ``accumulator``
+        """
         return accumulator
 
     def _open_output(self, dsname, filetype):
+        """Try to open an output file for writing the per-event data. It is
+        ensured the file is newly created and does not overwrite existing data.
+
+        Parameters
+        ----------
+        dsname
+            Name of the data set of the data
+        filetype
+            Either "root" or "hdf5". The type of the output file
+
+        Returns
+        -------
+            File object of the opened file
+        """
         if filetype == "root":
             ext = ".root"
         elif filetype == "hdf5":
@@ -125,6 +196,8 @@ class Processor(coffea.processor.ProcessorABC):
         return f
 
     def _prepare_saved_columns(self, selector):
+        """Creates an array to be saved as per-event data. The content is taken
+        from the selector's and the data pickers defined in the config."""
         columns = {}
         if "columns_to_save" in self.config:
             to_save = self.config["columns_to_save"]
@@ -151,6 +224,7 @@ class Processor(coffea.processor.ProcessorABC):
 
     def _save_per_event_info_hdf5(
             self, dsname, selector, identifier, save_full_sys=True):
+        """Save the per-event info into an HDF5 file"""
         out_dict = {"dsname": dsname, "identifier": identifier}
         out_dict["events"] = self._prepare_saved_columns(selector)
         cutnames, cutflags = selector.get_cuts()
@@ -170,6 +244,19 @@ class Processor(coffea.processor.ProcessorABC):
 
     @staticmethod
     def _separate_masks_for_root(arrays):
+        """Seperate a masked awkward array into an unmasked array and an array
+        defining its mask.
+
+        Parameters
+        ----------
+        arrays
+            Dict of awkard arrays to unmask
+
+        Returns
+        -------
+            Dict with unsmaked arrays and their masks. The masks have the same
+            key prefixed by "mask"
+        """
         ret = {}
         for key, array in arrays.items():
             if (not isinstance(array, ak.Array)
@@ -191,6 +278,7 @@ class Processor(coffea.processor.ProcessorABC):
 
     def _save_per_event_info_root(self, dsname, selector, identifier,
                                   save_full_sys=True):
+        """Save the per-event info into a Root file"""
         out_dict = {"dsname": dsname, "identifier": str(identifier)}
         events = self._prepare_saved_columns(selector)
         # Workaround: Use ak.packed to make sure offset arrays of virtual
@@ -219,6 +307,21 @@ class Processor(coffea.processor.ProcessorABC):
                 outf[key] = out_dict[key]
 
     def save_per_event_info(self, dsname, selector, save_full_sys=True):
+        """Save the per-event info
+
+        Parameters
+        ----------
+        dsname
+            Name of the data set of the data
+        selector
+            Selector containing data, systematics and all the other info
+            we save
+        identifier
+            Touple that uniquely identifies the data that goes into the file
+        save_full_sys
+            Whether to save all systematic variations. If ``False`` only
+            the event weight is saved
+        """
         idn = self.get_identifier(selector)
         logger.debug("Saving per event info")
         if "column_output_format" in self.config:
@@ -238,10 +341,34 @@ class Processor(coffea.processor.ProcessorABC):
 
     @staticmethod
     def get_identifier(data):
+        """Get a unique identifier for the data as used in the per-event data
+        file
+
+        Parameters
+        ----------
+        data
+            Data array (usually NanoEvents) or Selector
+
+        Returns
+        -------
+            Tuple uniquely identifing the data
+        """
         meta = data.metadata
         return meta["filename"], meta["entrystart"], meta["entrystop"]
 
     def process(self, data):
+        """Do all setup steps of the selector, output filler, follwed by
+        performing the actual selection and saving the output
+
+        Parameters
+        ----------
+        data
+            Data array (usually NanoEvents)
+
+        Returns
+        -------
+            Output from the processor, containing hists and/or cutflows
+        """
         pepper_logger = logging.getLogger("pepper")
         try:
             jobad = pepper.htcondor.get_htcondor_jobad()
@@ -265,6 +392,8 @@ class Processor(coffea.processor.ProcessorABC):
             raise
 
     def _process_inner(self, data):
+        """Inner part of the ``process()`` method, so that it can easily be
+        part of a try-block"""
         starttime = time()
         dsname = data.metadata["dataset"]
         filename = data.metadata["filename"]
@@ -286,6 +415,21 @@ class Processor(coffea.processor.ProcessorABC):
         return filler.output
 
     def setup_outputfiller(self, dsname, is_mc):
+        """Create a new output filler to be used throughout the selection. The
+        output filler is responsible to create the output of the processor,
+        including histograms and cutflows
+
+        Parameters
+        ----------
+        dsname
+            Name of the data set that is processed
+        is_mc
+            Whether the data is simulation
+
+        Returns
+        -------
+            An instance of an ``OutputFiller`` to be used for the selection
+        """
         sys_enabled = self.config["compute_systematics"]
 
         if dsname in self.config["dataset_for_systematics"]:
@@ -313,6 +457,24 @@ class Processor(coffea.processor.ProcessorABC):
         return filler
 
     def setup_selection(self, data, dsname, is_mc, filler):
+        """Create a new selector that is to be used throughout the selection.
+        The selector lets us specify cuts and new columns.
+
+        Parameters
+        ----------
+        data
+            Data array (usually NanoEvents)
+        dsname
+            Name of the data set that is processed
+        is_mc
+            Whether the data is simulation
+        filler
+            The output filler used in the selection
+
+        Returns
+        -------
+            A new instance of ``Selector`` for the selection
+        """
         if is_mc:
             genweight = data["genWeight"]
         else:
@@ -326,18 +488,44 @@ class Processor(coffea.processor.ProcessorABC):
 
     @abc.abstractmethod
     def process_selection(self, selector, dsname, is_mc, filler):
-        """Do selection steps, e.g. cutting, defining objects
+        """Do selection steps, e.g. cutting, defining objects.
 
-        Arguments:
-        selector -- A pepper.Selector object with the event data
-        dsname -- Name of the dataset from config
-        is_mc -- Bool, whether events come from Monte Carlo
-        filler -- pepper.OutputFiller object to controll how the output is
-                  structured if needed
+        This is to be defined in the practial implementations of the
+        processors. Users that want to implement an analysis should inherit in
+        some way from the processor and overwrite this method.
+
+        Parameters
+        ----------
+        selector
+            A pepper.Selector object with the event data
+        dsname
+            Name of the data set that is processed
+        is_mc
+            Whether the data is simulation
+        filler
+            pepper.OutputFiller object to controll how the output is structured
         """
 
     @staticmethod
     def _get_cuts(output):
+        """Get a list of cuts in the order they are applied
+
+        The cuts are obtained from an output's cutflow.
+
+        Paramters
+        ---------
+        output
+            The output in which the cutflow is found
+
+        Returns
+        -------
+            List of cuts
+
+        Raises
+        ------
+        ValueError
+            When no ordering of cuts could be identified
+        """
         cutflow_all = output["cutflows"]
         cut_lists = [list(cutflow.keys()) for cutflow
                      in cutflow_all.values()]
@@ -361,6 +549,9 @@ class Processor(coffea.processor.ProcessorABC):
 
     @staticmethod
     def _prepare_cutflows(proc_output):
+        """Convert the cutflows into a dictionary. Cutflows are produced as
+        one bin histograms, thus conversion is needed. Aditionally, this adds
+        a sum (with the key "all")."""
         cutflows = proc_output["cutflows"]
         output = {}
         for dataset, cf1 in cutflows.items():
@@ -380,6 +571,33 @@ class Processor(coffea.processor.ProcessorABC):
 
     @staticmethod
     def _save_histograms_inner(key, histdict, cuts, hist_col, format):
+        """Save a histogram
+
+        This method does the actual work and can be run
+        in paramell. This may take them due to having to sum histograms
+        across different data sets and in case of the Root format, having
+        to split into sub-histograms.
+
+        Parameters
+        ----------
+        key
+            Key to be used in ``hist_col``. Touple with the first element being
+            the a cut name
+        histdict
+            The histogram split into sub-histograms, one for each data set
+        cuts
+            List of cuts that have been applied
+        hist_col
+            HistCollection instance, which is used to save the histogram
+        format
+            Either "hist" or "root". The format to save the histogram in.
+            Usually "hist" is faster.
+
+        Returns
+        -------
+            The ``hist_col``
+
+        """
         hist_sum = None
         cats_present = set()
         for dataset, hist in histdict.items():
@@ -403,6 +621,20 @@ class Processor(coffea.processor.ProcessorABC):
 
     @classmethod
     def save_histograms(cls, format, output, dest, threads=10):
+        """Save histograms to files
+
+        Parameters
+        ----------
+        format
+            Either "hist" or "root". The format to save the histogram in.
+            Usually "hist" is faster.
+        output
+            Output from the processor's output filler
+        dest
+            Path to the destination directory to save the histograms in
+        threads
+            Number of processes to run in parallel to do the saving
+        """
         cuts = cls._get_cuts(output)
         hists = defaultdict(dict)
         data = {"cuts": cuts}
@@ -424,6 +656,15 @@ class Processor(coffea.processor.ProcessorABC):
             hist_col.save_metadata_json(f)
 
     def save_output(self, output, dest):
+        """Save the histograms and cutflows to files
+
+        Parameters
+        ----------
+        output
+            Output from the processor's output filler
+        dest
+            Destination direction
+        """
         # Save cutflows
         with open(os.path.join(dest, "cutflows.json"), "w") as f:
             json.dump(self._prepare_cutflows(output), f, indent=4)

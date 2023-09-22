@@ -42,13 +42,15 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
     """Abstract base class for executors that save their state and thus are
     able to resume if there was an interruption
 
-    Parameters:
-    state_file_name -- Name of the file to save and read the state to/from
-    remove_state_at_end -- Bool, if true, remove the state file after
-                           successful completion
-    save_interval -- Seconds that have to pass before the state is saved
-                     after start or the last save. The sate is saved only
-                     after the completion of an item
+    Attributes
+    ----------
+    state_file_name
+        Name of the file to save and read the state to/from
+    remove_state_at_end
+        Bool, if true, remove the state file after successful completion
+    save_interval
+        Seconds that have to pass before the state is saved after start or the
+        last save. The sate is saved only after the completion of an item
     """
 
     state_file_name: Optional[str] = None
@@ -68,6 +70,10 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
         self._progress = None
 
     def _manage_state(self):
+        """Method run inside a separate thread, which watches the
+        ``_state_manager_queue`` for new results, adds them to the ones already
+        in the state and saves the state to a file if necessary
+        """
         state = self.state
         state_changed = False
         nextstatebackup = time.time() + self.save_interval
@@ -92,6 +98,30 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
             self.save_state()
 
     def _accumulate(self, results, items_done=None, accumulator=None):
+        """Accumulates results and adds them to an accumulator
+
+        Accumulation essentially uses the += operator on the objects inside the
+        results.
+
+        Parameters
+        ----------
+        results
+            Results as they come from the workers. Will be decompressed if
+            neccessary.
+        items_done
+            The items in results will be added to this list
+        accumulator
+            The results will be added to this accumulator
+
+        Returns
+        -------
+        items_done
+            Same as the ``items_done`` parameter or a new list if it was
+            ``None``
+        accumulator
+            Same as the ``accumulator`` parameter or a new accumulator if it
+            was ``None``
+        """
         if items_done is None:
             items_done = []
         for result in results:
@@ -106,7 +136,19 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
         return items_done, accumulator
 
     def copy(self, **kwargs):
-        # Same as ExecutorBase.copy, plus handling of additional private fields
+        """Create a shallow copy of the executor
+
+        This is similar to Coffea's ExecutorBase.copy.
+
+        Parameters
+        ----------
+        **kwargs
+            Attributes that will be overwritten in the copy
+
+        Returns
+        -------
+            A shallow copy of `self`
+        """
         tmp = {f.name: getattr(self, f.name) for f in fields(self)}
         tmp.update(kwargs)
         instance = type(self)(**tmp)
@@ -117,9 +159,11 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
     def load_state(self, filename=None):
         """Load a previous state from a file
 
-        Parameters:
-        filename -- Name of the file to read the state from. If not given,
-                    will load from self.state_file_name
+        Parameters
+        ----------
+        filename
+            Name of the file to read the state from. If not given, will load
+            from ``self.state_file_name``.
         """
 
         if filename is None:
@@ -133,10 +177,25 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
         self.state = state
 
     def reset_state(self):
+        """Set the state to an empty one
+        """
         self.state = {"items_done": [], "accumulator": None,
                       "version": STATEFILE_VERSION, "userdata": {}}
 
     def __call__(self, items, function, accumulator):
+        """Start the execution, usually to be called from inside the Coffea
+        Runner
+
+        Parameters
+        ----------
+        items
+            Each item is hashable and uniquely identifies each task to be done
+        function
+            The function to be executied on ``items``
+        accumulator
+            Accumulator to use. Can contain results already or can also be
+            ``None``
+        """
         items_done = set(self.state["items_done"])
         items = [item for item in items if item not in items_done]
         if len(items) == 0:
@@ -185,9 +244,30 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
 
     @abc.abstractmethod
     def _submit(self, items, function):
+        """Defines how to submit and execute the work
+
+        Parameters
+        ----------
+        items
+            Each item is so be called on ``function``
+        function
+            Function to be executed
+
+        Returns
+        -------
+        results
+            Generator for the results. Results that are completed first should
+            also be yielded first
+        """
         return
 
     def save_state(self):
+        """Save the state of this executor to the disk
+
+        The file created is named according to the ``state_file_name``
+        attribute and cam be used to obtain an executor of the same state using
+        ``load_state``.
+        """
         # Save state to a new file and only replace the previous state file
         # when writing is finished. This avoids leaving only an invalid state
         # file if the program is terminated during writing.
@@ -206,11 +286,19 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
 # ClusterExecutor.__init__
 @dataclass
 class _WithCluster:
+    """
+    Attributes
+    ----------
+    cluster
+        To be used to execute work
+    """
     cluster: pepper.htcondor.Cluster
 
 
 @dataclass
 class ClusterExecutor(ResumableExecutor, _WithCluster):
+    """Uses ``pepper.htcondor.Cluster`` to execute work
+    """
     @staticmethod
     def get_taskname(item, i):
         if hasattr(item, "entrystart"):
@@ -226,8 +314,37 @@ class ClusterExecutor(ResumableExecutor, _WithCluster):
 
 
 class Runner(coffea.processor.Runner):
+    """
+    This is used to make it possible retry a different XRootD server if the
+    first server gave an error
+
+    Making a subclass is a bad solution but there seems to be no other solution
+    other than making our own Runner. Coffea's Runner is using ``uproot.open``
+    inside ``metadata_fetcher`` and ``_work_function``.
+    """
     @staticmethod
     def resolve_lfn(lfn, store, xrootddomain, skippaths):
+        """Converts logical file names (LFNs) to physical file names that can
+        be understood by ``uproot.open``
+
+        Parameters
+        ----------
+        lfn
+            If it starts with 'cmslfn://', it is interpreseted as logical file
+            name, otherwise it is assumed it already is a physical file name
+        store
+            Path to the store directory for local access to the file
+        xrootddomain
+            Domain of the redirector server to find sites that offer the file
+            via XRootD
+        skippaths
+            Blacklist of physical file paths to ignore
+
+        Returns
+        -------
+        filepaths
+            Physical file paths associated to ``lfn``
+        """
         if lfn.startswith("cmslfn://"):
             filepaths = pepper.datasets.resolve_lfn(lfn, store, xrootddomain)
         else:

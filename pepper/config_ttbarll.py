@@ -12,13 +12,15 @@ class ConfigTTbarLL(pepper.ConfigBasicPhysics):
     def __init__(self, path_or_file, textparser=hjson.load, cwd="."):
         """Initialize the configuration.
 
-        Arguments:
-        path_or_file -- Either a path to the file containing the configuration
-                        or a file-like object of it
-        textparser -- Callable to be used to parse the text contained in
-                      path_or_file
-        cwd -- A path to use as the working directory for relative paths in the
-               config. The actual working directory of the process might change
+        Parameters
+        ----------
+        path
+            Path to the file containing the configuration
+        textparser
+            Callable to be used to parse the text contained in path_or_file
+        cwd
+            Path to use as the working directory for relative paths in the
+            config. The actual working directory of the process might change
         """
         super().__init__(path_or_file, textparser, cwd)
 

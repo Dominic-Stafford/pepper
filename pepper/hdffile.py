@@ -30,17 +30,21 @@ class HDF5File(MutableMapping):
                  packed=True):
         """Create or open an HDF5 file storing awkward arrays
 
-        Arguments:
-        file -- Filename as string or Python file object or h5py file object
-        mode -- Determines whether to read ('r') or to write ('w') in case
-                `file` is a string
-        compression -- If the file is opened for writing, determines the
-                       compression used for writing. If None, compression
-                       is disabled. Either the value for `compression` in
-                       `h5py.Group.create_dataset` or a mapping with keys
-                       `compression` and `compression_opts`. See
-                       `h5py.Group.create_dataset` for details.
-        packed -- Minimize size that awkward arrays will take using ak.packed.
+        Arguments
+        ---------
+        file
+            Filename as string or Python file object or h5py file object
+        mode
+            Determines whether to read ('r') or to write ('w') in case
+            ``file`` is a string
+        compression
+            If the file is opened for writing, determines the compression used
+            for writing. If None, compression is disabled. Either the value for
+            ``compression`` in ``h5py.Group.create_dataset`` or a mapping with
+            keys ``compression`` and ``compression_opts``. See
+            ``h5py.Group.create_dataset`` for details.
+        packed
+            Minimize size that awkward arrays will take using ``ak.packed``.
         """
         if isinstance(file, str):
             if mode is None:

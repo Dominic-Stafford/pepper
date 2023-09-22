@@ -73,8 +73,13 @@ else:
 
 
 def get_site():
-    """Returns the name of the computing site currently on. If the site is
-    unknown, returns the hostname"""
+    """
+    Returns
+    -------
+    hostname
+        Name of the computing site currently on. If the site is
+        unknown, returns the hostname
+    """
     hostname = os.uname().nodename
     if hostname.endswith(".cern.ch") and hostname.startswith("lxplus"):
         return "lxplus"
@@ -87,24 +92,39 @@ def get_site():
 def get_dask_cluster(num_jobs, runtime=3*60*60, memory="1.5 GB", disk="3 GB",
                      cores=1, *, condorsubmit=None, condorenv=None,
                      logdir=None, memorylimit=None):
-    """Get a Dask Jobqueue HTCondor cluster for a host.
+    """Get a Dask Jobqueue HTCondor cluster for a host
 
-    Arguments:
-    num_jobs -- Number of jobs/processes to run in parallel
-    runtime -- Requested runtime in seconds. If None, do not request a runtime
-    memory -- Request memory. String with a unit like "GB" or an int.
-    retries -- The number of times to retry a failed task. If None, the task is
-               retried until it stops failing
-    condorsubmit -- String containing additional parameters for the Condor
-                     submit file.
-    condorenv -- Path to a Shell script that is sourced before the job starts
-                  If None, try to use the file pointed at by the local
-                  environment variable PEPPER_CONDOR_ENV and its contents
-                  instead. If PEPPER_CONDOR_ENV is also not set, no futher
-                  environment will be set up.
-    logdir -- Directory where to store stdout and stderr logs
-    workers_per_job -- Number of workers (processes) the job on Condor will
-                       simultaneously run.
+    Parameters
+    ---------
+    num_jobs
+        Number of jobs to run in parallel
+    runtime
+        Requested runtime in seconds. If None, do not request a runtime
+    memory
+        Request memory. String with a unit like "GB" or an int.
+    disk
+        Request disk space. String with a unit like "GB" or an int.
+    cores
+        Total number of cores per job
+    condorsubmit
+        String containing additional parameters for the HTCondor submit file.
+    condorenv
+        Path to a Shell script that is sourced before the job starts
+        If None, try to use the file pointed at by the local
+        environment variable PEPPER_CONDOR_ENV and its contents
+        instead. If PEPPER_CONDOR_ENV is also not set, no futher
+        environment will be set up.
+    logdir
+        Directory where to store stdout and stderr logs
+    memorylimit
+        Maximum memory the job is allowed to use before it is killed by Dask.
+        If ``Ǹone`` use three times of ``memory``
+
+    Returns
+    -------
+    cluster
+        Can be used within a distrubted Client to submit jobs to HTCondor
+        Use ``client = distrubted.Client(cluster)``
     """
 
     site_config = {
@@ -172,9 +192,32 @@ def get_htcondor_jobad():
 
 
 class Cluster:
+    """Run tasks either locally or on HTCondor.
+
+    Internally, this class may call ``get_dask_cluster`` in order to submit
+    jobs to HTCondor.
+    """
     def __init__(
             self, num_jobs, condorsubmit=None, condorinit=None,
             logdir="pepper_logs", retries=None, condorsubmitfile=None):
+        """
+        Parameters
+        ----------
+        num_jobs
+            The number of jobs to create on HTCondor. If ``None`` run locally
+        condorsubmit
+            Additional content to add to the HTCondor submit file
+        condorinit
+            Path to a script that will get sourced by the HTCondor jobs in
+            order to initialize the environment
+        logdir
+            Directory to write log file to
+        retries
+            Number of retries if a job fails. If ``None`` retry indefinitely
+        condorsubmitfile
+            Path to a file containing additional content to add to the
+            HTCondor submit file
+        """
         self.logdir = self.get_enumerated_dir(logdir)
         if num_jobs is None:
             # Run locally
@@ -249,6 +292,24 @@ class Cluster:
         return new_task
 
     def process(self, function, *iterables, key=None):
+        """Call function on each item in iterables, either locally or on
+        HTCondor
+        The parameters are handled in the same fashion as in Python's ``map``
+        function.
+
+        Parameters
+        ----------
+        function
+            Function to be called
+        *iterables
+            Arguments to the function call.
+        key
+            Key as in ``distributed.Client.map``
+
+        Yields
+        -------
+            Return values of function in the order they are finished
+        """
         if self.client is None:
             for args in zip(*iterables):
                 yield function(*args)
@@ -257,12 +318,17 @@ class Cluster:
 
     @property
     def dashboard_link(self):
+        """URL to the Dask client dashboard"""
         if self.client is None:
             return None
         return self.client.dashboard_link
 
     @staticmethod
     def set_global_config():
+        """Set the config of the local process that is needed to errorlessly
+        run on HTCondor. For example ensuring the maximum number of connections
+        is large enough
+        """
         # Increase maximum number of connections. Dask needs ~4 per job
         nfilelimit = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
         resource.setrlimit(resource.RLIMIT_NOFILE,
@@ -272,6 +338,7 @@ class Cluster:
         logging.getLogger("distributed").setLevel(logging.WARNING)
 
     def close(self):
+        """Close the Dask client"""
         if self.client is not None:
             self.client.close()
 

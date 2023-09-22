@@ -11,10 +11,21 @@ import awkward as ak
 import hist as hi
 
 
+"""
+Attributes
+----------
+XROOTDTIMEOUT
+    Seconds to wait for XRootD request to be replied by the server before
+    raising an error
+"""
+
+
 XROOTDTIMEOUT = 10  # 10 s, no need to bother with slow sites
 
 
 def normalize_trigger_path(path):
+    """Remove trigger prefixes, such as HLT and L1, as well as suffixes, such
+    as _v, from trigger paths"""
     # Remove HLT and L1 prefixes
     if path.startswith("HLT_"):
         path = path[4:]
@@ -30,18 +41,28 @@ def get_trigger_paths_for(dataset, is_mc, trigger_paths, trigger_order=None,
                           normalize=True, era=None):
     """Get trigger paths needed for the specific dataset.
 
-    Arguments:
-    dataset -- Name of the dataset
-    trigger_paths -- dict mapping dataset names to their triggers
-    trigger_order -- list of datasets to define the order in which the triggers
-                     are applied.
-    normalize -- bool, whether to remove HLT_ from the beginning
-    era -- None or a string. If not None and if <name>_era, where name is any
-           dataset name, is present in `trigger_paths`, it will be used over
-           just <name>. This can be used to define per era triggers.
+    Parameters
+    ----------
+    dataset
+        Name of the dataset
+    trigger_paths
+        dict mapping dataset names to their triggers
+    trigger_order
+        Datasets to define the order in which the triggers are applied.
+    normalize
+        Whether to remove HLT_ from the beginning
+    era
+        If not None and if <name>_era, where name is any dataset name, is
+        present in `trigger_paths`, it will be used over just <name>. This can
+        be used to define per era triggers.
 
-    Returns a tuple of lists (pos_triggers, neg_triggers) describing trigger
-    paths to include and to exclude respectively.
+    Returns
+    -------
+    pos_triggers
+        Triggers that events in the data set need to pass
+    neg_triggers
+        Trigger that events in the data set must not pass (to avoid double
+        counting)
     """
     if isinstance(trigger_order, dict):
         if era in trigger_order.keys():
@@ -92,7 +113,7 @@ def hist_split_strcat(hist):
 
 def get_hist_cat_values(hist):
     """Return a map from the different categories of a hist histogram
-    to the values (in the same way hist.values did for a coffea hist).
+    to the values (in the same way hist.values did for a coffea hists).
     Will hopefully be superseded in the near future by a dedicated hist
     function."""
     axs = [ax for ax in hist.axes if isinstance(ax, hi.axis.StrCategory)]
@@ -147,18 +168,27 @@ def chunked_calls(array_param, returns_multiple=False, chunksize=10000,
     The resulting functions will have two additional parameters, chunksize and
     num_threads. For a description see below.
 
-    Arguments:
-    array_param -- Parameter that will defninitely be a chunkable argument
-    returns_multiple -- Needs to be set to true if the function returns more
-                        than one variable, e.g. as a tuple or list
-    chunksize -- Default maximum chunk size to call the function on. The
-                 chunksize can be adjusted by using the keyword argument
-                 `chunksize` of the resulting function.
-    num_threads -- Number of simultaneous threads. Each thread processes one
-                   chunk at a time, allowing to process multiple chunks in
-                   parallel and on multiple cores. The number of threads can be
-                   adjusted by using the keyword argument `num_threads` of the
-                   resulting function.
+    Parameters
+    ----------
+    array_param
+        Parameter that will defninitely be a chunkable argument
+    returns_multiple
+        Needs to be set to true if the function returns more than one
+        variable, e.g. as a tuple or list
+    chunksize
+        Default maximum chunk size to call the function on. The chunksize can
+        be adjusted by using the keyword argument `chunksize` of the resulting
+        function.
+    num_threads
+        Number of simultaneous threads. Each thread processes one chunk at a
+        time, allowing to process multiple chunks in parallel and on multiple
+        cores. The number of threads can be adjusted by using the keyword
+        argument `num_threads` of the resulting function.
+
+    Returns
+    -------
+    decorator
+        Decorator function
     """
 
     def concatenate(arrays):
@@ -230,10 +260,25 @@ def chunked_calls(array_param, returns_multiple=False, chunksize=10000,
 
 
 def onedimeval(func, *arrays, tonumpy=True, output_like=0):
-    """Evaluate the callable `func` on the flattened versions of arrays. These
-    are converted into numpy arrays if `tonumpy` is true. The return value is
-    the result of `func` converted into an awkward array, unflattened and with
-    the parameters and behavior of the array at position `output_like`.
+    """Evaluate a function on the flattened one dimensional version of arrays
+
+    Parameters
+    ----------
+    func
+        Function to execute
+    *arrays
+        Arrays that will be planned and fed into ``func``
+    tonumpy
+        Whether to convert the flattened arrays to numpy arrays
+    output_like
+        Position of the array in ``arrays`` to take parameters and behavior
+        from
+
+    Returns
+    -------
+        An unflattened version of the array that was returned by ``func``.
+        Its behavior and parameters are set according to the array pointed to
+        by ``output_like``
     """
     counts_all_arrays = []
     flattened_arrays = []
@@ -260,6 +305,22 @@ def onedimeval(func, *arrays, tonumpy=True, output_like=0):
 
 
 def akremask(array, mask):
+    """Make an array of length of ``mask``, where values inside ``array`` are
+    used where mask is ``True`` and masked values where it is ``False``.
+
+    Parameters
+    ----------
+    array
+        Array to obtain the values from. Length is equal to the number of
+        ``True`` occurances in ``mask``
+    mask
+        Array identifying masked values
+
+    Returns
+    -------
+    array
+        The produced array
+    """
     if ak.sum(mask) != len(array):
         raise ValueError(f"Got array of length {len(array)} but mask needs "
                          f"{ak.sum(mask)}")
@@ -270,24 +331,45 @@ def akremask(array, mask):
 
 
 class VirtualArrayCopier:
-    """Create a shallow copy of the an awkward Array such as NanoEvents
+    """Create a shallow copy of the an awkward Record Array such as NanoEvents
     while trying to not make virtual subarrays load their contents.
+
+    Setting fields in record arrays containing virtual arrays often leads to
+    the virtual arrays to be loaded, which should be avoided. The class makes
+    it possible to achieve this.
+
+    Notes
+    -----
+        With the removal of Virtual Arrays in Awkward version 2, this class
+        will also lose its function.
     """
     def __init__(self, array, attrs=[]):
+        """
+        Parameters
+        ----------
+        array
+            Record array containing virtual arrays that should not be touched
+        attrs
+            Attributes of the array to keep
+        """
         self.data = {f: array[f] for f in ak.fields(array)}
         self.behavior = array.behavior
         self.attrs = {attr: getattr(array, attr) for attr in attrs}
 
     def __setitem__(self, key, value):
+        """Add a field to the array"""
         self.data[key] = value
 
     def __getitem__(self, key):
+        """Get a field from the array"""
         return self.data[key]
 
     def __delitem__(self, key):
+        """Remove a field from the array"""
         del self.data[key]
 
     def get(self):
+        """Get an awkward Array version of the copy"""
         array = ak.Array(self.data)
         array.behavior = self.behavior
         for attr, value in self.attrs.items():
@@ -295,6 +377,8 @@ class VirtualArrayCopier:
         return array
 
     def wrap_with_copy(self, func):
+        """A decorator that will bind the result from ``get()`` to the first
+        parameter of the function"""
         @wraps(func)
         def wrapper(*args, **kwargs):
             return func(self.get(), *args, **kwargs)
@@ -302,7 +386,7 @@ class VirtualArrayCopier:
 
 
 def akismasked(arr):
-    """Return true if arr is masked on any axis, otherwise false"""
+    """Return ``True`` if arr is masked on any axis"""
     t = arr
     while hasattr(t, "type"):
         if isinstance(t.type, ak.types.OptionType):

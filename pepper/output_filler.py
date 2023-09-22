@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 class DummyOutputFiller:
+    """An output filler that does not do anything. Useful if no output filling
+    should be performed"""
     def __init__(self, output):
         self.output = output
 
@@ -22,6 +24,7 @@ class DummyOutputFiller:
 
 
 class AddableDict(dict):
+    """A dictionary add can be added to other dictionaries"""
     # Workaround for Coffea shuffling dict keys when accumulating
     def __add__(self, other):
         if not isinstance(other, MutableMapping):
@@ -42,8 +45,43 @@ class AddableDict(dict):
 
 
 class OutputFiller:
+    """Fills histograms and cutflows
+
+    Attributes
+    ----------
+    output
+        Dict holding all the cutflows and histograms filled by the filler
+    """
     def __init__(self, hist_dict, is_mc, dsname, dsname_in_hist, sys_enabled,
                  sys_overwrite=None, cuts_to_histogram=None):
+        """
+        Parameters
+        ----------
+        hist_dict
+            Dictionary mapping histogram names to functions. This class
+            does not further assumptions about the histograms other than
+            the functions are used to fill the histogram. The functions should
+            return the histogram that was filled.
+        is_mc
+            Whether the data to be used is simulation
+        dsname
+            Data set name of the data to be used
+        dsname_in_hist
+            Data set name to be used for the data when filling the histogram.
+            Usually this is the same as ``dsname``
+        sys_enabled
+            Whether systematic uncertainties are to be computed if available.
+            For example, this might be False if the user disabled systematic
+            computation in their config
+        sys_overwrite
+            If not None, the data that is being filled is treated as a
+            systematic variation. The parameter then names the systematic
+            variation. An example would be JER variations or events generated
+            with different generator settings
+        cuts_to_histogram
+            Lists cuts for which histograms should be produced. If ``None``
+            all cuts will create histograms
+        """
         self.output = {
             "hists": {},
             "cutflows": defaultdict(AddableDict)
@@ -61,6 +99,25 @@ class OutputFiller:
         self.done_hists = set()
 
     def fill_cutflows(self, data, systematics, cut, done_steps, cats):
+        """Fill the cutflows for a specific step or cut
+
+        Parameters
+        ----------
+        data
+            Event data, usually NanoEvents
+        systematics
+            Record array with systematic weights
+        cut
+            Name of the cut applied last
+        done_steps
+            List of steps that have been done. Each step is represented by a
+            string
+        cats
+            Categorizations to split the numbers into. The keys of cats name
+            the categorization, while the values are lists, of which each
+            element names a category. If not all categories are present in
+            ``data``, the particular categorization is ignored.
+        """
         if self.sys_overwrite is not None:
             return
         accumulator = self.output["cutflows"]
@@ -100,6 +157,22 @@ class OutputFiller:
         accumulator[self.dsname][cut] = hist
 
     def _add_hist(self, cut, histname, sysname, dsname, hist):
+        """Add a histogram to ``self.output``
+
+        Parameters
+        ----------
+        cut
+            Name of the cut applied last
+        histname
+            Name of the histogram
+        sysname
+            Name of the systematic variation if this histogram is for
+            a systematic variation only
+        dsname
+            Name of the data set
+        hist
+            The histogram to add
+        """
         acc = self.output["hists"]
         # Split histograms by data set name. Summing histograms of the same
         # data set is generally much faster than summing across data sets
@@ -124,6 +197,26 @@ class OutputFiller:
         self.done_hists.add((cut, histname, sysname))
 
     def fill_hists(self, data, systematics, cut, done_steps, cats):
+        """Fill the histograms for a specific step or cut
+
+        This will call the functions found in ``self.hist_dict``.
+
+        Parameters
+        ----------
+        data
+            Event data, usually NanoEvents
+        systematics
+            Record array with systematic weights
+        cut
+            Name of the cut applied last
+        done_steps
+            List of steps that have been done. Each step is represented by a
+            string
+        cats
+            Categorizations to split the numbers into. The keys of cats name
+            the categorization, while the values are lists, of which each
+            element names a category.
+        """
         if self.cuts_to_histogram is not None:
             if cut not in self.cuts_to_histogram:
                 return
@@ -175,9 +268,12 @@ class OutputFiller:
                 continue
 
     def get_callbacks(self):
+        """Get all functions that should be called after every step in a
+        selection is done"""
         return [self.fill_cutflows, self.fill_hists]
 
     @property
     def channels(self):
+        """Deprecated"""
         raise AttributeError("'channels' is not used anymore. Use "
                              "Selector.set_cat('channel', [...])")
