@@ -59,12 +59,26 @@ class Config(MutableMapping):
             "hists": self._get_hists
         }
 
+    def _load_config(self, path, prev_imports=None):
+        if prev_imports is None:
+            prev_imports = set()
+        with open(path) as f:
+            conf = self._textparser(f)
+        if "import" in conf:
+            import_path = os.path.realpath(conf["import"])
+            if import_path in prev_imports:
+                raise ConfigError(f"Circular configuration import in {path}")
+            prev_imports.add(import_path)
+            imported = self._load_config(import_path, prev_imports)
+            imported.update(conf)
+            conf = imported
+        return conf
+
     @property
     def _config(self):
         if self._config_loaded is not None:
             return self._config_loaded
-        with open(self._path) as f:
-            self._config_loaded = self._textparser(f)
+        self._config_loaded = self._load_config(self._path)
         self._config_loaded["configdir"] = os.path.dirname(self._path)
         return self._config_loaded
 

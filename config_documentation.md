@@ -2,8 +2,9 @@
 The configuration file uses a JSON format. JSON arrays correspond to Python lists and JSON objects correspond to Python dicts with only strings as keys. A variable with value `Null` in the JSON configuration is equivalent to it not being present. If a variable is supposed to contain a path to a JSON file, it can also directly have the content of said JSON file as value directly. Masses and pT are always in GeV.
 
 ## Special variables
+- `import`: Optional, path to a config JSON, that is loaded before the rest of your config file is loaded. If a config value is contained in your config and in the imported config, it is overwritten by your config.
 Inside the string values of a configuration variable the following placeholders are allowed and a replaced by their values at runtime
-- `"$CONFDIR`: Path to the directory where the configuration file is located.
+- `"$CONFDIR`: Path to the directory where the configuration file that is specified on the command line is located.
 - `"$STOREDIR"`: Path given in the `store` configuration variable.
 - `"$DATADIR"`: Path given in the `datadir` configuration variable.
 
