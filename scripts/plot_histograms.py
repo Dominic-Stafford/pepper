@@ -398,7 +398,8 @@ if __name__ == "__main__":
         help="Format to save the plots in. Default: svg"
     )
     parser.add_argument(
-        "--cut", help="Plot only histograms for this specific cut"
+        "-c", "--cut", help="Plot only histograms for this specific cut "
+                            "(can be cut name or number; -1 for last cut)"
     )
     parser.add_argument(
         "--histname", help="Plot only histograms with this name"
@@ -421,17 +422,26 @@ if __name__ == "__main__":
 
     with open(args.histsfile) as f:
         histcol = HistCollection.from_json(f)
+    all_cuts = histcol.userdata["cuts"]
     if args.cut or args.histname:
+        cut = args.cut
+        if cut:
+            try:
+                cutidx = int(cut)
+                cut = all_cuts[cutidx]
+            except ValueError:
+                pass
         histcol = histcol[{
-            "cut": [args.cut] if args.cut else None,
+            "cut": [cut] if cut else None,
             "hist": [args.histname] if args.histname else None
         }]
     config = Config(args.config)
-    check_plot_group_config(config)
+    if "plot_dataset_groups" in config:
+        check_plot_group_config(config)
     with ProcessPoolExecutor(max_workers=args.processes) as executor:
         futures = []
         for key in histcol.keys():
-            cutidx = histcol.userdata["cuts"].index(key[0])
+            cutidx = all_cuts.index(key[0])
             futures.append(executor.submit(
                 process, histcol, key, config, key[1], key[0], cutidx,
                 args.output, args.log, args.stat_only, args.no_data,
