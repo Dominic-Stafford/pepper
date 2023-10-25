@@ -14,8 +14,9 @@ parser = ArgumentParser(
     "for computing b-tagging scale factors. This requires a specific "
     "histogram to have been computed, see the btageff histogram in "
     "example/hist_config.json")
-parser.add_argument("histsfile", help="A JSON file specifying the histograms, "
-                                      "e.g. 'hists.json'")
+parser.add_argument(
+    "histsfile", help="Output Pepper histogram JSON file inside the directory "
+    "of the output histograms and usually named 'hists.json'")
 parser.add_argument("output", help="Output ROOT file")
 parser.add_argument(
     "--cut", default="Has jet(s)", help="Name of the cut before the b-tag "
@@ -38,9 +39,15 @@ with open(args.histsfile) as f:
 
 with uproot.recreate(args.output) as f:
     full_hist = hists.load({"cut": args.cut, "hist": args.histname})
-    for sysname in full_hist.axes["sys"]:
-        hist = full_hist[{"sys": sysname}]
-        hist = hist[{"dataset": sum, "channel": sum}]
+    if "sys" in [ax.name for ax in full_hist.axes]:
+        hists = {
+            sysname: full_hist[{"sys": sysname}]
+            for sysname in full_hist.axes["sys"]
+        }
+    else:
+        hists = {"nominal": full_hist}
+    for sysname, hist in hists.items():
+        hist = hist.project("flav", "pt", "abseta", "btagged")
         eff = hist[{"btagged": "yes"}] / hist[{"btagged": sum}].values()
         if sysname == "nominal":
             f["central"] = eff
