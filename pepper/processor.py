@@ -280,28 +280,29 @@ class Processor(coffea.processor.ProcessorABC):
                                   save_full_sys=True):
         """Save the per-event info into a Root file"""
         out_dict = {"dsname": dsname, "identifier": str(identifier)}
-        events = self._prepare_saved_columns(selector)
-        # Workaround: Use ak.packed to make sure offset arrays of virtual
-        # arrays are not given to uproot. Uproot has a bug for these.
-        events = {f: ak.packed(events[f]) for f in ak.fields(events)}
-        additional = {}
         cutnames, cutflags = selector.get_cuts()
         out_dict["Cutnames"] = str(cutnames)
-        additional["cutflags"] = cutflags
-        if selector.systematics is not None:
-            additional["weight"] = selector.systematics["weight"]
-            if self.config["compute_systematics"] and save_full_sys:
-                for field in ak.fields(selector.systematics):
-                    additional[f"systematics_{field}"] = \
-                        selector.systematics[field]
+        if len(selector.data) > 0:
+            events = self._prepare_saved_columns(selector)
+            # Workaround: Use ak.packed to make sure offset arrays of virtual
+            # arrays are not given to uproot. Uproot has a bug for these.
+            events = {f: ak.packed(events[f]) for f in ak.fields(events)}
+            additional = {}
+            additional["cutflags"] = cutflags
+            if selector.systematics is not None:
+                additional["weight"] = selector.systematics["weight"]
+                if self.config["compute_systematics"] and save_full_sys:
+                    for field in ak.fields(selector.systematics):
+                        additional[f"systematics_{field}"] = \
+                            selector.systematics[field]
 
-        for key in additional.keys():
-            if key in events:
-                raise RuntimeError(
-                    f"branch named '{key}' already present in Events tree")
-        events.update(additional)
-        events = self._separate_masks_for_root(events)
-        out_dict["Events"] = events
+            for key in additional.keys():
+                if key in events:
+                    raise RuntimeError(
+                        f"branch named '{key}' already present in Events tree")
+            events.update(additional)
+            events = self._separate_masks_for_root(events)
+            out_dict["Events"] = events
         with self._open_output(dsname, "root") as outf:
             for key in out_dict.keys():
                 outf[key] = out_dict[key]
