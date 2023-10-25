@@ -105,18 +105,21 @@ class HistDefinition:
                 if unit is not None:
                     bin_config["label"] = \
                         bin_config.get("label", "") + f" ({unit})"
+                hist_type = bin_config.pop("type", "float")
                 if "lo" in bin_config:
-                    if (bin_config["n_or_arr"] ==
-                            bin_config["hi"] - bin_config["lo"]):
+                    if hist_type == "int":
                         bin_config.pop("n_or_arr")
                         bin = hi.axis.Integer(bin_config.pop("lo"),
                                               bin_config.pop("hi"),
                                               **bin_config)
-                    else:
+                    elif hist_type == "float":
                         bin = hi.axis.Regular(bin_config.pop("n_or_arr"),
                                               bin_config.pop("lo"),
                                               bin_config.pop("hi"),
                                               **bin_config)
+                    else:
+                        raise HistDefinitionError(
+                            f"Unknown histogram type: {hist_type}")
                 else:
                     bin = hi.axis.Variable(bin_config.pop("n_or_arr"),
                                            **bin_config)
