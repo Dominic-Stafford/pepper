@@ -575,15 +575,15 @@ class Processor(coffea.processor.ProcessorABC):
         """Save a histogram
 
         This method does the actual work and can be run
-        in paramell. This may take them due to having to sum histograms
+        in paralel. This may take some time due to having to sum histograms
         across different data sets and in case of the Root format, having
         to split into sub-histograms.
 
         Parameters
         ----------
         key
-            Key to be used in ``hist_col``. Touple with the first element being
-            the a cut name
+            Key to be used in ``hist_col``. Tuple with the first element being
+            the cut name
         histdict
             The histogram split into sub-histograms, one for each data set
         cuts
