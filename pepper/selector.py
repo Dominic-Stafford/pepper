@@ -150,7 +150,7 @@ class Selector:
         self.cats = {}
 
         self._applying_cuts = True
-        self.add_cut("Before cuts", np.full(self.num, True))
+        self.add_cut("BeforeCuts", np.full(self.num, True))
         self._applying_cuts = applying_cuts
 
     @property

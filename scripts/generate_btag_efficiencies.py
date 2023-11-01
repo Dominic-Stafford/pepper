@@ -18,8 +18,8 @@ parser.add_argument("histsfile", help="A JSON file specifying the histograms, "
                                       "e.g. 'hists.json'")
 parser.add_argument("output", help="Output ROOT file")
 parser.add_argument(
-    "--cut", default="Has jet(s)", help="Name of the cut before the b-tag "
-                                        "requirement. (Default 'Has jet(s)')")
+    "--cut", default="HasJets", help="Name of the cut before the b-tag "
+                                     "requirement. (Default 'HasJets')")
 parser.add_argument(
     "--histname", default="btageff", help="Name of the b-tagging efficiency "
                                           "histogram. (Default 'btageff')")

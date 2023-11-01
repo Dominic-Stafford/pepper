@@ -41,8 +41,8 @@ parser.add_argument("histsfile", help="A JSON file specifying the histograms, "
                                       "e.g. 'hists.json'")
 parser.add_argument("output", help="Output ROOT file")
 parser.add_argument(
-    "--cut", default="Req MET", help="Name of the cut after which to calculate"
-    "the trigger SFs. (Default 'Req MET')")
+    "--cut", default="ReqMET", help="Name of the cut after which to calculate"
+    "the trigger SFs. (Default 'ReqMET')")
 parser.add_argument(
     "--histname", default="trigger_sf_constructor", help="Name of the trigger "
     "SF efficiency histogram. (Default 'trigger_sf_constructor')")

@@ -376,7 +376,7 @@ def process(
             directory = os.path.join(output, name, *cats)
             os.makedirs(directory, exist_ok=True)
             fname = "_".join(
-                (f"Cut {cutidx:03} " + cut, name)
+                (f"Cut_{cutidx:03}_" + cut, name)
                 + cats
                 + (this_ax.name,)
             ) + "." + fmt

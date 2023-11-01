@@ -613,7 +613,7 @@ class Processor(coffea.processor.ProcessorABC):
             ext = ".coffea"
         else:
             raise ValueError(f"Invalid hist format: {format}")
-        fname = f"Cut {cutnum:03} {'_'.join(key)}{ext}"
+        fname = f"Cut_{cutnum:03}_{'_'.join(key)}{ext}"
         fname = fname.replace("/", "")
         key = key + (None,) * (len(hist_col.key_fields) - len(key))
         hist_col.save(key, hist_sum, fname, format, cats_present=cats_present)

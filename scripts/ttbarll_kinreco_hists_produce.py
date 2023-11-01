@@ -64,7 +64,7 @@ class Processor(pepper.ProcessorTTbarLL):
 
     def process_selection(self, selector, dsname, is_mc, filler):
         selector.set_multiple_columns(self.build_gen_columns)
-        selector.add_cut("Has gen particles", self.has_gen_particles)
+        selector.add_cut("HasGenParticles", self.has_gen_particles)
         selector.set_column("mlb", self.mlb)
         selector.set_column("mw", self.mw)
         selector.set_column("mt", self.mt)
@@ -164,7 +164,7 @@ class Processor(pepper.ProcessorTTbarLL):
         output = output["hists"]["TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8"]
         items = ("mlb", "mw", "mt", "alphal", "energyfl", "alphaj",
                  "energyfj")
-        cuts = ("Has gen particles", "Req MET")
+        cuts = ("HasGenParticles", "ReqMET")
         with uproot.recreate(os.path.join(dest, "kinreco.root")) as f:
             for item in items:
                 for cut in cuts:
