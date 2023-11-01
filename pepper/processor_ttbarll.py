@@ -141,16 +141,16 @@ class Processor(pepper.ProcessorBasicPhysics):
             selector.set_column("gent_lc", self.gentop, lazy=True)
             if "top_pt_reweighting" in self.config:
                 selector.add_cut(
-                    "Top pt reweighting", self.do_top_pt_reweighting,
+                    "TopPtReweighting", self.do_top_pt_reweighting,
                     no_callback=True)
         if is_mc and "pileup_reweighting" in self.config:
-            selector.add_cut("Pileup reweighting", partial(
+            selector.add_cut("PileupReweighting", partial(
                 self.do_pileup_reweighting, dsname))
         if self.config["compute_systematics"] and is_mc:
             self.add_generator_uncertainies(dsname, selector)
         if is_mc:
             selector.add_cut(
-                "Cross section", partial(self.crosssection_scale, dsname))
+                "CrossSection", partial(self.crosssection_scale, dsname))
 
         if "blinding_denom" in self.config:
             selector.add_cut("Blinding", partial(self.blinding, is_mc))
@@ -163,18 +163,18 @@ class Processor(pepper.ProcessorBasicPhysics):
             self.passing_trigger, pos_triggers, neg_triggers))
         if is_mc and self.config["year"] in ("2016", "2017", "ul2016pre",
                                              "ul2016post", "ul2017"):
-            selector.add_cut("L1 prefiring", self.add_l1_prefiring_weights)
+            selector.add_cut("L1Prefiring", self.add_l1_prefiring_weights)
 
-        selector.add_cut("MET filters", partial(self.met_filters, is_mc))
+        selector.add_cut("METFilters", partial(self.met_filters, is_mc))
 
-        selector.add_cut("No add leps",
+        selector.add_cut("NoAddLeps",
                          partial(self.no_additional_leptons, is_mc))
         selector.set_column("Electron", self.pick_electrons)
         selector.set_column("Muon", self.pick_muons)
         selector.set_column("Lepton", partial(
             self.build_lepton_column, is_mc, selector.rng))
         # Wait with hists filling after channel masks are available
-        selector.add_cut("At least 2 leps", partial(self.lepton_pair, is_mc),
+        selector.add_cut("AtLeast2Leps", partial(self.lepton_pair, is_mc),
                          no_callback=True)
         selector.set_cat("channel", {"is_ee", "is_em", "is_mm"})
         selector.set_multiple_columns(self.channel_masks)
@@ -183,15 +183,15 @@ class Processor(pepper.ProcessorBasicPhysics):
 
         selector.applying_cuts = False
 
-        selector.add_cut("Opposite sign", self.opposite_sign_lepton_pair)
-        selector.add_cut("Chn trig match",
+        selector.add_cut("OppositeSign", self.opposite_sign_lepton_pair)
+        selector.add_cut("ChnTrigMatch",
                          partial(self.channel_trigger_matching, era))
         if "trigger_sfs" in self.config and is_mc:
             selector.add_cut(
-                "Trigger SFs", partial(self.apply_trigger_sfs, dsname))
-        selector.add_cut("Req lep pT", self.lep_pt_requirement)
-        selector.add_cut("m_ll", self.good_mass_lepton_pair)
-        selector.add_cut("Z window", self.z_window,
+                "TriggerSFs", partial(self.apply_trigger_sfs, dsname))
+        selector.add_cut("ReqLepPt", self.lep_pt_requirement)
+        selector.add_cut("Mll", self.good_mass_lepton_pair)
+        selector.add_cut("ZWindow", self.z_window,
                          categories={"channel": ["is_ee", "is_mm"]})
 
         if (is_mc and self.config["compute_systematics"]
@@ -230,7 +230,7 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.set_column("OrigJet", selector.data["Jet"])
         selector.set_column("Jet", partial(self.build_jet_column, is_mc))
         if "jet_puid_sf" in self.config and is_mc:
-            selector.add_cut("Jet PU id SFs", self.jet_puid_sfs)
+            selector.add_cut("JetPUIdSFs", self.jet_puid_sfs)
         selector.set_column("Jet", self.jets_with_puid)
         smear_met = "smear_met" in self.config and self.config["smear_met"]
         selector.set_column(
@@ -240,16 +240,16 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.set_multiple_columns(
             partial(self.drellyan_sf_columns, selector))
         if "drellyan_sf" in self.config and is_mc:
-            selector.add_cut("DY scale", partial(self.apply_dy_sfs, dsname))
-        selector.add_cut("Has jet(s)", self.has_jets)
+            selector.add_cut("DYScale", partial(self.apply_dy_sfs, dsname))
+        selector.add_cut("HasJets", self.has_jets)
         if (self.config["hem_cut_if_ele"] or self.config["hem_cut_if_muon"]
                 or self.config["hem_cut_if_jet"]):
-            selector.add_cut("HEM cut", self.hem_cut)
-        selector.add_cut("Jet pt req", self.jet_pt_requirement)
+            selector.add_cut("HEMCut", self.hem_cut)
+        selector.add_cut("JetPtReq", self.jet_pt_requirement)
         if is_mc and self.config["compute_systematics"]:
             self.scale_systematics_for_btag(selector, variation, dsname)
-        selector.add_cut("Has btag(s)", partial(self.btag_cut, is_mc))
-        selector.add_cut("Req MET", self.met_requirement,
+        selector.add_cut("HasBtags", partial(self.btag_cut, is_mc))
+        selector.add_cut("ReqMET", self.met_requirement,
                          categories={"channel": ["is_ee", "is_mm"]})
 
         if "reco_algorithm" in self.config:

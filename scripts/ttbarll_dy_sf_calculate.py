@@ -169,8 +169,8 @@ parser.add_argument("histsfile", help="A JSON file specifying the histograms, "
                                       "e.g. 'hists.json'")
 parser.add_argument("output", help="Path to the output file")
 parser.add_argument(
-    "--cut", default="Has jet(s)", help="Name of the cut after which to"
-    "calculate the SFs. (Default 'Has jet(s)')")
+    "--cut", default="HasJets", help="Name of the cut after which to"
+    "calculate the SFs. (Default 'HasJets')")
 parser.add_argument(
     "--histname", default="Leptonpt", help="Name of the histgoram to use for "
     "computation. The binning does not matter if --integrate, otherwise need "
