@@ -193,7 +193,7 @@ class ProcessorBasicPhysics(pepper.Processor):
                 "Unexpected length of the PSWeight: "
                 f"{num_weights}")
 
-    def add_pdf_uncertainties(self, selector, data):
+    def add_pdf_uncertainties(self, dsname, selector, data):
         """Add PDF uncertainties, using the methods described here:
         https://arxiv.org/pdf/1510.03865.pdf#section.6"""
         if ("LHEPdfWeight" not in data.fields
@@ -204,10 +204,26 @@ class ProcessorBasicPhysics(pepper.Processor):
         if "split_pdf_uncs" in self.config:
             split_pdf_uncs = self.config["split_pdf_uncs"]
         pdfs = data["LHEPdfWeight"]
+
+        normalize_pdf_uncs = False
+        if "normalize_pdf_uncs" in self.config:
+            normalize_pdf_uncs = self.config["normalize_pdf_uncs"]
+
+        pdf_doc = pdfs.__doc__
         pdf_type = None
         for LHA_ID, _type in self.config["pdf_types"].items():
-            if LHA_ID in pdfs.__doc__:
+            if LHA_ID in pdf_doc:
                 pdf_type = _type.lower()
+
+        if normalize_pdf_uncs:
+            if dsname + "_LHEPdfSumw" not in self.config["mc_lumifactors"]:
+                raise pepper.config.ConfigError(
+                    "Missing lumifactors for PDF uncertainties for dataset "
+                    f"'{dsname}'. Please run compute_mc_lumifactors.py with "
+                    "the '-p' option.")
+            norm = self.config["mc_lumifactors"][dsname + "_LHEPdfSumw"]
+            pdfs = pdfs * abs(np.array(norm)[np.newaxis, :])
+
         # Check if sample has alpha_s variations - currently assuming number of
         # regular variations is a multiple of 10
         if len(data) == 0:
@@ -248,7 +264,7 @@ class ProcessorBasicPhysics(pepper.Processor):
             elif pdf_type is None:
                 raise pepper.config.ConfigError(
                     "PDF LHA Id not included in config. PDF docstring is: "
-                    + pdfs.__doc__)
+                    + pdf_doc)
             else:
                 raise pepper.config.ConfigError(
                     f"PDF type {pdf_type} not recognised. Valid options "
@@ -288,7 +304,7 @@ class ProcessorBasicPhysics(pepper.Processor):
             elif pdf_type is None:
                 raise pepper.config.ConfigError(
                     "PDF LHA Id not included in config. PDF docstring is: "
-                    + pdfs.__doc__)
+                    + pdf_doc)
             else:
                 raise pepper.config.ConfigError(
                     f"PDF type {pdf_type} not recognised. Valid options "
@@ -317,7 +333,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         data = selector.data
         self.add_me_uncertainties(dsname, selector, data)
         self.add_ps_uncertainties(selector, data)
-        self.add_pdf_uncertainties(selector, data)
+        self.add_pdf_uncertainties(dsname, selector, data)
 
     def crosssection_scale(self, dsname, data):
         """Cross section uncertainties. These are values depending only on the
