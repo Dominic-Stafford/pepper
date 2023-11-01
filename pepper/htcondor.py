@@ -91,7 +91,7 @@ def get_site():
 
 def get_dask_cluster(num_jobs, runtime=3*60*60, memory="1.5 GB", disk="3 GB",
                      cores=1, *, condorsubmit=None, condorenv=None,
-                     logdir=None, memorylimit=None):
+                     logdir=None, memorylimit=0):
     """Get a Dask Jobqueue HTCondor cluster for a host
 
     Parameters
@@ -118,7 +118,8 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="1.5 GB", disk="3 GB",
         Directory where to store stdout and stderr logs
     memorylimit
         Maximum memory the job is allowed to use before it is killed by Dask.
-        If ``Ǹone`` use three times of ``memory``
+        Default is 0, which sets no memory limit in Dask (leaving all memory
+        management to Condor).
 
     Returns
     -------
@@ -141,8 +142,6 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="1.5 GB", disk="3 GB",
     # We don't want this, because usually one can use more memory than
     # requested through Condor. Thus explicitly set RequestMemory.
     memory = dask.utils.parse_bytes(memory)
-    if memorylimit is None:
-        memorylimit = memory * 3
     job_extra_directives = {
         "RequestMemory": str(int(memory / 2**20))
     }
@@ -276,7 +275,24 @@ class Cluster:
                     function, task, tasks_to_itemidx, iterables, key)
                 task_failures[new_task] = failures + 1
             else:
-                yield result
+                if result is None:
+                    logger.error("Task returned 'None' (usually due to dask "
+                                 "killing this worker).")
+                    failures = task_failures.get(task, 0)
+                    if self.retries is not None and failures >= self.retries:
+                        raise RuntimeError(
+                            "Number of retries was exceed by a task returning "
+                            "'None'. This is usually due to dask killing a "
+                            "worker for exceeding memory usage.")
+                    logger.info(
+                        f"Task failed {failures} times and will be retried")
+
+                    new_task = self._dask_resubmit_failed_task(
+                        function, task, tasks_to_itemidx, iterables, key)
+                    task.cancel()
+                    task_failures[new_task] = failures + 1
+                else:
+                    yield result
             del tasks_to_itemidx[task]
             if task in task_failures:
                 del task_failures[task]
