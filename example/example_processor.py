@@ -57,10 +57,10 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.set_column("Muon", self.pick_muons)
 
         # Only accept events that have to leptons
-        selector.add_cut("Exactly 2 leptons", self.lepton_pair)
+        selector.add_cut("Exactly2Leptons", self.lepton_pair)
 
         # Only accept events that have oppositely changed leptons
-        selector.add_cut("OC leptons", self.opposite_sign_lepton_pair)
+        selector.add_cut("OCLeptons", self.opposite_sign_lepton_pair)
 
         # Things that could be done next: Adding cuts on the jets, MET or
         # only allowing events that have a certain m_ll. A full implementation

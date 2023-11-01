@@ -112,9 +112,9 @@ class Processor(pepper.Processor):
         mchist = None
         for dataset, hists in output["hists"].items():
             if mchist is None:
-                mchist = hists[("Before cuts", "pileup")].copy()
+                mchist = hists[("BeforeCuts", "pileup")].copy()
             else:
-                mchist += hists[("Before cuts", "pileup")]
+                mchist += hists[("BeforeCuts", "pileup")]
         # Set underflow and 0 pileup bin to 0, which might be != 0 only for
         # buggy reasons in MC
         axidx = [ax.name for ax in mchist.axes].index(self.axisname)

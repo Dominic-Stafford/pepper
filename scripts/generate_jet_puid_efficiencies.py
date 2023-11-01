@@ -18,8 +18,8 @@ parser.add_argument("histsfile", help="A JSON file specifying the histograms, "
                                       "e.g. 'hists.json'")
 parser.add_argument("output", help="Output ROOT file")
 parser.add_argument(
-    "--cut", default="Z window", help="Name of the cut before the jet PU ID "
-                                      "requirement. (Default 'Z window')")
+    "--cut", default="ZWindow", help="Name of the cut before the jet PU ID "
+                                     "requirement. (Default 'ZWindow')")
 parser.add_argument(
     "--histname", default="jet_pu_id_eff", help="Name of the jet PU ID "
     "efficiency histogram. (Default 'jet_pu_id_eff')")
