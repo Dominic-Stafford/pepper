@@ -228,7 +228,9 @@ class HistDefinition:
         ----------
         categorizations
             Add ``StrCategory`` axes to the histogram. The axes will be named
-            and labeled according to the keys of this dict
+            and labeled according to the keys of this dict. An exception is a
+            category named "dataset", which will be used to overwrite the
+            default dataset name.
         has_systematic
             If true, add an ``StrCategory`` axis called 'sys' for systematic
             uncertainties
@@ -240,8 +242,9 @@ class HistDefinition:
         """
         axes = self.axes.copy()
         for cat in categorizations.keys():
-            axes.append(
-                hi.axis.StrCategory([], name=cat, label=cat, growth=True))
+            if cat != "dataset":
+                axes.append(
+                    hi.axis.StrCategory([], name=cat, label=cat, growth=True))
         if has_systematic:
             axes.insert(0, hi.axis.StrCategory(
                 [], name="sys", label="Systematic", growth=True))
@@ -263,7 +266,8 @@ class HistDefinition:
             already in the definition. Its keys name the axes, while its values
             are lists of strings that name the inidivuals bins in the axes and
             the fields inside ``data`` to take masks from if an event belongs
-            to a category
+            to a category. If a category called "dataset" is supplied, this
+            will be used instead of the dsname.
         dsname
             Name of the data set from where the event data is
         is_mc
@@ -305,7 +309,10 @@ class HistDefinition:
                 else:
                     key = ax.default_key
                     cat_present[name] = {key: np.full(len(data), True)}
-        non_array_fills = {"dataset": dsname}
+        if "dataset" in categorizations:
+            non_array_fills = {}
+        else:
+            non_array_fills = {"dataset": dsname}
         for weightname, w in weight.items():
             if weightname is not None:
                 non_array_fills["sys"] = weightname
