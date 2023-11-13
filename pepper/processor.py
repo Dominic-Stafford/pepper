@@ -69,8 +69,23 @@ class Processor(coffea.processor.ProcessorABC):
         configuration for obvious errors, so that the user has an immediate
         error message.
         """
-        # Nothing to do here currently. Implemented in subclasses
-        pass
+        # Check for duplicate names in columns_to_save
+        column_names = []
+        if "columns_to_save" in config:
+            to_save = config["columns_to_save"]
+            if isinstance(to_save, dict):
+                spec = to_save.items()
+            else:
+                spec = zip([None] * len(to_save), to_save)
+            for key, specifier in spec:
+                if key is None:
+                    datapicker = pepper.hist_defns.DataPicker(specifier)
+                    key = datapicker.name
+                if key in column_names:
+                    raise pepper.config.ConfigError(
+                        f"Ambiguous column to save '{key}' (from {specifier})")
+                else:
+                    column_names.append(key)
 
     @staticmethod
     def _get_hists_from_config(config, key, todokey):
@@ -197,7 +212,7 @@ class Processor(coffea.processor.ProcessorABC):
 
     def _prepare_saved_columns(self, selector):
         """Creates an array to be saved as per-event data. The content is taken
-        from the selector's and the data pickers defined in the config."""
+        from the selectors and the data pickers defined in the config."""
         columns = {}
         if "columns_to_save" in self.config:
             to_save = self.config["columns_to_save"]
@@ -216,9 +231,6 @@ class Processor(coffea.processor.ProcessorABC):
                 continue
             if key is None:
                 key = datapicker.name
-            if key in columns:
-                raise pepper.config.ConfigError(
-                    f"Ambiguous column to save '{key}', (from {specifier})")
             columns[key] = item
         return ak.Array(columns)
 
