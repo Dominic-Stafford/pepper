@@ -222,6 +222,13 @@ class Processor(coffea.processor.ProcessorABC):
             columns[key] = item
         return ak.Array(columns)
 
+    def _prepare_saved_categories(self, selector):
+        cat_dict = defaultdict(dict)
+        for cat_name, cats in selector.cats.items():
+            for cat in cats:
+                cat_dict[cat_name][cat] = selector.data[cat]
+        return ak.Array(cat_dict)
+
     def _save_per_event_info_hdf5(
             self, dsname, selector, identifier, save_full_sys=True):
         """Save the per-event info into an HDF5 file"""
@@ -230,6 +237,10 @@ class Processor(coffea.processor.ProcessorABC):
         cutnames, cutflags = selector.get_cuts()
         out_dict["cutnames"] = cutnames
         out_dict["cutflags"] = cutflags
+        if ("save_categories_per_event" not in self.config or
+                self.config["save_categories_per_event"]):
+            out_dict["categories"] = \
+                self._prepare_saved_categories(selector)
         if (self.config["compute_systematics"] and save_full_sys
                 and selector.systematics is not None):
             out_dict["systematics"] = ak.flatten(selector.systematics,
@@ -303,6 +314,14 @@ class Processor(coffea.processor.ProcessorABC):
             events.update(additional)
             events = self._separate_masks_for_root(events)
             out_dict["Events"] = events
+            if ("save_categories_per_event" not in self.config or
+                    self.config["save_categories_per_event"]):
+                cats = self._prepare_saved_categories(selector)
+                for cat in ak.fields(cats):
+                    out_dict[f"Categories/{cat}"] = \
+                        self._separate_masks_for_root(
+                            {f: ak.packed(cats[cat][f])
+                             for f in ak.fields(cats[cat])})
         with self._open_output(dsname, "root") as outf:
             for key in out_dict.keys():
                 outf[key] = out_dict[key]
