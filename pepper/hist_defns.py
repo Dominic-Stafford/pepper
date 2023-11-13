@@ -518,13 +518,15 @@ class DataPicker:
 
     @property
     def name(self):
-        """Printiple string identifying the data picker"""
+        """Principle string identifying the data picker"""
         name = ""
         for sel in self._method:
             if isinstance(sel, str):
                 name += sel.replace("/", "")
             elif isinstance(sel, list):
-                name += ",".join(sel)
+                # Output will contain multiple attributes of an object, just
+                # give the name of this object
+                break
             elif isinstance(sel, dict):
                 if "function" in sel:
                     name += sel["function"].replace("/", "")
@@ -536,7 +538,7 @@ class DataPicker:
                     name += "leading"
                     if isinstance(sel["leading"], tuple):
                         if (not isinstance(sel["leading"][0], int)
-                                or not isinstance(sel["leading"][0], int)):
+                                or not isinstance(sel["leading"][1], int)):
                             raise HistDefinitionError(
                                 "Invalid value for leading tuple. Must be int")
                         name += (str(sel["leading"][0]) + "-"
