@@ -119,8 +119,9 @@ def run_processor(processor_class=None, description=None, mconly=False):
         "--statedata", help="File to write and load processing state to/from. "
         "This allows resuming the processor after an interruption that made "
         "the process quit. States produced from different configurations "
-        "should not be loaded, as this can lead to bogus results. Default is "
-        "'pepper_state.coffea'", default="pepper_state.coffea"
+        "should not be loaded, as this can lead to bogus results. If not "
+        "given, the file is put in the output directory as controlled by "
+        "the --output argument.", default=None
     )
     parser.add_argument(
         "-R", "--resume", action="store_true", help="If present and the file "
@@ -222,15 +223,19 @@ def run_processor(processor_class=None, description=None, mconly=False):
     # Create histdir and in case of errors, raise them now (before processing)
     os.makedirs(args.output, exist_ok=True)
 
-    if os.path.realpath(args.metadata) == os.path.realpath(args.statedata):
+    if args.statedata is None:
+        statedata = os.path.join(args.output, "pepper_state.coffea")
+    else:
+        statedata = args.statedata
+    if os.path.realpath(args.metadata) == os.path.realpath(statedata):
         print("--metadata and --statedate can not be the same")
         sys.exit(1)
-    if os.path.exists(args.statedata) and os.path.getsize(args.statedata) > 0:
+    if os.path.exists(statedata) and os.path.getsize(statedata) > 0:
         if not args.resume:
             print("Found old processor state file. Please either delete "
-                  f"'{args.statedata}' or specify --resume/-R")
+                  f"'{statedata}' or specify --resume/-R")
             sys.exit(1)
-        mtime = datetime.fromtimestamp(os.stat(args.statedata).st_mtime)
+        mtime = datetime.fromtimestamp(os.stat(statedata).st_mtime)
         print(f"Loading old processor state made on {mtime}")
 
     datasets = processor.preprocess(datasets)
@@ -248,7 +253,7 @@ def run_processor(processor_class=None, description=None, mconly=False):
         cluster=cluster
     )
     executor = pepper.executor.ClusterExecutor(
-        state_file_name=args.statedata,
+        state_file_name=statedata,
         cluster=cluster
     )
 
@@ -265,7 +270,7 @@ def run_processor(processor_class=None, description=None, mconly=False):
         if (userdata["chunksize"] is not None
                 and userdata["chunksize"] != args.chunksize):
             sys.exit(
-                f"'{args.statedata}' got different chunksize: "
+                f"'{statedata}' got different chunksize: "
                 f"{userdata['chunksize']}. Delete it or change --chunksize")
 
     maxchunks = 1 if args.debug else None
