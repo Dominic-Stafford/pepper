@@ -89,7 +89,7 @@ def get_site():
         return hostname
 
 
-def get_dask_cluster(num_jobs, runtime=3*60*60, memory="1.5 GB", disk="3 GB",
+def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GB", disk="3 GB",
                      cores=1, *, condorsubmit=None, condorenv=None,
                      logdir=None, memorylimit=0):
     """Get a Dask Jobqueue HTCondor cluster for a host
@@ -198,7 +198,8 @@ class Cluster:
     """
     def __init__(
             self, num_jobs, condorsubmit=None, condorinit=None,
-            logdir="pepper_logs", retries=None, condorsubmitfile=None):
+            logdir="pepper_logs", retries=None, condorsubmitfile=None,
+            memory="2 GB"):
         """
         Parameters
         ----------
@@ -216,6 +217,8 @@ class Cluster:
         condorsubmitfile
             Path to a file containing additional content to add to the
             HTCondor submit file
+        memory
+            Request memory. String with a unit like "GB" or an int.
         """
         self.logdir = self.get_enumerated_dir(logdir)
         if num_jobs is None:
@@ -232,7 +235,8 @@ class Cluster:
                 num_jobs,
                 condorsubmit=condorsubmit,
                 condorenv=condorinit,
-                logdir=self.logdir
+                logdir=self.logdir,
+                memory=memory
             )
             self.client = dask.distributed.Client(dask_cluster)
         self.retries = retries
