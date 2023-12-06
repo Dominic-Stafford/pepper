@@ -109,6 +109,10 @@ def run_processor(processor_class=None, description=None, mconly=False):
         "increases memory usage inside the job. Default is 1."
     )
     parser.add_argument(
+        "-m", "--memory", type=float, help="Memory in GB that is requested "
+        "per condor worker. If a worker exceeds the limit, condor might "
+        " kill it. Default is 2.", default=2.0)
+    parser.add_argument(
         "--condorlogdir", help="Directory to store stdout and stderr logs "
         "running on HTCondor. Default is pepper_logs", default="pepper_logs")
     parser.add_argument(
@@ -246,7 +250,8 @@ def run_processor(processor_class=None, description=None, mconly=False):
         condorsubmitfile=args.condorsubmit,
         condorinit=args.condorinit,
         retries=args.retries,
-        logdir=args.condorlogdir
+        logdir=args.condorlogdir,
+        memory=str(args.memory) + " GB"
     )
     pre_executor = pepper.executor.ClusterExecutor(
         state_file_name=args.metadata,
