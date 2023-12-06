@@ -117,12 +117,16 @@ class ConfigBasicPhysics(pepper.Config):
         ignore_missing = (self["btag_ignoremissing"]
                           if "btag_ignoremissing" in self
                           else False)
+        measure_type = ("mujets"
+                        if "btag_measure_type" not in self
+                        else self["btag_measure_type"])
         for weighter_paths in value:
             paths = [self._get_path(path) for path in weighter_paths]
             btagweighter = BTagWeighter(
                 paths[0], paths[1] if len(paths) > 1 else None,
                 tagger=tagger, year=year,
-                method=method, ignore_missing=ignore_missing)
+                method=method, ignore_missing=ignore_missing,
+                meastype=measure_type)
             weighters.append(btagweighter)
         return weighters
 
