@@ -58,9 +58,13 @@ config = pepper.ConfigBasicPhysics(args.config)
 config["file_mode"] = "local"
 config["bad_file_paths"] = []
 datasets = config.get_datasets()
-paths = []
+lfns = []
 for dsname, dspaths in datasets.items():
-    paths.extend(dspaths)
+    lfns.extend(dspaths)
+
+paths = []
+for lfn in lfns:
+    paths.extend(config.get_paths_for_lfn(lfn))
 paths = set(paths)
 
 corrupt = []
@@ -73,6 +77,7 @@ for list in args.list:
                 continue
             if line in paths:
                 corrupt.append(line)
+
 
 if not args.no_search:
     with concurrent.futures.ProcessPoolExecutor(

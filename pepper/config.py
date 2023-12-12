@@ -218,9 +218,20 @@ class Config(MutableMapping):
 
         mode = self["file_mode"] if "file_mode" in self else "local"
         store = self["store"] if "store" in self else None
+        ignore_path = None
+        if mode == "local" and "bad_file_paths" in self:
+            # In local mode, we want to ignore completely files that
+            # are in the bad file list
+            skippaths = set(self["bad_file_paths"])
+
+            def is_lfn_in_bad_paths(lfn):
+                return not skippaths.isdisjoint(
+                    pepper.datasets.resolve_lfn(lfn, self["store"]))
+            ignore_path = is_lfn_in_bad_paths
         logger.debug("Finding files for data sets")
         datasets, paths2dsname = pepper.datasets.expand_datasetdict(
-            datasets, store=store, mode=mode)
+            datasets, store=store, mode=mode,
+            ignore_path=ignore_path)
         missing_datasets = requested_datasets - datasets.keys()
         if len(missing_datasets) > 0:
             raise ConfigError("Could not find files for: "
