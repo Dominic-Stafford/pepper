@@ -143,7 +143,8 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GB", disk="3 GB",
     # requested through Condor. Thus explicitly set RequestMemory.
     memory = dask.utils.parse_bytes(memory)
     job_extra_directives = {
-        "RequestMemory": str(int(memory / 2**20))
+        "RequestMemory": str(int(memory / 2**20)),
+        '+RequestRuntime': str(int(runtime))
     }
     if condorsubmit is not None:
         for param in condorsubmit.split("\n"):
@@ -199,7 +200,7 @@ class Cluster:
     def __init__(
             self, num_jobs, condorsubmit=None, condorinit=None,
             logdir="pepper_logs", retries=None, condorsubmitfile=None,
-            memory="2 GB"):
+            memory="2 GB", runtime=3*60*60):
         """
         Parameters
         ----------
@@ -236,7 +237,8 @@ class Cluster:
                 condorsubmit=condorsubmit,
                 condorenv=condorinit,
                 logdir=self.logdir,
-                memory=memory
+                memory=memory,
+                runtime=runtime
             )
             self.client = dask.distributed.Client(dask_cluster)
         self.retries = retries
