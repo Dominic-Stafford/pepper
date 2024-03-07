@@ -113,6 +113,10 @@ def run_processor(processor_class=None, description=None, mconly=False):
         "per condor worker. If a worker exceeds the limit, condor might "
         " kill it. Default is 2.", default=2.0)
     parser.add_argument(
+        "--runtime", type=float, help="Runtime in hours that a condor job "
+        "is allowd to take. Note that jobs that exceed the runtime and are "
+        "killed will still be resubmitted. Default is 3.", default=3.0)
+    parser.add_argument(
         "--condorlogdir", help="Directory to store stdout and stderr logs "
         "running on HTCondor. Default is pepper_logs", default="pepper_logs")
     parser.add_argument(
@@ -251,7 +255,8 @@ def run_processor(processor_class=None, description=None, mconly=False):
         condorinit=args.condorinit,
         retries=args.retries,
         logdir=args.condorlogdir,
-        memory=str(args.memory) + " GB"
+        memory=str(args.memory) + " GB",
+        runtime=int(args.runtime*60*60)
     )
     pre_executor = pepper.executor.ClusterExecutor(
         state_file_name=args.metadata,
