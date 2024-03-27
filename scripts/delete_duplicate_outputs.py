@@ -2,6 +2,7 @@ import os
 from argparse import ArgumentParser
 from functools import partial
 from tqdm import tqdm
+import uproot
 
 import pepper
 import pepper.htcondor
@@ -12,13 +13,18 @@ def process_dir(dir, delete=False):
     corrupted_files = []
     processed_chunks = set()
     for in_file in os.listdir(dir):
-        if not in_file.endswith(".hdf5") and not in_file.endswith(".h5"):
+        if not in_file.endswith(".hdf5") and not in_file.endswith(".h5") \
+                and not in_file.endswith(".root"):
             continue
         in_file = os.path.join(dir, in_file)
         try:
-            with pepper.HDF5File(in_file, "r") as f:
-                identifier = f["identifier"]
-        except OSError:
+            if in_file.endswith(".root"):
+                with uproot.open(in_file) as f:
+                    identifier = str(f["identifier"])
+            else:
+                with pepper.HDF5File(in_file, "r") as f:
+                    identifier = f["identifier"]
+        except (OSError, uproot.DeserializationError):
             if delete:
                 os.remove(in_file)
             else:
