@@ -508,9 +508,15 @@ class Processor(coffea.processor.ProcessorABC):
             A new instance of ``Selector`` for the selection
         """
         if is_mc:
-            genweight = data["genWeight"]
+            if (("norm_genweights" in self.config
+                    and self.config["norm_genweights"])
+                    or ("genweights_to_norm" in self.config and
+                        dsname in self.config["genweights_to_norm"])):
+                genweight = np.sign(data["genWeight"])
+            else:
+                genweight = data["genWeight"]
         else:
-            genweight = np.ones(len(data))
+            genweight = None
         # Use a different seed for every chunk in a reproducable way
         seed = (self.rng_seed, uuid.UUID(data.metadata["fileuuid"]).int,
                 data.metadata["entrystart"])
