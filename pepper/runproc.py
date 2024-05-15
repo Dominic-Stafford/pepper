@@ -305,8 +305,12 @@ def run_processor(processor_class=None, description=None, mconly=False):
     bad_file_paths = None
     if "bad_file_paths" in config:
         bad_file_paths = config["bad_file_paths"]
+    xrootd_url_blacklist = None
+    if "xrootd_url_blacklist" in config:
+        xrootd_url_blacklist = config["xrootd_url_blacklist"]
     metadata = {"store_path": store, "xrootddomain": xrootddomain,
-                "skippaths": bad_file_paths}
+                "skippaths": bad_file_paths,
+                "url_blacklist": xrootd_url_blacklist}
     # Give metadata for the processing step
     processor.pepperitemmetadata = metadata
     # For the preprocessing step, add metadata also to the file meta

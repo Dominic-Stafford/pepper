@@ -56,6 +56,7 @@ class Config(MutableMapping):
         }
         self.behaviors = {
             "bad_file_paths": self._get_maybe_external,
+            "xrootd_url_blacklist": self._get_maybe_external,
             "hists": self._get_hists
         }
 
@@ -261,6 +262,7 @@ class Config(MutableMapping):
         """
         store = None
         xrootddomain = None
+        xrootd_url_blacklist = None
         skippaths = self["bad_file_paths"] if "bad_file_paths" in self else\
             None
         filemode = self["file_mode"] if "file_mode" in self else "local"
@@ -268,9 +270,12 @@ class Config(MutableMapping):
             store = self["store"]
         if filemode == "xrootd" or filemode == "local+xrootd":
             xrootddomain = self["xrootddomain"]
+            if "xrootd_url_blacklist" in self:
+                xrootd_url_blacklist = self["xrootd_url_blacklist"]
 
         if lfn.startswith("cmslfn://"):
-            filepaths = pepper.datasets.resolve_lfn(lfn, store, xrootddomain)
+            filepaths = pepper.datasets.resolve_lfn(lfn, store, xrootddomain,
+                                                    xrootd_url_blacklist)
         else:
             filepaths = [lfn]
         if skippaths is not None:

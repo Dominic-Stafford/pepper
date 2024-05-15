@@ -323,7 +323,7 @@ class Runner(coffea.processor.Runner):
     inside ``metadata_fetcher`` and ``_work_function``.
     """
     @staticmethod
-    def resolve_lfn(lfn, store, xrootddomain, skippaths):
+    def resolve_lfn(lfn, store, xrootddomain, skippaths, url_blacklist=None):
         """Converts logical file names (LFNs) to physical file names that can
         be understood by ``uproot.open``
 
@@ -339,6 +339,9 @@ class Runner(coffea.processor.Runner):
             via XRootD
         skippaths
             Blacklist of physical file paths to ignore
+        url_blacklist
+            Optional; a blacklist of XRootD URLs which should not be used for
+            resolving the file
 
         Returns
         -------
@@ -346,7 +349,8 @@ class Runner(coffea.processor.Runner):
             Physical file paths associated to ``lfn``
         """
         if lfn.startswith("cmslfn://"):
-            filepaths = pepper.datasets.resolve_lfn(lfn, store, xrootddomain)
+            filepaths = pepper.datasets.resolve_lfn(lfn, store, xrootddomain,
+                                                    url_blacklist)
         else:
             filepaths = [lfn]
         if skippaths is not None:
@@ -358,7 +362,8 @@ class Runner(coffea.processor.Runner):
     def metadata_fetcher(xrootdtimeout, align_clusters, item):
         filepaths = Runner.resolve_lfn(
             item.filename, item.metadata["store_path"],
-            item.metadata["xrootddomain"], item.metadata["skippaths"])
+            item.metadata["xrootddomain"], item.metadata["skippaths"],
+            item.metadata["url_blacklist"])
         for filepath in filepaths:
             try:
                 with uproot.open(
@@ -416,7 +421,8 @@ class Runner(coffea.processor.Runner):
 
         filepaths = Runner.resolve_lfn(
             item.filename, metadata["store_path"],
-            metadata["xrootddomain"], metadata["skippaths"])
+            metadata["xrootddomain"], metadata["skippaths"],
+            metadata["url_blacklist"])
 
         for filepath in filepaths:
             try:
