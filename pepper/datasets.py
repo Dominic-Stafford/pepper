@@ -107,7 +107,7 @@ def lfn_to_xrootd_path(lfn, xrootddomain):
     return f"root://{xrootddomain}/" + lfn
 
 
-def resolve_lfn(lfn, store=None, xrootddomain=None):
+def resolve_lfn(lfn, store=None, xrootddomain=None, url_blacklist=None):
     """Get paths and URLs for a file given a specific logical file name (LFN).
 
     Parameters
@@ -119,6 +119,9 @@ def resolve_lfn(lfn, store=None, xrootddomain=None):
         See ``expand_datasetdict``
     xrootddomain
         See ``expand_datasetdict``
+    url_blacklist
+        Optional; a blacklist of XRootD URLs which should not be used for
+        resolving the file
 
     Returns
     -------
@@ -142,6 +145,12 @@ def resolve_lfn(lfn, store=None, xrootddomain=None):
         if loc is None:
             raise OSError("XRootD error: " + status.message)
         domains = [r.address for r in loc]
+        if url_blacklist is not None:
+            domains = [d for d in domains if not any(
+                    blacklisted in d for blacklisted in url_blacklist)]
+            if len(domains) == 0:
+                raise ValueError("All domains are on the blacklist for LFN "
+                                 + lfn)
         pfns.extend(f"root://{d}/{lfn}" for d in domains)
     return pfns
 
