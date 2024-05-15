@@ -480,11 +480,17 @@ class Processor(coffea.processor.ProcessorABC):
         else:
             cuts_to_histogram = None
 
+        if "systs_to_histogram" in self.config:
+            systs_to_histogram = self.config["systs_to_histogram"]
+        else:
+            systs_to_histogram = None
+
         hists = self._get_hists_from_config(
             self.config, "hists", "hists_to_do")
         filler = OutputFiller(
             hists, is_mc, dsname, dsname_in_hist, sys_enabled,
-            sys_overwrite=sys_overwrite, cuts_to_histogram=cuts_to_histogram)
+            sys_overwrite=sys_overwrite, cuts_to_histogram=cuts_to_histogram,
+            systs_to_histogram=systs_to_histogram)
 
         return filler
 

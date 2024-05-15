@@ -73,6 +73,7 @@ These determine various calibrations and weightings. In case they are optional a
 - `save_categories_per_event`: Optional, bool, default `True`. Whether to save all of the categories in the per-event output. If only specific categories are desired, this can be to `False` and individual columns specified in ``columns_to_save`.
 - `hists`: Path to a JSON file containing the histogram definitions as object. The keys decide the name of the histogram. For its elements, see the Histogram Definition subparagraph.
 - `cuts_to_histogram`: Optional, array of strings. If this is present, histograms will only be created for cuts whose names are in this array.
+- `systs_to_histogram`: Optional, array of strings. If this is present, only systematics in this array will be included in the histograms. For two-sided or numeric systematic, the directions/indices should not be included (i.e. just `muonsf` instead of `muonsf_down`, and `PDF` instead of `PDF_0`).
 - `datasets_to_group`: Optional, object of strings. If a data set name is present as a key inside this object, its value will be used as name instead inside the histograms.
 - `histogram_format`: Optional, either `"hist"`, `"coffea"` or `"root"`. This decides the format which will be used for saving the histograms. Defaults to `"hist"`.
 ### Histogram definition
@@ -88,6 +89,7 @@ Elements of the `hists` object are objects themselves. They have these keys:
 - `cats`: Optional, array of objects, each defining a category axis. The purpose of a category axis is to group events by some criteria. Similar to `bins` it also has a `name` and a `label`. In addition there is an optional key `default_key`, with a string as value, which if present defines a value for all events for which the fill can not be evaluated from the data present. If `default_key` is not given and the fill is not present, the histogram will not be filled. Note that category axes for data set and channel are automatically created and should not be specified here.
 - `fill`: Object, each of its keys must be either a key in `bins` or in `cats`. In latter case, it its elements are objects, where each key names a category and where the value is a data picker defining which events belong to this category. In the former case it is just a data picker, defining the observable to use for the binned axes. If the fill is not present in the data, the histogram will not be filled.
 - `step_requirement`: Optional, string. The histogram will only be created once a specific step is done. This can be either `"cut:"` followed by a cut name, or `"column:"` followed by a column name. The latter requires that a specific column has been set during the processing.
+- `do_systs`: Optional, bool. If `false`, do not include systematics for this histogram. Default is `true`.
 - `weight`: Optional, data picker. Specifies a customs event weight using a data picker. If it is not present, the event weight will be used.
 - `label`: Optional, string. To use as the label of the bin height axis. If not given, will be chosen so it best matches CMS guidelines (something like "Events / bin").
 ### Data pickers
