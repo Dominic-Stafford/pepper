@@ -516,7 +516,7 @@ class Processor(coffea.processor.ProcessorABC):
             else:
                 genweight = data["genWeight"]
         else:
-            genweight = None
+            genweight = np.ones(len(data))
         # Use a different seed for every chunk in a reproducable way
         seed = (self.rng_seed, uuid.UUID(data.metadata["fileuuid"]).int,
                 data.metadata["entrystart"])
