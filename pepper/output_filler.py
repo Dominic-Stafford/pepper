@@ -53,7 +53,8 @@ class OutputFiller:
         Dict holding all the cutflows and histograms filled by the filler
     """
     def __init__(self, hist_dict, is_mc, dsname, dsname_in_hist, sys_enabled,
-                 sys_overwrite=None, cuts_to_histogram=None):
+                 sys_overwrite=None, cuts_to_histogram=None,
+                 systs_to_histogram=None):
         """
         Parameters
         ----------
@@ -81,6 +82,9 @@ class OutputFiller:
         cuts_to_histogram
             Lists cuts for which histograms should be produced. If ``None``
             all cuts will create histograms
+        systs_to_histogram
+            Lists systematics which should be included in histograms.
+            If ``None``, all systematics will be included.
         """
         self.output = {
             "hists": {},
@@ -96,6 +100,7 @@ class OutputFiller:
         self.sys_enabled = sys_enabled
         self.sys_overwrite = sys_overwrite
         self.cuts_to_histogram = cuts_to_histogram
+        self.systs_to_histogram = systs_to_histogram
         self.done_hists = set()
 
     def fill_cutflows(self, data, systematics, cut, done_steps, cats):
@@ -196,6 +201,26 @@ class OutputFiller:
             acc[dsname][(cut, histname)] = hist
         self.done_hists.add((cut, histname, sysname))
 
+    def _is_sysname_allowed(self, sysname):
+        """
+        Helper method to check whether a systematic should be included in
+        a histogram.
+
+        Parameters
+        ----------
+        sysname
+            The name of the systematic (e.g. "muonsf_down").
+        """
+        if self.systs_to_histogram is None:
+            return True
+        else:
+            if "_" in sysname:
+                sysname_split = sysname.split("_")
+                if sysname_split[-1] == "down" or sysname_split[-1] == "up" \
+                        or sysname_split[-1].isdigit():
+                    sysname = "_".join(sysname_split[:-1])
+            return sysname in self.systs_to_histogram
+
     def fill_hists(self, data, systematics, cut, done_steps, cats):
         """Fill the histograms for a specific step or cut
 
@@ -227,6 +252,8 @@ class OutputFiller:
                 if syscol == "weight":
                     sysname = "nominal"
                     sysweight = systematics["weight"]
+                elif not self._is_sysname_allowed(syscol):
+                    continue
                 else:
                     sysname = syscol
                     sysweight = systematics["weight"] * systematics[syscol]
@@ -245,8 +272,10 @@ class OutputFiller:
                 if self.sys_overwrite is not None:
                     sysname = self.sys_overwrite
                     # But only if we want to compute systematics
-                    if do_systematics:
+                    if do_systematics and fill_func.do_systs:
                         if (cut, histname, sysname) in self.done_hists:
+                            continue
+                        elif not self._is_sysname_allowed(sysname):
                             continue
 
                         sys_hist = fill_func(

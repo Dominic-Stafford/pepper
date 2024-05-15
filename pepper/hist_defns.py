@@ -54,6 +54,7 @@ func_dict = {
     "arctanh": np.arctanh,
     "exp": np.exp,
     "log": np.log,
+    "log10": np.log10,
     "sqrt": np.sqrt,
     "abs": np.abs,
     "sign": np.sign,
@@ -156,6 +157,10 @@ class HistDefinition:
             self.step_requirement = config["step_requirement"]
         else:
             self.step_requirement = None
+        if "do_systs" in config:
+            self.do_systs = config["do_systs"]
+        else:
+            self.do_systs = True
 
     @staticmethod
     def _prepare_fills(fill_vals, mask=None):
@@ -273,9 +278,20 @@ class HistDefinition:
         is_mc
             Whether this is simulation
         weight
-            Event weight as array
+            Event weight as array or dict of arrays (for systematics)
         """
-        has_systematic = self.weight is None and isinstance(weight, dict)
+        has_systematic = self.do_systs and self.weight is None \
+            and isinstance(weight, dict)
+
+        if not isinstance(weight, dict):
+            weight = {None: weight}
+        elif not has_systematic:
+            if "nominal" in weight:
+                weight = {None: weight["nominal"]}
+            else:
+                raise HistFillError("Hist should not include systs, but "
+                                    "no nominal was found")
+
         hist = self.create_hist(categorizations, has_systematic)
 
         fill_vals = {name: DataPicker(method)(data)
@@ -285,12 +301,11 @@ class HistDefinition:
             raise HistFillError(f"No fill for axes: {', '.join(none_keys)}")
 
         if self.weight is not None:
-            weight = DataPicker(self.weight)(data)
-            if weight is None:
+            new_weight = DataPicker(self.weight)(data)
+            if new_weight is None:
                 raise HistFillError(
                     "Weight specified in hist config not available")
-        if not isinstance(weight, dict):
-            weight = {None: weight}
+            weight = {None: new_weight}
 
         categorizations = {name: {cat: [cat] for cat in cats}
                            for name, cats in categorizations.items()}
