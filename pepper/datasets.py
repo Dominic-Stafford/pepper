@@ -91,11 +91,12 @@ def dataset_to_lfn_dbs(dataset):
     proxy certificate file isn't at its usual location (/tmp/x509up_uNNN), it
     can be set via the environment variable X509_USER_PROXY."""
 
-    DBSURL = "https://cmsweb.cern.ch/dbs/prod/global/DBSReader/files?dataset="
+    DBSURL = "https://cmsweb.cern.ch/dbs/prod/global/DBSReader/files"
+    dbsurl_dataset = f"{DBSURL}?dataset={dataset}&validFileOnly=1"
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.load_verify_locations(**_get_cernca_rootcert())
     context.load_cert_chain(**_get_cert_vomsproxy())
-    with urllib.request.urlopen(DBSURL + dataset, context=context) as f:
+    with urllib.request.urlopen(dbsurl_dataset, context=context) as f:
         dbs_reply = f.read()
     dbs_files = json.loads(dbs_reply.decode())
     return set([file["logical_file_name"] for file in dbs_files])
