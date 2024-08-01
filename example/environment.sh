@@ -8,7 +8,7 @@ fi
 # Please do not forget to run voms-proxy-init --voms cms --out $X509_USER_PROXY
 export X509_USER_PROXY=~/.globus/x509up
 # Load LCG
-source /cvmfs/sft.cern.ch/lcg/views/setupViews.sh LCG_102 x86_64-centos7-gcc11-opt
+source /cvmfs/sft.cern.ch/lcg/views/setupViews.sh LCG_104 x86_64-el9-gcc11-opt
 # Make sure python libs installed in the user directory are prefered over system-wide ones
 export PYTHONPATH=`python3 -c 'import site; print(site.getusersitepackages())'`:$PYTHONPATH
 # Parsl installs some of it's commands into ~/.local/bin if installed as user

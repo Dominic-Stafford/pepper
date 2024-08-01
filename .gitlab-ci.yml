@@ -1,11 +1,11 @@
-image: gitlab-registry.cern.ch/ci-tools/ci-worker:cc7
+image: gitlab-registry.cern.ch/cms-cloud/cmssw-docker/al9-cms
 
 stages:
   - flake8
   - test
 before_script:
-  - yum install -y python3 python3-pip python3-devel > /dev/null
-  - pip3 install pep8-naming > /dev/null
+  - sudo yum install -y python3 python3-pip python3-devel > /dev/null
+  - sudo pip3 install pep8-naming > /dev/null
   - echo flake8 version `flake8 --version`
 
 flake8:
