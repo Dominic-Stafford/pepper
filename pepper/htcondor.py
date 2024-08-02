@@ -1,75 +1,14 @@
 import os
 import logging
 import resource
-import asyncio
-import uuid
 import dask
 import dask.distributed
 import dask_jobqueue
 import shlex
-from packaging.version import parse as parse_version
-
+import traceback
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
-
-
-# Older versions of dask_jobqueue are missing the PR
-# https://github.com/dask/dask-jobqueue/pull/610
-# Workaround: Patch in necessary changes if version too old
-if parse_version(dask_jobqueue.__version__) < parse_version("0.8.3"):
-    from contextlib import suppress
-
-    class HTCondorJob(dask_jobqueue.htcondor.HTCondorJob):
-        async def _submit_job(self, script_filename):
-            return await self._call(
-                shlex.split(self.submit_command) + [script_filename])
-
-        async def start(self):
-            """Start workers and point them to our local scheduler"""
-
-            with self.job_file() as fn:
-                out = await self._submit_job(fn)
-                self.job_id = self._job_id_from_submit_output(out)
-
-            await super(dask_jobqueue.core.Job, self).start()
-
-        async def close(self):
-            await self._close_job(self.job_id, self.cancel_command)
-
-        @classmethod
-        async def _close_job(cls, job_id, cancel_command):
-            if job_id:
-                with suppress(RuntimeError):
-                    await cls._call(shlex.split(cancel_command) + [job_id])
-
-        @staticmethod
-        async def _call(cmd, **kwargs):
-            cmd_str = " ".join(cmd)
-
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                **kwargs
-            )
-
-            out, err = await proc.communicate()
-            out, err = out.decode(), err.decode()
-
-            if proc.returncode != 0:
-                raise RuntimeError(
-                    "Command exited with non-zero exit code.\n"
-                    "Exit code: {}\n"
-                    "Command:\n{}\n"
-                    "stdout:\n{}\n"
-                    "stderr:\n{}\n".format(proc.returncode, cmd_str, out, err)
-                )
-            return out
-
-    class HTCondorCluster(dask_jobqueue.htcondor.HTCondorCluster):
-        job_cls = HTCondorJob
-else:
-    HTCondorCluster = dask_jobqueue.htcondor.HTCondorCluster
 
 
 def get_site():
@@ -91,7 +30,7 @@ def get_site():
 
 def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GB", disk="3 GB",
                      cores=1, *, condorsubmit=None, condorenv=None,
-                     logdir=None, memorylimit=0):
+                     logdir=None):
     """Get a Dask Jobqueue HTCondor cluster for a host
 
     Parameters
@@ -116,10 +55,6 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GB", disk="3 GB",
         environment will be set up.
     logdir
         Directory where to store stdout and stderr logs
-    memorylimit
-        Maximum memory the job is allowed to use before it is killed by Dask.
-        Default is 0, which sets no memory limit in Dask (leaving all memory
-        management to Condor).
 
     Returns
     -------
@@ -158,7 +93,8 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GB", disk="3 GB",
     config = dict(
         name="PepperJob",
         cores=cores,
-        memory=memorylimit,
+        # Set memory limit to 0 as explained above
+        memory=0,
         disk=disk,
         log_directory=logdir,
         job_extra_directives=job_extra_directives,
@@ -168,7 +104,7 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GB", disk="3 GB",
     )
     site = get_site()
     config.update(site_config.get(site, {}))
-    cluster = HTCondorCluster(**config)
+    cluster = dask_jobqueue.htcondor.HTCondorCluster(**config)
     cluster.adapt(maximum_jobs=num_jobs)
 
     return cluster
@@ -189,6 +125,74 @@ def get_htcondor_jobad():
         k, v = line.split("=", 1)
         ret[k.strip()] = v.strip()
     return ret
+
+
+class PepperSchedulerPlugin(
+        dask.distributed.diagnostics.plugin.SchedulerPlugin):
+    """A dask scheduler plugin which prints certain events - adding workers,
+    removing workers, and task state transitions - to the default log for
+    better diagnostics.
+    See https://distributed.dask.org/en/latest/plugins.html for the plugin API.
+    """
+
+    def __init__(self):
+        self.current_workers = []
+
+    def add_worker(self, scheduler, worker, **kwargs):
+        """Called when the dask scheduler successfully connects to a worker.
+        """
+
+        if worker in scheduler.workers:
+            worker_name = scheduler.workers[worker].name
+        else:
+            worker_name = "unknown"
+        logger.info(f"Connected to worker at adress {worker} "
+                    f"with name {worker_name}")
+        self.current_workers.append(worker)
+
+    def remove_worker(self, scheduler, worker, **kwargs):
+        """Called when a worker is removed from the scheduler for any reason
+        (including both dead workers and regular shutdowns).
+        """
+
+        # Only log if the worker is expected to still run
+        if len(scheduler.tasks) > 0 and worker in self.current_workers:
+            logger.warn(f"HTCondor worker process at address {worker} died. "
+                        "Resubmitting automatically.")
+            self.current_workers.remove(worker)
+
+    def transition(self, key, start, finish, *args, **kwargs):
+        """Called when a task changes state from 'start' to 'finish'.
+        There are quite a few different states, we only log the most important
+        """
+
+        if finish == "processing":
+            logger.info(f"Started processing task {key}")
+        elif start == "processing" and finish == "memory":
+            if "startstops" in kwargs and len(kwargs["startstops"]) > 0:
+                startstops = kwargs["startstops"][-1]
+                time = startstops["stop"] - startstops["start"]
+                logger.info(f"Finished processing task {key} "
+                            f"in {time:.1f} seconds")
+            else:
+                logger.info(f"Finished processing task {key}")
+        elif start == "processing" and finish != "memory":
+            logger.info(f"Task {key} did not finish processing "
+                        f"(status '{finish}')")
+
+    def valid_workers_downscaling(self, scheduler, workers):
+        """Called when Dask decides that some workers should be shut down
+        since there are no more tasks for them to process
+        This can in principle veto the shutdown, but we do not need that
+        """
+
+        for worker in workers:
+            address = worker.address
+            if address in self.current_workers:
+                logger.debug(f"Shutting down the worker at address {address}")
+                self.current_workers.remove(address)
+        # Return all workers, i.e. allow the shutdown of all of them
+        return workers
 
 
 class Cluster:
@@ -241,6 +245,7 @@ class Cluster:
                 runtime=runtime
             )
             self.client = dask.distributed.Client(dask_cluster)
+            self.client.register_plugin(PepperSchedulerPlugin())
         self.retries = retries
 
     def __enter__(self):
@@ -256,62 +261,92 @@ class Cluster:
         client = self.client
         # Setting pure=False allows resubmission, with pure=True dask assumes
         # the error that happened once will always happen and skips retrying
-        tasks = client.map(function, *iterables, pure=False, key=key)
-        tasks_to_itemidx = dict(zip(tasks, range(len(tasks))))
-        tasks = dask.distributed.as_completed(tasks)
-        task_failures = {}
-        for task in tasks:
-            try:
-                # This call should return immediately but sometimes Dask gets
-                # stuck here. Unknown why. Specify timeout to circumvent.
-                result = task.result(timeout=1)
-            except asyncio.exceptions.TimeoutError:
-                # Retry but silence the error
-                tasks.add(self._dask_resubmit_failed_task(
-                    function, task, tasks_to_itemidx, iterables, key))
-            except Exception as e:
-                logger.exception(e)
-                failures = task_failures.get(task, 0)
-                if self.retries is not None and failures >= self.retries:
-                    raise
-                logger.info(
-                    f"Task failed {failures} times and will be retried")
+        tasks = client.map(function, *iterables, pure=True, key=key)
+        # Get an iterator that yields tasks in the order they complete
+        tasks_iterator = dask.distributed.as_completed(tasks)
+        # Dictionary to store the number of retries per task
+        task_failures = defaultdict(int)
+        # Store completed tasks to check for completeness at the end
+        tasks_completed = []
 
-                new_task = self._dask_resubmit_failed_task(
-                    function, task, tasks_to_itemidx, iterables, key)
-                task_failures[new_task] = failures + 1
-            else:
-                if result is None:
-                    logger.error("Task returned 'None' (usually due to dask "
-                                 "killing this worker).")
-                    failures = task_failures.get(task, 0)
-                    if self.retries is not None and failures >= self.retries:
-                        raise RuntimeError(
-                            "Number of retries was exceed by a task returning "
-                            "'None'. This is usually due to dask killing a "
-                            "worker for exceeding memory usage.")
-                    logger.info(
-                        f"Task failed {failures} times and will be retried")
-
-                    new_task = self._dask_resubmit_failed_task(
-                        function, task, tasks_to_itemidx, iterables, key)
-                    task.cancel()
-                    task_failures[new_task] = failures + 1
+        # Iterate over all still pending tasks
+        for task in tasks_iterator:
+            if not task.done():
+                logger.critical(f"Task {task.key} was yielded from the "
+                                "iterator even though it was not done. "
+                                "This Should Not Happen (TM). "
+                                "Please contact the Pepper developers.")
+            if task.status == "finished":
+                # Tasks that are finished successfully
+                result = task.result()
+                # Sanity check: the task should not be completed twice
+                if task.key in tasks_completed:
+                    logger.critical(f"Task {task.key} was evaluated twice! "
+                                    "This Should Not Happen (TM). "
+                                    "Please contact the Pepper developers. "
+                                    "The duplicate result will be ignored.")
+                # Check whether the result is actually there
+                elif result is None:
+                    logger.critical(f"Result for task {task.key} is None. "
+                                    "This Should Not Happen (TM). "
+                                    "Please contact the Pepper developers. "
+                                    "The task will be resubmitted.")
+                    task_failures[task.key] += 1
+                    task.retry()
+                    tasks_iterator.add(task)
                 else:
+                    logger.debug(f"Got result for task {task.key}")
+                    tasks_completed.append(task.key)
+                    # We cancel the task after we got the result so it doesnt
+                    # re-run if its worker dies
+                    task.cancel()
+                    # Only if we got here, we further pass the result to the
+                    # accumulator
                     yield result
-            del tasks_to_itemidx[task]
-            if task in task_failures:
-                del task_failures[task]
+            else:
+                # Task did not finish successfully. Try to get information why
+                exc = task.exception()
+                tb = task.traceback()
+                task_retries = task_failures[task.key]
+                logger.error(f"Task failed with status '{task.status}' "
+                             f"for '{task.key}' (retry {task_retries}).")
+                if exc is not None:
+                    logger.error(f"The type of the exception is "
+                                 f"'{type(exc).__name__}'.")
+                else:
+                    logger.error("The type of the exception is not available.")
+                if tb is not None:
+                    logger.error("Stacktrace of the exception: ")
+                    traceback.print_tb(tb)
+                else:
+                    logger.error("No stack trace is available.")
+                if self.retries is None or task_retries < self.retries:
+                    # Retry the task using the task.retry() method
+                    # We do it this way as opposed to the automatic retry
+                    # functionality from Dask to log the retries, and keep
+                    # more control over when a task should be retried
+                    logger.error("Retrying the task automatically.")
+                    task_failures[task.key] += 1
+                    task.retry()
+                    # Re-add the task to the iterator to wait for it again
+                    tasks_iterator.add(task)
+                else:
+                    logger.error("Maximum number of retries reached. "
+                                 "Aborting.")
+                    raise exc
 
-    def _dask_resubmit_failed_task(
-            self, function, task, tasks_to_itemidx, iterables, key):
-        idx = tasks_to_itemidx[task]
-        item = (list(args)[idx] for args in iterables)
-        if key is not None:
-            key = key[idx] + "-retry-" + str(uuid.uuid4())
-        new_task = self.client.submit(function, *item, pure=False, key=key)
-        tasks_to_itemidx[new_task] = idx
-        return new_task
+        logger.debug("All tasks processed. Checking for completeness...")
+        incomplete_tasks = [task.key for task in tasks
+                            if task.key not in tasks_completed]
+        if len(incomplete_tasks) > 0:
+            logger.critical(f"WARNING: {len(incomplete_tasks)} tasks that "
+                            "were not processed properly! "
+                            "The following tasks where not processed:")
+            logger.critical('\n'.join(incomplete_tasks))
+            logger.critical("Your output is very likely unreliable! "
+                            "Please contact the pepper developers.")
+        else:
+            logger.debug("All tasks are complete.")
 
     def process(self, function, *iterables, key=None):
         """Call function on each item in iterables, either locally or on
@@ -346,7 +381,7 @@ class Cluster:
         return self.client.dashboard_link
 
     @staticmethod
-    def set_global_config():
+    def set_global_config(dasklogs=False):
         """Set the config of the local process that is needed to errorlessly
         run on HTCondor. For example ensuring the maximum number of connections
         is large enough
@@ -356,8 +391,19 @@ class Cluster:
         resource.setrlimit(resource.RLIMIT_NOFILE,
                            (nfilelimit, nfilelimit))
 
-        # Increase log level of dask to hide misc messages
-        logging.getLogger("distributed").setLevel(logging.WARNING)
+        if dasklogs:
+            # Adapt level for distributed logger
+            logging.getLogger("distributed").setLevel(logging.DEBUG)
+            # Enable and format dask_jobqueue logger for console output
+            jobqueue_logger = logging.getLogger("dask_jobqueue.core")
+            stream_handler = logging.StreamHandler()
+            stream_handler.setFormatter(
+                logging.Formatter(fmt="[%(name)s(%(levelname)s)] %(message)s"))
+            jobqueue_logger.addHandler(stream_handler)
+            jobqueue_logger.setLevel(logging.DEBUG)
+        else:
+            # Increase log level of dask to hide misc messages
+            logging.getLogger("distributed").setLevel(logging.WARNING)
 
     def close(self):
         """Close the Dask client"""
