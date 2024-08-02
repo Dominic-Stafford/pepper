@@ -120,6 +120,12 @@ def run_processor(processor_class=None, description=None, mconly=False):
         "--condorlogdir", help="Directory to store stdout and stderr logs "
         "running on HTCondor. Default is pepper_logs", default="pepper_logs")
     parser.add_argument(
+        "--dasklogs",
+        action="store_true",
+        help="Flag to enable logging of output from dask_jobqueue. "
+        "Enabling this might help with debugging condor issues, but leads "
+        "to very verbose output in the console.")
+    parser.add_argument(
         "--metadata", help="File to cache metadata in. This allows speeding "
         "up or skipping the preprocessing step. Default is "
         "'pepper_metadata.coffea'", default="pepper_metadata.coffea")
@@ -248,7 +254,7 @@ def run_processor(processor_class=None, description=None, mconly=False):
 
     datasets = processor.preprocess(datasets)
     if args.condor is not None:
-        pepper.htcondor.Cluster.set_global_config()
+        pepper.htcondor.Cluster.set_global_config(dasklogs=args.dasklogs)
     cluster = pepper.htcondor.Cluster(
         args.condor,
         condorsubmitfile=args.condorsubmit,
