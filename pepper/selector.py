@@ -204,11 +204,11 @@ class Selector:
         else:
             return ak.sum(self.unapplied_product != 0)
 
-    def set_cat(self, name, categories):
-        """Set a categorization
+    def set_cat(self, name, categories, safe=True):
+        """Set a categorisation
 
-        A categorization is for example the decay channel of an event.
-        Categories inside this categorization would be the ee-decay or the
+        A categorisation is for example the decay channel of an event.
+        Categories inside this categorisation would be the ee-decay or the
         µµ-decay.
 
         Parameters
@@ -216,9 +216,22 @@ class Selector:
         name
             Name of the categorization
         categories
-            Categories inside the categorization. Each category must also be
+            Categories inside the categorisation. Each category must also be
             a field in ``data``
+        safe --  Boolean on whether to check if all events belong to exactly
+                 one category. Note that if this is not satisfied, the
+                 cutflows will be incorrect, as will histograms when
+                 integrating over the category axis, as events will either be
+                 silently cut away (if not included in any catgories) or
+                 double counted (if appearing in multiple categories)
         """
+        if safe:
+            selected = np.zeros(len(self.data), dtype=int)
+            for cat in categories:
+                selected = selected + self.data[cat]
+            if not ak.all(selected == 1):
+                raise ValueError(
+                    "Not all events fit into exactly one category")
         self.cats[name] = categories
 
     def _invoke_callbacks(self):
