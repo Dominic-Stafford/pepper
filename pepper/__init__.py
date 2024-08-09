@@ -15,6 +15,7 @@ from pepper.processor import Processor
 from pepper.processor_basic import ProcessorBasicPhysics
 from pepper.processor_ttbarll import Processor as ProcessorTTbarLL
 from pepper import scale_factors
+from pepper import hist_utils
 
 __all__ = [
     "HistCollection",
@@ -33,5 +34,6 @@ __all__ = [
     "Processor",
     "ProcessorBasicPhysics",
     "ProcessorTTbarLL",
-    "scale_factors"
+    "scale_factors",
+    "hist_utils"
 ]
