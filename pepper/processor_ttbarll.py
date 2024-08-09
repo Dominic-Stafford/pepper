@@ -176,8 +176,8 @@ class Processor(pepper.ProcessorBasicPhysics):
         # Wait with hists filling after channel masks are available
         selector.add_cut("AtLeast2Leps", partial(self.lepton_pair, is_mc),
                          no_callback=True)
-        selector.set_cat("channel", {"is_ee", "is_em", "is_mm"})
         selector.set_multiple_columns(self.channel_masks)
+        selector.set_cat("channel", {"is_ee", "is_em", "is_mm"})
         selector.set_column("mll", self.mass_lepton_pair)
         selector.set_column("dilep_pt", self.dilep_pt, lazy=True)
 
