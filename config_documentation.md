@@ -157,10 +157,26 @@ Data pickers are arrays, specifying to use something from the `data` array of th
 - `fast_dy_sfs`: Optional, bool. Specifies if DYprocessor should run over just DY and observed data; not relevant for other processors.
 - `bin_dy_sfs`: Optional, data picker defining a variable in which DY SFs are binned, used by the Processor when applying them.
 
-### Plotting
-- `plot_dataset_groups`: Optional, array. Each element is an object describing a group. These group several data sets and make them appear as one on the plot. The order of the objects describes the order of stacked bars from bottom to top. Each object has the following:
-  - `label`: Label to be used on the plot for the group. Must be unique.
-  - `color`: Color to be used for the group. Any valid Matplotlib colors are allowed
-  - `datasets`: Array of data set names
-- `plot_datasets_ignore`: Optional, list. A list of data sets to not plot.
-- `plot_scale_sysuncertainty`: Optional, array. Factors to be multiplied to the scale of a systematic uncertainty. The keys are the systematic names, without the suffix (e.g. '_up').
+## Plotting
+A general-purpose plotting script is provided in `scripts/make_plots.py`. It is designed to be both flexible and easily extendible, so that it can be adapted to analysis-specific needs.
+
+The plotting is steered from a separate config file. An example for such a file is given in `example/example_plotting.json`. The structure of this file is as follows:
+
+- `backgrounds`: A dictionary in the form `"proc1": {...}, "proc2": {...}, ...` defining background processes to plot in the stack plot. Each process can contain multiple datasets. Possible options for each process are:
+  - `datasets`: A list of dataset names, as present in the histogram.
+  - `label`: Optonal, a label to use for the process in the legend. Can contain Latex math syntax enclosed in dollar signs ($). Default is to use the process key.
+  - `color`: Optional, a color for the process. Either a name (e.g. `blue`) or a hex code (e.g. `#c0c0c0`). Default is to use the Official CMS Color Scheme (TM).
+- `data`: Optional, a list of observed data datasets to plot as black markers. If it is not given, plot only MC.
+- `signals`: Optional, a process dictionary in the same format as `backgrounds` to plot as lines on top of the MC backgrounds.
+- `stack_signals`: Optional, boolean. If `true`, plot the sum of signals and background prediction. If `false`, plot the signals on their own. Default is false.
+- `sum_categories`: Optional, boolean. If `true`, sum over all categorical axes in the histograms and make only one plot per histogram. Default `false`.
+- `categories`: Optional, a dictionary defining custom categories to plot. A category is given in the form `"category_name": {"ax1": ["val1", "val2"], "ax2": "val3", ...}`, where `ax1`, `ax2`, ... are the names of categorical axes in the histograms. For each axis, it is allowed to either give a single value (e.g. `"channel": "is_em"` to plot opposite-flavor leptons) or multiple values (e.g. `"channel": ["is_ee", "is_mm"]` to plot same-flavor leptons). Axes in the histogram that are not present in the category definition are summed over. `categories` is ignored if `sum_categories` is `true`. If neither `categories` or `sum_categories` are given, the script will plot all possible combinations of categorical axes present in the histogram.
+- `rebin`: Optional, a dictionary defining new binnings for specific histograms. For each histogram, possible values are:
+  - `n_or_arr`: Required, either an integer defining the new number of bins, or an array giving the new bin edges.
+  - `lo`: If `n_or_arr` is a number, the low edge of the new binning.
+  - `hi`: If `n_or_arr` is a number, the high edge of the new binning.
+  - `label`: Optional, a new label to appear on the x axis of the plot.
+  See `example/example_plotting.json` for examples of the rebinning syntax.
+- `year`: Optional, the year to display on the top right edge of the plot.
+- `lumi`: Optional, the luminosity to display.
+- `com_energy`: Optional, the center-of-mass energy in TeV to display. Default is 13.
