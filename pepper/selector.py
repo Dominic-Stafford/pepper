@@ -425,6 +425,10 @@ class Selector:
             raise ValueError("scheme needs to be either 'updown', 'numeric',"
                              f"'single' or None, got {scheme}")
         for name, value in zip(names, values):
+            if not isinstance(value, np.ndarray):
+                value = np.array(value)
+            if value.ndim != 1:
+                raise ValueError("Systematics must be flat 1-d arrays!")
             self.systematics[name] = value
             if cut is not None:
                 self.cut_systematic_map[cut].append(name)
