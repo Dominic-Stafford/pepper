@@ -52,6 +52,8 @@ class Processor(pepper.Processor):
         config["hists"] = {"pileup": pepper.HistDefinition(hist_config)}
         if "hists_to_do" in config:
             del config["hists_to_do"]
+        if "cuts_to_histogram" in config:
+            del config["cuts_to_histogram"]
         config["compute_systematics"] = False
         # Treat all datasets as normal datasets, instead of using them as
         # systematic
