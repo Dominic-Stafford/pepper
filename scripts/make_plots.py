@@ -425,7 +425,7 @@ def get_category_dict(h, config):
         }
 
     # If categories are given in the config explicitly, use those
-    elif "categories" in config:
+    elif "categories" in config and len(config["categories"]) > 0:
         # Iterate over the categories defined in the config
         for category_label, category_definition \
                 in config["categories"].items():
