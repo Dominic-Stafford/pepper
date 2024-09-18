@@ -646,11 +646,11 @@ for histkey in tqdm.tqdm(hists.keys()):
     for category_label, category_definition in category_dict.items():
 
         # Make a subfolder for this cut and category
-        
         if args.outdir is not None:
             cat_outfolder = os.path.join(args.outdir, cutname, category_label)
         else:
-            cat_outfolder = os.path.join(os.path.dirname(args.histfile), cutname, category_label)
+            cat_outfolder = os.path.join(os.path.dirname(args.histfile),
+                                         cutname, category_label)
         os.makedirs(cat_outfolder, exist_ok=True)
 
         # Build a output file name for the plot
