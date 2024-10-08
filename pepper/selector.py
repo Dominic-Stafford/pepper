@@ -232,6 +232,12 @@ class Selector:
             if not ak.all(selected == 1):
                 raise ValueError(
                     "Not all events fit into exactly one category")
+        for exist_categories in self.cats.values():
+            if exist_categories & categories:
+                raise ValueError(
+                    f"The following category(s) are already used in "
+                    f"a previous categorisation, please rename: "
+                    f"{exist_categories & categories}")
         self.cats[name] = categories
 
     def _invoke_callbacks(self):
