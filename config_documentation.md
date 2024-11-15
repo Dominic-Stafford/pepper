@@ -94,6 +94,7 @@ Elements of the `hists` object are objects themselves. They have these keys:
 - `do_systs`: Optional, bool. If `false`, do not include systematics for this histogram. Default is `true`.
 - `weight`: Optional, data picker. Specifies a customs event weight using a data picker. If it is not present, the event weight will be used.
 - `label`: Optional, string. To use as the label of the bin height axis. If not given, will be chosen so it best matches CMS guidelines (something like "Events / bin").
+- `selector_cats`: Optional, bool or array. Can be either a bool, specifying whether to include the categories in the selector as categories for this histogram, or a list of categories from the selector which should be included. Default is `true`. 
 ### Data pickers
 Data pickers are arrays, specifying to use something from the `data` array of the processor instance. This is used in histogramming and per-event output. Each element of such a data picker array gives a further specification that is used on the result of the previous element. The fist element will be used upon the data table of the processor. An element can be
 - a column name or an object of the form `{"key": columnname}`,

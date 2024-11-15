@@ -163,6 +163,10 @@ class HistDefinition:
             self.do_systs = config["do_systs"]
         else:
             self.do_systs = True
+        if "selector_cats" in config:
+            self.sel_cats = config["selector_cats"]
+        else:
+            self.sel_cats = True
 
     @staticmethod
     def _prepare_fills(fill_vals):
@@ -282,6 +286,15 @@ class HistDefinition:
             else:
                 raise HistFillError("Hist should not include systs, but "
                                     "no nominal was found")
+
+        if isinstance(self.sel_cats, list):
+            categorizations = {k: v for k, v in categorizations.items()
+                               if k in self.sel_cats}
+        elif not isinstance(self.sel_cats, bool):
+            raise HistDefinitionError(
+                "selector_cats must be either a list or a boolean")
+        elif not self.sel_cats:
+            categorizations = {}
 
         hist = self.create_hist(categorizations, has_systematic)
 
