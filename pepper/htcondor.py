@@ -271,11 +271,6 @@ class Cluster:
 
         # Iterate over all still pending tasks
         for task in tasks_iterator:
-            if not task.done():
-                logger.critical(f"Task {task.key} was yielded from the "
-                                "iterator even though it was not done. "
-                                "This Should Not Happen (TM). "
-                                "Please contact the Pepper developers.")
             if task.status == "finished":
                 # Tasks that are finished successfully
                 result = task.result()
@@ -308,8 +303,13 @@ class Cluster:
                 exc = task.exception()
                 tb = task.traceback()
                 task_retries = task_failures[task.key]
-                logger.error(f"Task failed with status '{task.status}' "
-                             f"for '{task.key}' (retry {task_retries}).")
+                if task.done():
+                    logger.error(f"Task failed with status '{task.status}' "
+                                 f"for '{task.key}' (retry {task_retries}).")
+                else:
+                    logger.error(f"Task returned undone with status "
+                                 f"'{task.status}' for '{task.key}' (retry "
+                                 f"{task_retries}).")
                 if exc is not None:
                     logger.error(f"The type of the exception is "
                                  f"'{type(exc).__name__}'.")
