@@ -79,7 +79,8 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GB", disk="3 GB",
     memory = dask.utils.parse_bytes(memory)
     job_extra_directives = {
         "RequestMemory": str(int(memory / 2**20)),
-        '+RequestRuntime': str(int(runtime))
+        "+RequestRuntime": str(int(runtime)),
+        "+MaxRuntime": str(int(runtime))
     }
     if condorsubmit is not None:
         for param in condorsubmit.split("\n"):
