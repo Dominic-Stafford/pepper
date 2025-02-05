@@ -313,6 +313,8 @@ class Cluster:
                 if exc is not None:
                     logger.error(f"The type of the exception is "
                                  f"'{type(exc).__name__}'.")
+                    logger.error("The exception message is: ")
+                    logger.error(str(exc))
                 else:
                     logger.error("The type of the exception is not available.")
                 if tb is not None:
