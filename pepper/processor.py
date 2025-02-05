@@ -86,6 +86,19 @@ class Processor(coffea.processor.ProcessorABC):
                         f"Ambiguous column to save '{key}' (from {specifier})")
                 else:
                     column_names.append(key)
+        if "bad_file_paths" in config:
+            raise pepper.config.ConfigError(
+                "'bad_file_paths' is deprecated due to ambiguity. Please "
+                "use 'file_blacklist' if you want to completely skip files, "
+                "and use 'local_file_blackist' if you want to replace bad "
+                "local files by remote files in 'local+xrootd' mode.")
+        if "local_file_blacklist" in config \
+            and not ("file_mode" in config
+                     and config["file_mode"] == "local+xrootd"):
+            logger.warning("'local_file_blacklist' specified in config but "
+                           "file mode is not 'local+xrootd'. Blacklist "
+                           "will be ignored. If you want to skip files, "
+                           "use 'file_blacklist' instead.")
 
     @staticmethod
     def _get_hists_from_config(config, key, todokey):

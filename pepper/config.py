@@ -55,7 +55,8 @@ class Config(MutableMapping):
             "$STOREDIR": "store",
         }
         self.behaviors = {
-            "bad_file_paths": self._get_maybe_external,
+            "file_blacklist": self._get_maybe_external,
+            "local_file_blacklist": self._get_maybe_external,
             "xrootd_url_blacklist": self._get_maybe_external,
             "hists": self._get_hists
         }
@@ -234,14 +235,13 @@ class Config(MutableMapping):
         mode = self["file_mode"] if "file_mode" in self else "local"
         store = self["store"] if "store" in self else None
         ignore_path = None
-        if mode == "local" and "bad_file_paths" in self:
-            # In local mode, we want to ignore completely files that
-            # are in the bad file list
-            skippaths = set(self["bad_file_paths"])
+        if "file_blacklist" in self:
+            file_blacklist = set(self["file_blacklist"])
 
             def is_lfn_in_bad_paths(lfn):
-                return not skippaths.isdisjoint(
-                    pepper.datasets.resolve_lfn(lfn, self["store"]))
+                return lfn in file_blacklist or \
+                    (lfn.startswith("cmslfn:/")
+                     and lfn[len('cmslfn:/'):] in file_blacklist)
             ignore_path = is_lfn_in_bad_paths
         logger.debug("Finding files for data sets")
         datasets, paths2dsname = pepper.datasets.expand_datasetdict(
@@ -277,8 +277,8 @@ class Config(MutableMapping):
         store = None
         xrootddomain = None
         xrootd_url_blacklist = None
-        skippaths = self["bad_file_paths"] if "bad_file_paths" in self else\
-            None
+        local_file_blacklist = self["local_file_blacklist"] \
+            if "local_file_blacklist" in self else None
         filemode = self["file_mode"] if "file_mode" in self else "local"
         if filemode == "local" or filemode == "local+xrootd":
             store = self["store"]
@@ -292,7 +292,7 @@ class Config(MutableMapping):
                                                     xrootd_url_blacklist)
         else:
             filepaths = [lfn]
-        if skippaths is not None:
-            filepaths = [p for p in filepaths if p not in skippaths]
+        if local_file_blacklist is not None:
+            filepaths = [p for p in filepaths if p not in local_file_blacklist]
 
         return filepaths

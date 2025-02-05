@@ -323,7 +323,8 @@ class Runner(coffea.processor.Runner):
     inside ``metadata_fetcher`` and ``_work_function``.
     """
     @staticmethod
-    def resolve_lfn(lfn, store, xrootddomain, skippaths, url_blacklist=None):
+    def resolve_lfn(lfn, store, xrootddomain, local_file_blacklist,
+                    url_blacklist=None):
         """Converts logical file names (LFNs) to physical file names that can
         be understood by ``uproot.open``
 
@@ -337,8 +338,8 @@ class Runner(coffea.processor.Runner):
         xrootddomain
             Domain of the redirector server to find sites that offer the file
             via XRootD
-        skippaths
-            Blacklist of physical file paths to ignore
+        local_file_blacklist
+            Blacklist of local file paths to ignore
         url_blacklist
             Optional; a blacklist of XRootD URLs which should not be used for
             resolving the file
@@ -353,8 +354,8 @@ class Runner(coffea.processor.Runner):
                                                     url_blacklist)
         else:
             filepaths = [lfn]
-        if skippaths is not None:
-            filepaths = [p for p in filepaths if p not in skippaths]
+        if xrootddomain is not None and local_file_blacklist is not None:
+            filepaths = [p for p in filepaths if p not in local_file_blacklist]
 
         return filepaths
 
@@ -362,7 +363,8 @@ class Runner(coffea.processor.Runner):
     def metadata_fetcher(xrootdtimeout, align_clusters, item):
         filepaths = Runner.resolve_lfn(
             item.filename, item.metadata["store_path"],
-            item.metadata["xrootddomain"], item.metadata["skippaths"],
+            item.metadata["xrootddomain"],
+            item.metadata["local_file_blacklist"],
             item.metadata["url_blacklist"])
         for filepath in filepaths:
             try:
@@ -421,7 +423,7 @@ class Runner(coffea.processor.Runner):
 
         filepaths = Runner.resolve_lfn(
             item.filename, metadata["store_path"],
-            metadata["xrootddomain"], metadata["skippaths"],
+            metadata["xrootddomain"], metadata["local_file_blacklist"],
             metadata["url_blacklist"])
 
         for filepath in filepaths:
