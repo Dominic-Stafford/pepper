@@ -308,14 +308,15 @@ def run_processor(processor_class=None, description=None, mconly=False):
     xrootddomain = None
     if "file_mode" in config and "xrootd" in config["file_mode"]:
         xrootddomain = config["xrootddomain"]
-    bad_file_paths = None
-    if "bad_file_paths" in config:
-        bad_file_paths = config["bad_file_paths"]
+    local_file_blacklist = None
+    if "local_file_blacklist" in config \
+            and config["file_mode"] == "local+xrootd":
+        local_file_blacklist = config["local_file_blacklist"]
     xrootd_url_blacklist = None
     if "xrootd_url_blacklist" in config:
         xrootd_url_blacklist = config["xrootd_url_blacklist"]
     metadata = {"store_path": store, "xrootddomain": xrootddomain,
-                "skippaths": bad_file_paths,
+                "local_file_blacklist": local_file_blacklist,
                 "url_blacklist": xrootd_url_blacklist}
     # Give metadata for the processing step
     processor.pepperitemmetadata = metadata
