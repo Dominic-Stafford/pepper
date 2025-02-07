@@ -225,7 +225,7 @@ class Processor(pepper.ProcessorBasicPhysics):
         reapply_jec = ("reapply_jec" in self.config
                        and self.config["reapply_jec"])
         selector.set_multiple_columns(partial(
-            self.compute_jet_factors, is_mc, reapply_jec, variation.junc,
+            self.compute_jet_factors, is_mc, era, reapply_jec, variation.junc,
             variation.jer, selector.rng))
         selector.set_column("OrigJet", selector.data["Jet"])
         selector.set_column("Jet", partial(self.build_jet_column, is_mc))

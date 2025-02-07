@@ -746,8 +746,8 @@ class ProcessorBasicPhysics(pepper.Processor):
         """Return invariant mass of lepton pair."""
         return (data["Lepton"][:, 0] + data["Lepton"][:, 1]).mass
 
-    def compute_jec_factor(self, is_mc, data, pt=None, eta=None, area=None,
-                           rho=None, raw_factor=None):
+    def compute_jec_factor(self, is_mc, era, data, pt=None, eta=None,
+                           area=None, rho=None, raw_factor=None):
         """Return jet energy correction factor."""
         if pt is None:
             pt = data["Jet"].pt
@@ -766,6 +766,8 @@ class ProcessorBasicPhysics(pepper.Processor):
             jec = self.config["jet_correction_mc"]
         else:
             jec = self.config["jet_correction_data"]
+            if isinstance(jec, dict):
+                jec = jec[era]
 
         raw_pt = pt * raw_factor
         l1l2l3 = jec.getCorrection(
@@ -847,11 +849,11 @@ class ProcessorBasicPhysics(pepper.Processor):
             factor = factor_stoch
         return factor
 
-    def compute_jet_factors(self, is_mc, jec, junc, jer, rng, data):
+    def compute_jet_factors(self, is_mc, era, jec, junc, jer, rng, data):
         """Return total jet factor."""
         factor = ak.ones_like(data["Jet"].pt)
         if jec:
-            jecfac = self.compute_jec_factor(is_mc, data)
+            jecfac = self.compute_jec_factor(is_mc, era, data)
             factor = factor * jecfac
         if is_mc and junc is not None:
             juncfac = self.compute_junc_factor(data, *junc)
@@ -957,7 +959,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         jets = data["Jet"]
         return jets[jets.pass_pu_id]
 
-    def build_lowptjet_column(self, is_mc, junc, jer, rng, data):
+    def build_lowptjet_column(self, is_mc, era, junc, jer, rng, data):
         """Build a column of low-pt jets, needed to propagate jet
            corrections to low-pt jets and consequently build the
            MET column."""
@@ -966,7 +968,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         # pt > 10 GeV and |eta| < 5.2, thus cut there
         jets = jets[(jets.rawPt > 10) & (abs(jets.eta) < 5.2)]
         l1l2l3 = self.compute_jec_factor(
-            is_mc, data, jets.rawPt, jets.eta, jets.area,
+            is_mc, era, data, jets.rawPt, jets.eta, jets.area,
             raw_factor=ak.ones_like(jets.rawPt))
         jets["pt"] = l1l2l3 * jets.rawPt
         jets["pt_nomuon"] = jets["pt"] * (1 - jets["muonSubtrFactor"])
@@ -1040,7 +1042,8 @@ class ProcessorBasicPhysics(pepper.Processor):
                 "mass": jets.mass,
                 "emef": jets.neEmEF + jets.chEmEF
             }, with_name="Jet", behavior=jets.behavior)
-            lowptjets = self.build_lowptjet_column(is_mc, junc, jer, rng, data)
+            lowptjets = self.build_lowptjet_column(
+                is_mc, era, junc, jer, rng, data)
             # Cut according to MissingETRun2Corrections Twiki
             jets = jets[(jets["pt_nomuon"] > 15) & (jets["emef"] < 0.9)]
             lowptjets = lowptjets[(lowptjets["pt_nomuon"] > 15)
