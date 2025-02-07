@@ -45,7 +45,7 @@ class ConfigBasicPhysics(pepper.Config):
                 "btag_sf": self._get_btag_sf,
                 "jet_puid_sf": self._get_puid_sf,
                 "jet_correction_mc": self._get_jet_correction,
-                "jet_correction_data": self._get_jet_correction,
+                "jet_correction_data": self._get_jet_correction_dict,
                 "jet_uncertainty": partial(
                     self._get_jet_general, evaltype="junc",
                     cls=coffea.jetmet_tools.JetCorrectionUncertainty),
@@ -166,6 +166,15 @@ class ConfigBasicPhysics(pepper.Config):
             evaluators.update(get_evaluator(path, "txt", "jec"))
         fjc = coffea.jetmet_tools.FactorizedJetCorrector(**evaluators)
         return fjc
+
+    def _get_jet_correction_dict(self, value):
+        if isinstance(value, dict):
+            corrs = {}
+            for era, val in value.items():
+                corrs[era] = self._get_jet_correction(val)
+            return corrs
+        else:
+            return self._get_jet_correction(value)
 
     def _get_jet_general(self, value, evaltype, cls):
         evaluator = get_evaluator(self._get_path(value), "txt", evaltype)
