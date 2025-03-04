@@ -136,26 +136,10 @@ class ProcessorBasicPhysics(pepper.Processor):
         # Get describtion of individual columns of this branch with
         # Events->GetBranch("LHEScaleWeight")->GetTitle() in ROOT
         data = selector.data
-        if dsname + "_LHEScaleSumw" in self.config["mc_lumifactors"]:
+        if (self.config["mc_lumifactors"] and dsname + "_LHEScaleSumw"
+                in self.config["mc_lumifactors"]):
             norm = self.config["mc_lumifactors"][dsname + "_LHEScaleSumw"]
-            if len(norm) == 44:
-                # See https://github.com/cms-nanoAOD/cmssw/issues/537
-                idx = [34, 5, 24, 15]
-            elif len(norm) == 9:
-                # This appears to be the standard case for most data sets
-                idx = [7, 1, 5, 3]
-            elif len(norm) == 8:
-                # Same as length 9, just missing the nominal weight at index 4
-                idx = [6, 1, 4, 3]
-            elif len(norm) == 18:
-                # Two sets of scale varations. From the titles in NanoAOD
-                # the exact order is not clear. Assume the right one comes
-                # first.
-                idx = [14, 2, 10, 6]
-            else:
-                raise RuntimeError(
-                    "Unexpected length of the norm for LHEScaleWeight: "
-                    f"{len(norm)}")
+            idx = pepper.misc.get_lhe_scale_idxs(len(norm))
             selector.set_systematic(
                 "MEren",
                 data["LHEScaleWeight"][:, idx[0]] * abs(norm[idx[0]]),
@@ -164,6 +148,15 @@ class ProcessorBasicPhysics(pepper.Processor):
                 "MEfac",
                 data["LHEScaleWeight"][:, idx[2]] * abs(norm[idx[2]]),
                 data["LHEScaleWeight"][:, idx[3]] * abs(norm[idx[3]]))
+        elif "LHEScaleWeight" in ak.fields(data):
+            idx = pepper.misc.get_lhe_scale_idxs(
+                len(data["LHEScaleWeight"][0]))
+            selector.set_systematic(
+                "MEren", data["LHEScaleWeight"][:, idx[0]],
+                data["LHEScaleWeight"][:, idx[1]], norm_post=True)
+            selector.set_systematic(
+                "MEfac", data["LHEScaleWeight"][:, idx[2]],
+                data["LHEScaleWeight"][:, idx[3]], norm_post=True)
 
     def add_ps_uncertainties(self, selector, data):
         """Parton shower scale uncertainties"""
@@ -205,24 +198,25 @@ class ProcessorBasicPhysics(pepper.Processor):
             split_pdf_uncs = self.config["split_pdf_uncs"]
         pdfs = data["LHEPdfWeight"]
 
-        normalize_pdf_uncs = False
-        if "normalize_pdf_uncs" in self.config:
-            normalize_pdf_uncs = self.config["normalize_pdf_uncs"]
+        norm_pdf_uncs_post = False
+        if ("normalize_pdf_uncs" in self.config
+                and self.config["normalize_pdf_uncs"]):
+            if self.config["mc_lumifactors"]:
+                if dsname + "_LHEPdfSumw" not in self.config["mc_lumifactors"]:
+                    raise pepper.config.ConfigError(
+                        "Missing lumifactors for PDF uncertainties for dataset"
+                        f" '{dsname}'. Please run compute_mc_lumifactors.py "
+                        "with the '-p' option.")
+                norm = self.config["mc_lumifactors"][dsname + "_LHEPdfSumw"]
+                pdfs = pdfs * abs(np.array(norm)[np.newaxis, :])
+            else:
+                norm_pdf_uncs_post = True
 
         pdf_doc = pdfs.__doc__
         pdf_type = None
         for LHA_ID, _type in self.config["pdf_types"].items():
             if LHA_ID in pdf_doc:
                 pdf_type = _type.lower()
-
-        if normalize_pdf_uncs:
-            if dsname + "_LHEPdfSumw" not in self.config["mc_lumifactors"]:
-                raise pepper.config.ConfigError(
-                    "Missing lumifactors for PDF uncertainties for dataset "
-                    f"'{dsname}'. Please run compute_mc_lumifactors.py with "
-                    "the '-p' option.")
-            norm = self.config["mc_lumifactors"][dsname + "_LHEPdfSumw"]
-            pdfs = pdfs * abs(np.array(norm)[np.newaxis, :])
 
         # Check if sample has alpha_s variations - currently assuming number of
         # regular variations is a multiple of 10
@@ -247,20 +241,21 @@ class ProcessorBasicPhysics(pepper.Processor):
                 selector.set_systematic(
                     "PDF", *[pdfs[:, i] - pdfs[:, 0] + 1
                              for i in range(1, num_variation)],
-                    scheme="numeric")
+                    scheme="numeric", norm_post=norm_pdf_uncs_post)
                 if has_as_unc:
                     selector.set_systematic(
                         "PDFalphas",
                         pdfs[:, -1] - pdfs[:, 0] + 1,
-                        pdfs[:, -2] - pdfs[:, 0] + 1)
+                        pdfs[:, -2] - pdfs[:, 0] + 1,
+                        norm_post=norm_pdf_uncs_post)
             elif pdf_type.startswith("mc"):
                 selector.set_systematic(
-                    "PDF",
-                    *[pdfs[:, i] for i in range(num_variation)],
-                    scheme="numeric")
+                    "PDF", *[pdfs[:, i] for i in range(num_variation)],
+                    scheme="numeric", norm_post=norm_pdf_uncs_post)
                 if has_as_unc:
                     selector.set_systematic(
-                        "PDFalphas", pdfs[:, -1], pdfs[:, -2])
+                        "PDFalphas", pdfs[:, -1], pdfs[:, -2],
+                        norm_post=norm_pdf_uncs_post)
             elif pdf_type is None:
                 raise pepper.config.ConfigError(
                     "PDF LHA Id not included in config. PDF docstring is: "

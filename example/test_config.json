@@ -8,14 +8,15 @@
     "lumimask": "$CONFDIR/Cert_314472-325175_13TeV_17SeptEarlyReReco2018ABC_PromptEraD_Collisions18_JSON.txt",
     "luminosity": 59.74,
     "crosssections": "$CONFDIR/crosssections.json",
+    "mc_lumifactors": false,
     "exp_datasets": {
         "MuonEG": [
-            "./nanoAOD_test_MuonEG.root"
+            "$CONFDIR/nanoAOD_test_MuonEG.root"
         ]
     },
     "mc_datasets": {
         "TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8": [
-            "./nanoAOD_test_TTTo2L2Nu.root"
+            "$CONFDIR/nanoAOD_test_TTTo2L2Nu.root"
         ]
     },
     "dataset_for_systematics": {

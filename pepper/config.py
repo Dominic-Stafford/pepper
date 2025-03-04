@@ -60,6 +60,17 @@ class Config(MutableMapping):
             "xrootd_url_blacklist": self._get_maybe_external,
             "hists": self._get_hists
         }
+        self.required_args = [
+            "exp_datasets",
+            "mc_datasets",
+            "mc_lumifactors"
+        ]
+
+    def check_required_args(self):
+        for arg in self.required_args:
+            if arg not in self:
+                raise ConfigError(
+                    f"Missing required argument in config: {arg}")
 
     def _load_config(self, path, prev_imports=None):
         if prev_imports is None:

@@ -192,3 +192,12 @@ def replace_missing_systematics(h):
     np.copyto(view, nominal, where=is_zero)
 
     return h
+
+
+def scale_histogram(h, axis_name, scales):
+    ax = h.axes[axis_name]
+    ax_ind = h.axes.name.index(axis_name)
+    for axval, scale in scales.items():
+        ind_tuple = tuple([ax.index(axval) if i == ax_ind else slice(None)
+                           for i in range(len(h.axes))])
+        h.view(flow=True)[ind_tuple] *= scale

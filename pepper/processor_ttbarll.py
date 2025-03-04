@@ -104,25 +104,6 @@ class Processor(pepper.ProcessorBasicPhysics):
                         f"{dsname} in crosssection_uncertainty but not in "
                         "mc_datasets")
 
-        for dsname in config["mc_datasets"].keys():
-            if dsname not in config["mc_lumifactors"]:
-                raise pepper.config.ConfigError(
-                    f"{dsname} is not in mc_lumifactors")
-
-        for dsname in config["exp_datasets"].keys():
-            if dsname not in config["dataset_trigger_map"]:
-                raise pepper.config.ConfigError(
-                    f"{dsname} is not in dataset_trigger_map")
-            if isinstance(config["dataset_trigger_order"], dict):
-                trigorder = set()
-                for datasets in config["dataset_trigger_order"].values():
-                    trigorder |= set(datasets)
-            else:
-                trigorder = config["dataset_trigger_order"]
-            if dsname not in trigorder:
-                raise pepper.config.ConfigError(
-                    f"{dsname} is not in dataset_trigger_order")
-
         if "drellyan_sf" not in config:
             logger.warning("No Drell-Yan scale factor specified")
 
@@ -137,6 +118,8 @@ class Processor(pepper.ProcessorBasicPhysics):
 
     def process_selection(self, selector, dsname, is_mc, filler):
         era = self.get_era(selector.data, is_mc)
+        if self.config["compute_systematics"] and is_mc:
+            self.add_generator_uncertainies(dsname, selector)
         if dsname.startswith("TTTo"):
             selector.set_column("gent_lc", self.gentop, lazy=True)
             if "top_pt_reweighting" in self.config:
@@ -146,9 +129,7 @@ class Processor(pepper.ProcessorBasicPhysics):
         if is_mc and "pileup_reweighting" in self.config:
             selector.add_cut("PileupReweighting", partial(
                 self.do_pileup_reweighting, dsname))
-        if self.config["compute_systematics"] and is_mc:
-            self.add_generator_uncertainies(dsname, selector)
-        if is_mc:
+        if is_mc and self.config["mc_lumifactors"]:
             selector.add_cut(
                 "CrossSection", partial(self.crosssection_scale, dsname))
 
