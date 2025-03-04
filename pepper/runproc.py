@@ -70,8 +70,8 @@ def run_processor(processor_class=None, description=None, mconly=False):
         "simultaneous jobs are submitted. The number can be changed by "
         "supplying it to this option.")
     parser.add_argument(
-        "-r", "--retries", type=int, help="Number of times to retry if there "
-        "is exception in an HTCondor job. If not given, retry infinitely.")
+        "-r", "--retries", default=10, type=int, help="Number of times to "
+        "retry if there is exception in an HTCondor job. Default is ten.")
     parser.add_argument(
         "--chunksize", type=int, help="Number of events to "
         "process at once. A smaller value means less memory usage. Defaults "
@@ -255,11 +255,17 @@ def run_processor(processor_class=None, description=None, mconly=False):
     datasets = processor.preprocess(datasets)
     if args.condor is not None:
         pepper.htcondor.Cluster.set_global_config(dasklogs=args.dasklogs)
+    if "exit_on_failed_jobs" in config:
+        exit_on_failed_jobs = config["exit_on_failed_jobs"].lower()
+    else:
+        exit_on_failed_jobs = "all"
     cluster = pepper.htcondor.Cluster(
         args.condor,
         condorsubmitfile=args.condorsubmit,
         condorinit=args.condorinit,
         retries=args.retries,
+        exit_on_failed_jobs=exit_on_failed_jobs,
+        mc_dsnames=list(config["mc_datasets"].keys()),
         logdir=args.condorlogdir,
         memory=str(args.memory) + " GB",
         runtime=int(args.runtime*60*60)

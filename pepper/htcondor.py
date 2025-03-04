@@ -8,6 +8,8 @@ import shlex
 import traceback
 from collections import defaultdict
 
+import pepper.config
+
 logger = logging.getLogger(__name__)
 
 
@@ -204,8 +206,9 @@ class Cluster:
     """
     def __init__(
             self, num_jobs, condorsubmit=None, condorinit=None,
-            logdir="pepper_logs", retries=None, condorsubmitfile=None,
-            memory="2 GB", runtime=3*60*60):
+            logdir="pepper_logs", retries=None, exit_on_failed_jobs="all",
+            mc_dsnames=[], condorsubmitfile=None, memory="2 GB",
+            runtime=3*60*60):
         """
         Parameters
         ----------
@@ -220,6 +223,14 @@ class Cluster:
             Directory to write log file to
         retries
             Number of retries if a job fails. If ``None`` retry indefinitely
+        exit_on_failed_jobs
+            Whether task which fail retries times should cause an exception.
+            Can be "All" if all tasks should cause a failure, "Data" if only
+            data tasks should cause an exception, or "None" to never raise the
+            exception
+        mc_dsnames
+            A list of the MC dataset names. Needed for exit_on_failed_jobs
+            == "data"
         condorsubmitfile
             Path to a file containing additional content to add to the
             HTCondor submit file
@@ -248,6 +259,11 @@ class Cluster:
             self.client = dask.distributed.Client(dask_cluster)
             self.client.register_plugin(PepperSchedulerPlugin())
         self.retries = retries
+        if exit_on_failed_jobs not in ["all", "data", "none"]:
+            raise pepper.config.ConfigError(
+                "'exit_on_failed_jobs' must be one of 'all', 'data' or 'none'")
+        self.exit_on_failed_jobs = exit_on_failed_jobs
+        self.mc_dsnames = mc_dsnames
 
     def __enter__(self):
         return self
@@ -260,8 +276,6 @@ class Cluster:
             return
 
         client = self.client
-        # Setting pure=False allows resubmission, with pure=True dask assumes
-        # the error that happened once will always happen and skips retrying
         tasks = client.map(function, *iterables, pure=True, key=key)
         # Get an iterator that yields tasks in the order they complete
         tasks_iterator = dask.distributed.as_completed(tasks)
@@ -323,6 +337,7 @@ class Cluster:
                     traceback.print_tb(tb)
                 else:
                     logger.error("No stack trace is available.")
+                is_mc = (task.key.split("/")[0] in self.mc_dsnames)
                 if self.retries is None or task_retries < self.retries:
                     # Retry the task using the task.retry() method
                     # We do it this way as opposed to the automatic retry
@@ -333,10 +348,15 @@ class Cluster:
                     task.retry()
                     # Re-add the task to the iterator to wait for it again
                     tasks_iterator.add(task)
-                else:
+                elif (self.exit_on_failed_jobs == "all" or (
+                        self.exit_on_failed_jobs == "data" and not is_mc)):
                     logger.error("Maximum number of retries reached. "
                                  "Aborting.")
                     raise exc
+                else:
+                    logger.error(f"Maximum number of retries reached for "
+                                 f"task {task.key}. Will continue running, "
+                                 f"but not retry this task.")
 
         logger.debug("All tasks processed. Checking for completeness...")
         incomplete_tasks = [task.key for task in tasks
@@ -346,8 +366,8 @@ class Cluster:
                             "were not processed properly! "
                             "The following tasks where not processed:")
             logger.critical('\n'.join(incomplete_tasks))
-            logger.critical("Your output is very likely unreliable! "
-                            "Please contact the pepper developers.")
+            logger.critical("This may cause issues if observed data is "
+                            "skipped, or if using pre-computed lumifactors")
         else:
             logger.debug("All tasks are complete.")
 

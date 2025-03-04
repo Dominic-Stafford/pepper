@@ -105,7 +105,7 @@ class Selector:
     """
 
     def __init__(self, data, weight=None, on_update=None, applying_cuts=True,
-                 rng_seed=None):
+                 rng_seed=None, output_filler=None):
         """
         Parameters
         ----------
@@ -125,6 +125,9 @@ class Selector:
             int or tuple of ints to seed the random number generator
             with. If ``None``, a random seed will be used. For details
             see the parameter of ``numpy.random.default_rng()``.
+        output_filler
+            A direct link to the output_filler, currently only used to
+            access the accumulators for normalisation of systematics
         """
         self.data = data
         if hasattr(self.data, "metadata"):
@@ -148,6 +151,7 @@ class Selector:
 
         self.rng = np.random.default_rng(rng_seed)
         self.cats = {}
+        self.filler = output_filler
 
         self._applying_cuts = True
         self.add_cut("BeforeCuts", np.full(self.num, True))
@@ -346,15 +350,15 @@ class Selector:
                 values = []
                 n = self.num
                 for value_old in values_old:
+                    if not isinstance(value_old, np.ndarray):
+                        value_old = np.array(value_old)
                     if categories is not None:
                         value_old = pad_cats(cats_mask, value_old)
                     if len(value_old) != n:
                         if self.applying_cuts:
                             value = value_old[accept]
                         else:
-                            value = np.empty(n)
-                            value[accept] = value_old
-                            value = ak.mask(value, accept)
+                            value = pad_cats(accept, value_old)
                     elif not self.applying_cuts:
                         value = ak.mask(value_old, accept)
                     else:
@@ -377,7 +381,8 @@ class Selector:
             self.systematics = self.systematics[mask]
         self.unapplied_cuts.clear()
 
-    def set_systematic(self, name, *values, scheme=None, cut=None):
+    def set_systematic(self, name, *values, scheme=None, cut=None,
+                       norm_post=False):
         """Set the systematic weights for an uncertainty. These will be
         found in the `self.systematics`.
 
@@ -408,6 +413,10 @@ class Selector:
             Name of the cut after which the systematic needs to be accounted
             for. If not None, a corresponding item will be found in
             ``self.cut_systematic_map``
+        norm_post
+            Boolean for whether this systematic should be normailsed at the end
+            of the run, will fill the sumw into the output filler, triggering
+            normalisation when saving histograms
         """
 
         if name == "weight":
@@ -438,6 +447,17 @@ class Selector:
             self.systematics[name] = value
             if cut is not None:
                 self.cut_systematic_map[cut].append(name)
+        if norm_post:
+            if len(self.cutnames) > 1:
+                raise RuntimeError(
+                    "Systematics to be normed should be set before any cuts "
+                    "to account for acceptance cuts. Please move the call "
+                    "to selector.systematic earlier in your processor")
+            if self.filler is None:
+                raise UnboundLocalError(
+                    "A call was made to selctor.set_systematic with "
+                    "norm_post=True, but no filler was set for this selector")
+            self.filler.add_sumws_for_norm(self.systematics, names)
 
     def _mask(self, column, mask):
         num_events = ak.sum(mask)

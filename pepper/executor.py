@@ -302,10 +302,10 @@ class ClusterExecutor(ResumableExecutor, _WithCluster):
     @staticmethod
     def get_taskname(item, i):
         if hasattr(item, "entrystart"):
-            return (f"{item.dataset[:40]}/{os.path.basename(item.filename)}/"
+            return (f"{item.dataset}/{os.path.basename(item.filename)}/"
                     f"{item.entrystart}:{item.entrystop}/chunk{i:06}")
         else:
-            return (f"{item.dataset[:40]}/{os.path.basename(item.filename)}/"
+            return (f"{item.dataset}/{os.path.basename(item.filename)}/"
                     f"/chunk{i:06}")
 
     def _submit(self, items, function):

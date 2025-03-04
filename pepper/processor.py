@@ -69,6 +69,8 @@ class Processor(coffea.processor.ProcessorABC):
         configuration for obvious errors, so that the user has an immediate
         error message.
         """
+        config.check_required_args()
+
         # Check for duplicate names in columns_to_save
         column_names = []
         if "columns_to_save" in config:
@@ -99,6 +101,42 @@ class Processor(coffea.processor.ProcessorABC):
                            "file mode is not 'local+xrootd'. Blacklist "
                            "will be ignored. If you want to skip files, "
                            "use 'file_blacklist' instead.")
+
+        if (not config["mc_lumifactors"] and "normalize_pdf_uncs" in config
+                and config["normalize_pdf_uncs"] and "split_pdf_uncs" in config
+                and not config["split_pdf_uncs"]):
+            raise pepper.config.ConfigError(
+                "PDF uncertainties can only be normalised after processing if "
+                "they are split. Please set 'split_pdf_uncs' to true, "
+                "'normalize_pdf_uncs' to false, or specify a pre-computed "
+                "'mc_lumifactors' file")
+
+        if (config["mc_lumifactors"] and "exit_on_failed_jobs" in config
+                and config["exit_on_failed_jobs"].lower() != "all"):
+            logger.warning(
+                "Allowing continuing past max retries is not recommended for "
+                "pre-computed lumifactors. Please set 'exit_on_failed_jobs' to"
+                " 'all', or 'mc_lumifactors' to false (posterior computation)")
+
+        for dsname in config["mc_datasets"].keys():
+            if (config["mc_lumifactors"] and
+                    dsname not in config["mc_lumifactors"]):
+                raise pepper.config.ConfigError(
+                    f"{dsname} is not in mc_lumifactors")
+
+        for dsname in config["exp_datasets"].keys():
+            if dsname not in config["dataset_trigger_map"]:
+                raise pepper.config.ConfigError(
+                    f"{dsname} is not in dataset_trigger_map")
+            if isinstance(config["dataset_trigger_order"], dict):
+                trigorder = set()
+                for datasets in config["dataset_trigger_order"].values():
+                    trigorder |= set(datasets)
+            else:
+                trigorder = config["dataset_trigger_order"]
+            if dsname not in trigorder:
+                raise pepper.config.ConfigError(
+                    f"{dsname} is not in dataset_trigger_order")
 
     @staticmethod
     def _get_hists_from_config(config, key, todokey):
@@ -450,6 +488,9 @@ class Processor(coffea.processor.ProcessorABC):
 
         filler = self.setup_outputfiller(dsname, is_mc)
         selector = self.setup_selection(data, dsname, is_mc, filler)
+        if not self.config["mc_lumifactors"]:
+            filler.fill_gen_sumws(selector.systematics["weight"])
+
         self.process_selection(selector, dsname, is_mc, filler)
 
         if self.eventdir is not None:
@@ -540,7 +581,7 @@ class Processor(coffea.processor.ProcessorABC):
         seed = (self.rng_seed, uuid.UUID(data.metadata["fileuuid"]).int,
                 data.metadata["entrystart"])
         selector = Selector(data, genweight, filler.get_callbacks(),
-                            rng_seed=seed)
+                            rng_seed=seed, output_filler=filler)
         return selector
 
     @abc.abstractmethod
@@ -712,6 +753,38 @@ class Processor(coffea.processor.ProcessorABC):
         with open(os.path.join(dest, "hists.json"), "w") as f:
             hist_col.save_metadata_json(f)
 
+    def apply_lumifactors_post(self, output):
+        crosssections = self.config["crosssections"]
+        if "dataset_for_systematics" in self.config:
+            dsforsys = self.config["dataset_for_systematics"]
+        else:
+            dsforsys = {}
+        for dsname in output["gen_sumws"].keys():
+            if dsname not in self.config["mc_datasets"].keys():
+                continue
+            if dsname in dsforsys:
+                xs = crosssections[dsforsys[dsname][0]]
+            else:
+                xs = crosssections[dsname]
+            factor = (xs * self.config["luminosity"]
+                      / output["gen_sumws"][dsname]["gen_sumw"])
+            output["cutflows"][dsname] = {
+                k: v * factor for k, v in output["cutflows"][dsname].items()}
+            output["hists"][dsname] = {
+                k: v * factor for k, v in output["hists"][dsname].items()}
+            if len(output["gen_sumws"][dsname]) > 1:
+                factors = {}
+                for key in output["gen_sumws"][dsname].keys():
+                    if key != "gen_sumw":
+                        factors[key] = (
+                            output["gen_sumws"][dsname]["gen_sumw"]
+                            / output["gen_sumws"][dsname][key])
+                for hkey, hist in output["hists"][dsname].items():
+                    if (hkey[0] != "BeforeCuts" and dsname not in
+                            self.config["dataset_for_systematics"]):
+                        pepper.hist_utils.scale_histogram(hist, "sys", factors)
+        return output
+
     def save_output(self, output, dest):
         """Save the histograms and cutflows to files
 
@@ -722,6 +795,19 @@ class Processor(coffea.processor.ProcessorABC):
         dest
             Destination direction
         """
+        if not self.config["mc_lumifactors"]:
+            output = self.apply_lumifactors_post(output)
+
+        # Save gen_sumws for normalising per-event output
+        if self.eventdir is not None and len(output["gen_sumws"]) > 0:
+            outpath = os.path.join(dest, "gen_sumws.json")
+            logger.warning(
+                f"Per-event outputs are only normalised when using "
+                f"pre-computed mc lumifacotrs. Please normalise these "
+                f"outputs using the sum weights in {outpath}.")
+            with open(outpath, "w") as f:
+                json.dump(output["gen_sumws"], f, indent=4)
+
         # Save cutflows
         with open(os.path.join(dest, "cutflows.json"), "w") as f:
             json.dump(self._prepare_cutflows(output), f, indent=4)

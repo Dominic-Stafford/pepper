@@ -88,7 +88,8 @@ class OutputFiller:
         """
         self.output = {
             "hists": {},
-            "cutflows": defaultdict(AddableDict)
+            "cutflows": defaultdict(AddableDict),
+            "gen_sumws": defaultdict(AddableDict)
         }
         if hist_dict is None:
             self.hist_dict = {}
@@ -102,6 +103,33 @@ class OutputFiller:
         self.cuts_to_histogram = cuts_to_histogram
         self.systs_to_histogram = systs_to_histogram
         self.done_hists = set()
+
+    def fill_gen_sumws(self, weight):
+        """Fill an accumulator with the initial sum genweights for
+        lumifactor computations at the end of the run
+
+        Parameters
+        ----------
+        weight
+            An array of event weights
+        """
+        accumulator = self.output["gen_sumws"][self.dsname]
+        accumulator["gen_sumw"] = ak.sum(weight)
+
+    def add_sumws_for_norm(self, sys, names):
+        """Fill an accumulator with the sum of weights for systematic
+        variations which should be normalised at the end of the run
+
+        Parameters
+        ----------
+        systematics
+            Record array with systematic weights
+        names
+            The names of the systematics which should be normalised
+        """
+        accumulator = self.output["gen_sumws"][self.dsname]
+        for name in names:
+            accumulator[name] = ak.sum(sys["weight"] * sys[name])
 
     def fill_cutflows(self, data, systematics, cut, done_steps, cats):
         """Fill the cutflows for a specific step or cut

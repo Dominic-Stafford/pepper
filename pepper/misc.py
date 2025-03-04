@@ -92,6 +92,27 @@ def get_trigger_paths_for(dataset, is_mc, trigger_paths, trigger_order=None,
     return pos_triggers, neg_triggers
 
 
+def get_lhe_scale_idxs(weight_len):
+    if weight_len == 44:
+        # See https://github.com/cms-nanoAOD/cmssw/issues/537
+        return [34, 5, 24, 15]
+    elif weight_len == 9:
+        # This appears to be the standard case for most data sets
+        return [7, 1, 5, 3]
+    elif weight_len == 8:
+        # Same as length 9, just missing the nominal weight at index 4
+        return [6, 1, 4, 3]
+    elif weight_len == 18:
+        # Two sets of scale varations. From the titles in NanoAOD
+        # the exact order is not clear. Assume the right one comes
+        # first.
+        return [14, 2, 10, 6]
+    else:
+        raise RuntimeError(
+            "Unexpected length of the norm for LHEScaleWeight: "
+            f"{weight_len}")
+
+
 def get_event_files(eventdir, eventext, datasets):
     out = {}
     for dsname in datasets:
