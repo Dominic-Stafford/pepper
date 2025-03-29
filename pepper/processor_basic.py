@@ -23,8 +23,8 @@ class VariationArg:
     name
         Name of the variation
     junc
-        First element names the jet energy uncertinty source, second element
-        names the direction in which it is varied
+        Tuple defining the jet energy uncertainty; first element is the
+        direction ("up" or "down"), second element is the uncertainty source
     jer
         Direction into which the jet energy resolution is varied. Can also be
         "central" for no variation, but smearing still being applied
