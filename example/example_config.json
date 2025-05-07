@@ -8,6 +8,7 @@
     "lumimask": "$CONFDIR/Cert_314472-325175_13TeV_17SeptEarlyReReco2018ABC_PromptEraD_Collisions18_JSON.txt",
     "luminosity": 59.74,
     "crosssections": "$CONFDIR/crosssections.json",
+    "mc_lumifactors": false,
     "exp_datasets": {
         "MuonEG": [
             "/MuonEG/Run2018A-02Apr2020-v1/NANOAOD",
