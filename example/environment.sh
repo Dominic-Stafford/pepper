@@ -9,10 +9,18 @@ fi
 export X509_USER_PROXY=~/.globus/x509up
 # Load LCG
 source /cvmfs/sft.cern.ch/lcg/views/setupViews.sh LCG_104 x86_64-el9-gcc11-opt
-# Make sure python libs installed in the user directory are prefered over system-wide ones
-export PYTHONPATH=`python3 -c 'import site; print(site.getusersitepackages())'`:$PYTHONPATH
-# Parsl installs some of it's commands into ~/.local/bin if installed as user
-export PATH=~/.local/bin:$PATH
+
+# Load your virtual environment - comment this out if you use one!
+# source /INSERT/ABSOLUTE/PATH/TO/YOUR/ENVIRONMENT/bin/activate
+
+if test -n "$VIRTUAL_ENV"; then
+    # Make sure python libs installed in virtual environment are prefered over system-wide ones
+    VENV_SITE_PACKAGES="$(realpath ${VIRTUAL_ENV}/lib/python3.*/site-packages)"
+    export PYTHONPATH=$VENV_SITE_PACKAGES:$PYTHONPATH
+else
+    # Make sure python libs installed in the user directory are prefered over system-wide ones
+    export PYTHONPATH=`python3 -c 'import site; print(site.getusersitepackages())'`:$PYTHONPATH
+fi
 # On DESY NAF, old HDF5 plugins that are installed system-wide break HDF5 functionality. Disable
 unset HDF5_PLUGIN_PATH
 # Use this script also as environment script when running Pepper on HTCondor
