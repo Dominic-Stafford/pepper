@@ -109,7 +109,7 @@ def run_processor(processor_class=None, description=None, mconly=False):
         "increases memory usage inside the job. Default is 1."
     )
     parser.add_argument(
-        "-m", "--memory", type=float, help="Memory in GB that is requested "
+        "-m", "--memory", type=float, help="Memory in GiB that is requested "
         "per condor worker. If a worker exceeds the limit, condor might "
         " kill it. Default is 2.", default=2.0)
     parser.add_argument(
@@ -267,7 +267,7 @@ def run_processor(processor_class=None, description=None, mconly=False):
         exit_on_failed_jobs=exit_on_failed_jobs,
         mc_dsnames=list(config["mc_datasets"].keys()),
         logdir=args.condorlogdir,
-        memory=str(args.memory) + " GB",
+        memory=str(args.memory) + " GiB",
         runtime=int(args.runtime*60*60)
     )
     pre_executor = pepper.executor.ClusterExecutor(

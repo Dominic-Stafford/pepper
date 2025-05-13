@@ -30,7 +30,7 @@ def get_site():
         return hostname
 
 
-def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GB", disk="3 GB",
+def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GiB", disk="3 GiB",
                      cores=1, *, condorsubmit=None, condorenv=None,
                      logdir=None):
     """Get a Dask Jobqueue HTCondor cluster for a host
@@ -42,9 +42,9 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GB", disk="3 GB",
     runtime
         Requested runtime in seconds. If None, do not request a runtime
     memory
-        Request memory. String with a unit like "GB" or an int.
+        Request memory. String with a unit like "GiB" or an int.
     disk
-        Request disk space. String with a unit like "GB" or an int.
+        Request disk space. String with a unit like "GiB" or an int.
     cores
         Total number of cores per job
     condorsubmit
@@ -207,7 +207,7 @@ class Cluster:
     def __init__(
             self, num_jobs, condorsubmit=None, condorinit=None,
             logdir="pepper_logs", retries=None, exit_on_failed_jobs="all",
-            mc_dsnames=[], condorsubmitfile=None, memory="2 GB",
+            mc_dsnames=[], condorsubmitfile=None, memory="2 GiB",
             runtime=3*60*60):
         """
         Parameters
@@ -235,7 +235,7 @@ class Cluster:
             Path to a file containing additional content to add to the
             HTCondor submit file
         memory
-            Request memory. String with a unit like "GB" or an int.
+            Request memory. String with a unit like "GiB" or an int.
         """
         self.logdir = self.get_enumerated_dir(logdir)
         if num_jobs is None:
