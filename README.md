@@ -19,6 +19,11 @@ python3 -m pip install --upgrade --upgrade-strategy eager --editable .
 ```
 This will update all dependencies to the latest version. Now `pepper` can be imported as any other python package from any location. Because of the `--editable` option, if you edit files inside your cloned pepper directory, the changes will be in effect already the next time you `import pepper`.
 
+It is recommended that you add a command sourcing your virtual environment to your environment setup script, i.e. by adding
+```sh
+source <absolute path to your environment>/bin/activate
+```
+In `example/environment.sh`, there is a placeholder line for this purpose.
 
 
 ## Usage
