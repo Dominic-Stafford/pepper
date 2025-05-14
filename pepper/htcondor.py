@@ -329,7 +329,7 @@ class Cluster:
                     logger.error(f"The type of the exception is "
                                  f"'{type(exc).__name__}'.")
                     logger.error("The exception message is: ")
-                    logger.error(str(exc))
+                    logger.error(str(exc)[:50000])
                 else:
                     logger.error("The type of the exception is not available.")
                 if tb is not None:
