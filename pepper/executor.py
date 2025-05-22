@@ -278,7 +278,7 @@ class ResumableExecutor(abc.ABC, coffea.processor.executor.ExecutorBase):
             if not os.path.exists(output):
                 break
             i += 1
-        coffea.util.save(self.state, output)
+        pepper.misc.save(self.state, output)
         os.replace(output, self.state_file_name)
 
 

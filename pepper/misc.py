@@ -10,6 +10,9 @@ import numpy as np
 import awkward as ak
 import hist as hi
 
+import lz4.frame
+import cloudpickle
+import pickle
 
 """
 Attributes
@@ -414,3 +417,20 @@ def akismasked(arr):
             return True
         t = t.type
     return False
+
+
+def save(output, filename):
+    """Save a coffea object or collection thereof to disk
+    This is a more performant and memory-efficient replacement for
+    'coffea.util.save'.
+
+    This function can accept any picklable object.
+    Suggested suffix: ``.coffea``
+    """
+    with lz4.frame.open(filename, "wb") as fout:
+        p = cloudpickle.Pickler(fout, protocol=pickle.HIGHEST_PROTOCOL)
+        # Fast mode can have issues with recursive objects.
+        # See https://docs.python.org/3/library/pickle.html
+        # It does not seem to be an issue with the objects we are pickling.
+        p.fast = True
+        p.dump(output)

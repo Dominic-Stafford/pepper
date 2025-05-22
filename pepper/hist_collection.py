@@ -9,6 +9,8 @@ import uproot
 import coffea.util
 import hist as hi
 
+import pepper.misc
+
 
 class _JSONEncoderWithSets(json.JSONEncoder):
     """Enables encoding of sets to JSON"""
@@ -405,7 +407,7 @@ class HistCollection(Mapping):
             filepath = os.path.join(self.path, filename)
         if format == "hist":
             hist.pepper_cats_present = cats_present
-            coffea.util.save(hist, filepath)
+            pepper.misc.save(hist, filepath)
         elif format == "root":
             with uproot.recreate(filepath) as f:
                 for idx, hist_split in self.hist_split_strcat(
