@@ -451,26 +451,31 @@ class ProcessorBasicPhysics(pepper.Processor):
         year = str(self.config["year"]).lower()
         if not self.config["apply_met_filters"]:
             return np.full(data.shape, True)
-        else:
-            passing_filters =\
-                (data["Flag"]["goodVertices"]
-                 & data["Flag"]["globalSuperTightHalo2016Filter"]
-                 & data["Flag"]["HBHENoiseFilter"]
-                 & data["Flag"]["HBHENoiseIsoFilter"]
-                 & data["Flag"]["EcalDeadCellTriggerPrimitiveFilter"]
-                 & data["Flag"]["BadPFMuonFilter"])
-            if not is_mc:
-                passing_filters = (
-                    passing_filters & data["Flag"]["eeBadScFilter"])
+        passing_filters = (
+            data["Flag"]["goodVertices"]
+            & data["Flag"]["globalSuperTightHalo2016Filter"]
+            & data["Flag"]["EcalDeadCellTriggerPrimitiveFilter"]
+            & data["Flag"]["BadPFMuonFilter"])
+
+        if not (year in ("2016", "2017", "2018") and is_mc):
+            passing_filters = (
+                passing_filters & data["Flag"]["eeBadScFilter"])
+
+        if year in ("2016", "2017", "2018", "ul2016pre", "ul2016post",
+                    "ul2017", "ul2018"):
+            passing_filters = (
+                passing_filters & data["Flag"]["HBHENoiseFilter"]
+                & data["Flag"]["HBHENoiseIsoFilter"])
+        elif year in ("2022post", "2022pre", "2023post", "2023pre"):
+            passing_filters = (
+                passing_filters & data["Flag"]["BadPFMuonDzFilter"]
+                & data["Flag"]["hfNoisyHitsFilter"])
         if year in ("2018", "2017"):
             passing_filters = (
                 passing_filters & data["Flag"]["ecalBadCalibFilterV2"])
         if year in ("ul2018", "ul2017"):
             passing_filters = (
                 passing_filters & data["Flag"]["ecalBadCalibFilter"])
-        if year in ("ul2018", "ul2017", "ul2016post", "ul2016pre"):
-            passing_filters = (
-                passing_filters & data["Flag"]["eeBadScFilter"])
 
         return passing_filters
 
@@ -742,12 +747,14 @@ class ProcessorBasicPhysics(pepper.Processor):
         return (data["Lepton"][:, 0] + data["Lepton"][:, 1]).mass
 
     def compute_jec_factor(self, is_mc, era, data, pt=None, eta=None,
-                           area=None, rho=None, raw_factor=None):
+                           phi=None, area=None, rho=None, raw_factor=None):
         """Return jet energy correction factor."""
         if pt is None:
             pt = data["Jet"].pt
         if eta is None:
             eta = data["Jet"].eta
+        if phi is None:
+            phi = data["Jet"].phi
         if area is None:
             area = data["Jet"].area
         if rho is None:
@@ -765,8 +772,12 @@ class ProcessorBasicPhysics(pepper.Processor):
                 jec = jec[era]
 
         raw_pt = pt * raw_factor
-        l1l2l3 = jec.getCorrection(
-            JetPt=raw_pt, JetEta=eta, JetA=area, Rho=rho)
+        if self.config["year"] == "2023post":
+            l1l2l3 = jec.getCorrection(
+                JetPt=raw_pt, JetEta=eta, JetPhi=phi, JetA=area, Rho=rho)
+        else:
+            l1l2l3 = jec.getCorrection(
+                JetPt=raw_pt, JetEta=eta, JetA=area, Rho=rho)
         return raw_factor * l1l2l3
 
     def get_junc_factor_mask(self, data, source, pt, eta, flavor):
@@ -931,16 +942,21 @@ class ProcessorBasicPhysics(pepper.Processor):
             jets["btag"] = jets["btagDeepB"]
         elif tagger == "deepjet":
             jets["btag"] = jets["btagDeepFlavB"]
+        elif tagger == "robustparticletransformer":
+            jets["btag"] = jets["btagRobustParTAK4B"]
+        elif tagger == "particlenet":
+            jets["btag"] = jets["btagPNetB"]
         else:
             raise pepper.config.ConfigError(
                 "Invalid tagger name: {}".format(tagger))
         year = self.config["year"]
-        wptuple = pepper.scale_factors.BTAG_WP_CUTS[tagger][year]
-        if not hasattr(wptuple, wp):
+        if "btag_wps" in self.config and self.config["btag_wps"]:
+            _, _, wp_val = self.config["btag_wps"](wp)
+        else:
             raise pepper.config.ConfigError(
-                "Invalid working point \"{}\" for {} in year {}".format(
-                    wp, tagger, year))
-        jets["btagged"] = jets["btag"] > getattr(wptuple, wp)
+                f"btag_wps not in config, or does not define wps for "
+                f"{tagger} in {year}.")
+        jets["btagged"] = jets["btag"] > wp_val
         jets["pass_pu_id"] = self.has_puid(jets)
         if is_mc:
             # A jet is considered to be a pileup jet if there is no gen jet
@@ -963,8 +979,8 @@ class ProcessorBasicPhysics(pepper.Processor):
         # pt > 10 GeV and |eta| < 5.2, thus cut there
         jets = jets[(jets.rawPt > 10) & (abs(jets.eta) < 5.2)]
         l1l2l3 = self.compute_jec_factor(
-            is_mc, era, data, jets.rawPt, jets.eta, jets.area,
-            raw_factor=ak.ones_like(jets.rawPt))
+            is_mc, era, data, jets.rawPt, jets.eta, jets.phi,
+            jets.area, raw_factor=ak.ones_like(jets.rawPt))
         jets["pt"] = l1l2l3 * jets.rawPt
         jets["pt_nomuon"] = jets["pt"] * (1 - jets["muonSubtrFactor"])
 

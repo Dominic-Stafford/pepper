@@ -10,6 +10,7 @@ import pepper
 from pepper.scale_factors import (
     TopPtWeigter,
     PileupWeighter,
+    BTagWPs,
     BTagWeighter,
     get_evaluator,
     ScaleFactors,
@@ -43,6 +44,7 @@ class ConfigBasicPhysics(pepper.Config):
                 "muon_sf": self._get_muonscalefactor,
                 "muon_rochester": self._get_rochester_corr,
                 "btag_sf": self._get_btag_sf,
+                "btag_wps": self._get_btag_wps,
                 "jet_puid_sf": self._get_puid_sf,
                 "jet_correction_mc": self._get_jet_correction,
                 "jet_correction_data": self._get_jet_correction_dict,
@@ -107,6 +109,16 @@ class ConfigBasicPhysics(pepper.Config):
             weighter = PileupWeighter(f)
         return weighter
 
+    def _get_btag_wps(self, value):
+        value = self._get_maybe_external(value)
+        tagger = self["btag"].split(":")[0]
+        year = self["year"]
+        wp_dict = {k.lower(): v for k, v in value.items()}
+        if tagger in wp_dict and year in wp_dict[tagger]["wps"]:
+            return BTagWPs(wp_dict, tagger, year)
+        else:
+            return None
+
     def _get_btag_sf(self, value):
         weighters = []
         tagger = self["btag"].split(":")[0]
@@ -120,11 +132,16 @@ class ConfigBasicPhysics(pepper.Config):
         measure_type = ("mujets"
                         if "btag_measure_type" not in self
                         else self["btag_measure_type"])
+        tagger_wps = (self["btag_wps"] if "btag_wps" in self else None)
+        if method == "fixedwp" and tagger_wps is None:
+            raise pepper.config.ConfigError(
+                f"btag_wps not in config, or does not define wps for "
+                f"{tagger} in {year}.")
         for weighter_paths in value:
             paths = [self._get_path(path) for path in weighter_paths]
             btagweighter = BTagWeighter(
                 paths[0], paths[1] if len(paths) > 1 else None,
-                tagger=tagger, year=year,
+                tagger=tagger, year=year, wps=tagger_wps,
                 method=method, ignore_missing=ignore_missing,
                 meastype=measure_type)
             weighters.append(btagweighter)

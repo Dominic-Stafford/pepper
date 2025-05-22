@@ -61,6 +61,7 @@
     ],
     "btag_method": "fixedwp",
     "btag_ignoremissing": false,
+    "btag_wps": "$CONFDIR/btag_wps.json",
     "jet_puid_sf": [
         "$DATADIR/scale_factors/2018_jmar.json",
         "$DATADIR/scale_factors/jet_puid_effs.root"

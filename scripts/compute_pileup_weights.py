@@ -9,6 +9,7 @@ class Processor(pepper.Processor):
         self.data_pu_hist = config["data_pu_hist"]
         self.data_pu_hist_up = config["data_pu_hist_up"]
         self.data_pu_hist_down = config["data_pu_hist_down"]
+        self.year = config["year"]
 
         datahist, datahistup, datahistdown = self.load_input_hists()
         if len(datahist.axes) != 1:
@@ -86,7 +87,7 @@ class Processor(pepper.Processor):
         return datahist, datahistup, datahistdown
 
     @staticmethod
-    def _save_hists(hist, datahist, datahistup, datahistdown, filename,
+    def _save_hists(self, hist, datahist, datahistup, datahistdown, filename,
                     sum_datasets):
         datasets = ["all_datasets"] if sum_datasets else hist.axes["dataset"]
 
@@ -103,7 +104,11 @@ class Processor(pepper.Processor):
                         (datahist, ""), (datahistup, "_up"),
                         (datahistdown, "_down")]:
                     datahist_i = datahist_i * is_nonzero
-                    norm = datahist_i.sum().value
+                    if isinstance(datahist_i.storage_type(),
+                                  hi.storage.Weight):
+                        norm = datahist_i.sum().value
+                    else:
+                        norm = datahist_i.sum()
                     ratio = datahist_i / norm / denom
 
                     f[dataset + suffix] = ratio
