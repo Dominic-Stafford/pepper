@@ -7,7 +7,7 @@ from coffea.nanoevents import NanoAODSchema
 import h5py
 import json
 import logging
-from time import time
+from time import time, time_ns
 import abc
 import uuid
 from collections import defaultdict
@@ -219,7 +219,7 @@ class Processor(coffea.processor.ProcessorABC):
         """
         return accumulator
 
-    def _open_output(self, dsname, filetype):
+    def _open_output(self, dsname, identifier, filetype):
         """Try to open an output file for writing the per-event data. It is
         ensured the file is newly created and does not overwrite existing data.
 
@@ -227,6 +227,8 @@ class Processor(coffea.processor.ProcessorABC):
         ----------
         dsname
             Name of the data set of the data
+        identifier
+            Tuple that uniquely identifies the data that goes into the file
         filetype
             Either "root" or "hdf5". The type of the output file
 
@@ -243,21 +245,31 @@ class Processor(coffea.processor.ProcessorABC):
         dsname = dsname.replace("/", "_")
         dsdir = os.path.join(self.eventdir, dsname)
         os.makedirs(dsdir, exist_ok=True)
-        i = 0
         while True:
-            filepath = os.path.join(dsdir, str(i).zfill(4) + ext)
+            filehash = hash((*identifier, time_ns()))
+            filename = "{:016x}".format(filehash % 16**16) + ext
+            filepath = os.path.join(dsdir, filename)
+            if os.path.exists(filepath):
+                logger.warn("Got a file locking conflict for path "
+                            f"'{filepath}'. Continuing with next file")
+                continue
+
+            # Open in exclusive file mode
+            # to prevent race conditions with other processes
             try:
-                f = open(filepath, "x")
-            except (FileExistsError, OSError):
-                i += 1
+                if filetype == "root":
+                    # Pass through open() to use the exclusive
+                    # file mode 'x'
+                    f = uproot.recreate(open(filepath, "x+b"))
+                elif filetype == "hdf5":
+                    # h5py supports the 'x' mode directly
+                    f = h5py.File(filepath, "x")
+            except (FileExistsError, OSError, BlockingIOError):
+                logger.warn("Got a file locking conflict for path "
+                            f"'{filepath}'. Continuing with next file")
                 continue
             else:
                 break
-        f.close()
-        if filetype == "root":
-            f = uproot.recreate(filepath)
-        elif filetype == "hdf5":
-            f = h5py.File(filepath, "w")
         logger.debug(f"Opened output {filepath}")
         return f
 
@@ -311,7 +323,7 @@ class Processor(coffea.processor.ProcessorABC):
         elif selector.systematics is not None:
             out_dict["weight"] = ak.flatten(
                 selector.systematics["weight"], axis=0)
-        with self._open_output(dsname, "hdf5") as f:
+        with self._open_output(dsname, identifier, "hdf5") as f:
             outf = HDF5File(f)
             for key in out_dict.keys():
                 outf[key] = out_dict[key]
@@ -389,7 +401,7 @@ class Processor(coffea.processor.ProcessorABC):
                         self._separate_masks_for_root(
                             {f: ak.packed(cats[cat][f])
                              for f in ak.fields(cats[cat])})
-        with self._open_output(dsname, "root") as outf:
+        with self._open_output(dsname, identifier, "root") as outf:
             for key in out_dict.keys():
                 outf[key] = out_dict[key]
 
@@ -807,7 +819,7 @@ class Processor(coffea.processor.ProcessorABC):
             outpath = os.path.join(dest, "gen_sumws.json")
             logger.warning(
                 f"Per-event outputs are only normalised when using "
-                f"pre-computed mc lumifacotrs. Please normalise these "
+                f"pre-computed mc lumifactors. Please normalise these "
                 f"outputs using the sum weights in {outpath}.")
             with open(outpath, "w") as f:
                 json.dump(output["gen_sumws"], f, indent=4)
