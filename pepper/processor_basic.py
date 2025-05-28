@@ -485,6 +485,7 @@ class ProcessorBasicPhysics(pepper.Processor):
 
     def electron_id(self, e_id, electron):
         """Check if electrons have ID specified in the config file."""
+        run_3_years = {"2022pre", "2022post", "2023pre", "2023post"}
         if e_id == "skip":
             has_id = True
         if e_id == "cut:loose":
@@ -494,13 +495,25 @@ class ProcessorBasicPhysics(pepper.Processor):
         elif e_id == "cut:tight":
             has_id = electron["cutBased"] >= 4
         elif e_id == "mva:noIso80":
-            has_id = electron["mvaFall17V2noIso_WP80"]
+            if self.config["year"] in run_3_years:
+                has_id = electron["mvaNoIso_WP80"]
+            else:
+                has_id = electron["mvaFall17V2noIso_WP80"]
         elif e_id == "mva:noIso90":
-            has_id = electron["mvaFall17V2noIso_WP90"]
+            if self.config["year"] in run_3_years:
+                has_id = electron["mvaNoIso_WP90"]
+            else:
+                has_id = electron["mvaFall17V2noIso_WP90"]
         elif e_id == "mva:Iso80":
-            has_id = electron["mvaFall17V2Iso_WP80"]
+            if self.config["year"] in run_3_years:
+                has_id = electron["mvaIso_WP80"]
+            else:
+                has_id = electron["mvaFall17V2Iso_WP80"]
         elif e_id == "mva:Iso90":
-            has_id = electron["mvaFall17V2Iso_WP90"]
+            if self.config["year"] in run_3_years:
+                has_id = electron["mvaIso_WP90"]
+            else:
+                has_id = electron["mvaFall17V2Iso_WP90"]
         else:
             raise ValueError("Invalid electron id string")
         return has_id
