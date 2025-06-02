@@ -136,6 +136,10 @@ class ProcessorBasicPhysics(pepper.Processor):
         # Get describtion of individual columns of this branch with
         # Events->GetBranch("LHEScaleWeight")->GetTitle() in ROOT
         data = selector.data
+        if ak.num(data["LHEScaleWeight"])[0] == 0:
+            logger.warning("LHEScaleWeights missing for this sample")
+            return
+
         if (self.config["mc_lumifactors"] and dsname + "_LHEScaleSumw"
                 in self.config["mc_lumifactors"]):
             norm = self.config["mc_lumifactors"][dsname + "_LHEScaleSumw"]
@@ -193,10 +197,14 @@ class ProcessorBasicPhysics(pepper.Processor):
                 or "pdf_types" not in self.config):
             return
 
+        pdfs = data["LHEPdfWeight"]
+        if ak.num(pdfs)[0] == 0:
+            logger.warning("LHEPdfWeights missing for this sample")
+            return
+
         split_pdf_uncs = False
         if "split_pdf_uncs" in self.config:
             split_pdf_uncs = self.config["split_pdf_uncs"]
-        pdfs = data["LHEPdfWeight"]
 
         norm_pdf_uncs_post = False
         if ("normalize_pdf_uncs" in self.config

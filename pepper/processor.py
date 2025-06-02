@@ -102,6 +102,13 @@ class Processor(coffea.processor.ProcessorABC):
                            "will be ignored. If you want to skip files, "
                            "use 'file_blacklist' instead.")
 
+        if not config["mc_lumifactors"]:
+            for proc in config["mc_datasets"]:
+                if (proc not in config["crosssections"] and not
+                        ("dataset_for_systematics" in config and
+                         proc in config["dataset_for_systematics"])):
+                    raise ValueError(f"Could not find crosssection for {proc}")
+
         if (not config["mc_lumifactors"] and "normalize_pdf_uncs" in config
                 and config["normalize_pdf_uncs"] and "split_pdf_uncs" in config
                 and not config["split_pdf_uncs"]):

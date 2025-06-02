@@ -87,7 +87,7 @@ class OutputFiller:
             If ``None``, all systematics will be included.
         """
         self.output = {
-            "hists": {},
+            "hists": {dsname: {}},
             "cutflows": defaultdict(AddableDict),
             "gen_sumws": defaultdict(AddableDict)
         }
@@ -206,17 +206,15 @@ class OutputFiller:
         hist
             The histogram to add
         """
-        acc = self.output["hists"]
         # Split histograms by data set name. Summing histograms of the same
         # data set is generally much faster than summing across data sets
         # because normally the category axes for one data set are always
         # the same. Thus not summing across data sets will increase speed
         # significantly.
-        if dsname not in acc:
-            acc[dsname] = {}
-        if (cut, histname) in acc[dsname]:
+        acc = self.output["hists"][dsname]
+        if (cut, histname) in acc:
             try:
-                acc[dsname][(cut, histname)] += hist
+                acc[(cut, histname)] += hist
             except ValueError as err:
                 raise ValueError(
                     f"Error adding sys {sysname} to hist {histname} for cut"
@@ -226,7 +224,7 @@ class OutputFiller:
                     f"'no_callback=True' on all new columns set before the"
                     f" next cut") from err
         else:
-            acc[dsname][(cut, histname)] = hist
+            acc[(cut, histname)] = hist
         self.done_hists.add((cut, histname, sysname))
 
     def _is_sysname_allowed(self, sysname):
