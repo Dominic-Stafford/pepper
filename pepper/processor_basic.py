@@ -201,6 +201,12 @@ class ProcessorBasicPhysics(pepper.Processor):
         if ak.num(pdfs)[0] == 0:
             logger.warning("LHEPdfWeights missing for this sample")
             return
+        pdf_doc = pdfs.__doc__
+        pdf_type = None
+        for LHA_ID, _type in self.config["pdf_types"].items():
+            if LHA_ID in pdf_doc:
+                pdf_type = _type.lower()
+
 
         split_pdf_uncs = False
         if "split_pdf_uncs" in self.config:
@@ -219,12 +225,6 @@ class ProcessorBasicPhysics(pepper.Processor):
                 pdfs = pdfs * abs(np.array(norm)[np.newaxis, :])
             else:
                 norm_pdf_uncs_post = True
-
-        pdf_doc = pdfs.__doc__
-        pdf_type = None
-        for LHA_ID, _type in self.config["pdf_types"].items():
-            if LHA_ID in pdf_doc:
-                pdf_type = _type.lower()
 
         # Check if sample has alpha_s variations - currently assuming number of
         # regular variations is a multiple of 10
