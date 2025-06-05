@@ -203,10 +203,10 @@ class ProcessorBasicPhysics(pepper.Processor):
             return
         pdf_doc = pdfs.__doc__
         pdf_type = None
+
         for LHA_ID, _type in self.config["pdf_types"].items():
             if LHA_ID in pdf_doc:
                 pdf_type = _type.lower()
-
 
         split_pdf_uncs = False
         if "split_pdf_uncs" in self.config:
