@@ -136,10 +136,6 @@ class ProcessorBasicPhysics(pepper.Processor):
         # Get describtion of individual columns of this branch with
         # Events->GetBranch("LHEScaleWeight")->GetTitle() in ROOT
         data = selector.data
-        if ak.num(data["LHEScaleWeight"])[0] == 0:
-            logger.warning("LHEScaleWeights missing for this sample")
-            return
-
         if (self.config["mc_lumifactors"] and dsname + "_LHEScaleSumw"
                 in self.config["mc_lumifactors"]):
             norm = self.config["mc_lumifactors"][dsname + "_LHEScaleSumw"]
@@ -152,7 +148,8 @@ class ProcessorBasicPhysics(pepper.Processor):
                 "MEfac",
                 data["LHEScaleWeight"][:, idx[2]] * abs(norm[idx[2]]),
                 data["LHEScaleWeight"][:, idx[3]] * abs(norm[idx[3]]))
-        elif "LHEScaleWeight" in ak.fields(data):
+        elif ("LHEScaleWeight" in ak.fields(data)
+              and ak.num(data["LHEScaleWeight"])[0] > 0):
             idx = pepper.misc.get_lhe_scale_idxs(
                 len(data["LHEScaleWeight"][0]))
             selector.set_systematic(
@@ -161,6 +158,8 @@ class ProcessorBasicPhysics(pepper.Processor):
             selector.set_systematic(
                 "MEfac", data["LHEScaleWeight"][:, idx[2]],
                 data["LHEScaleWeight"][:, idx[3]], norm_post=True)
+        else:
+            logger.warning("LHEScaleWeights missing for this sample")
 
     def add_ps_uncertainties(self, selector, data):
         """Parton shower scale uncertainties"""
@@ -194,13 +193,15 @@ class ProcessorBasicPhysics(pepper.Processor):
         """Add PDF uncertainties, using the methods described here:
         https://arxiv.org/pdf/1510.03865.pdf#section.6"""
         if ("LHEPdfWeight" not in data.fields
-                or "pdf_types" not in self.config):
+                or data["LHEPdfWeight"] == 0):
+            logger.warning("LHEPdfWeights missing for this sample")
+            return
+        if "pdf_types" not in self.config:
+            logger.warning("Not processing pdfs due to missing 'pdf_types' "
+                           "in config!")
             return
 
         pdfs = data["LHEPdfWeight"]
-        if ak.num(pdfs)[0] == 0:
-            logger.warning("LHEPdfWeights missing for this sample")
-            return
         pdf_doc = pdfs.__doc__
         pdf_type = None
 
