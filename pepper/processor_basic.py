@@ -931,13 +931,16 @@ class ProcessorBasicPhysics(pepper.Processor):
     def has_puid(self, jets):
         """Whether jets satisfy the configured pileup ID"""
         j_puId = self.config["good_jet_puId"]
+        is2016 = ("ul2016" in self.config["year"])
         if j_puId == "skip":
             has_puId = True
-        elif j_puId == "cut:loose":
+        elif ((not is2016 and j_puId == "cut:loose")
+               or (is2016 and j_puId == "cut:tight")):
             has_puId = ak.values_astype(jets["puId"] & 0b100, bool)
         elif j_puId == "cut:medium":
             has_puId = ak.values_astype(jets["puId"] & 0b10, bool)
-        elif j_puId == "cut:tight":
+        elif ((not is2016 and j_puId == "cut:tight")
+               or (is2016 and j_puId == "cut:loose")):
             has_puId = ak.values_astype(jets["puId"] & 0b1, bool)
         else:
             raise pepper.config.ConfigError(
