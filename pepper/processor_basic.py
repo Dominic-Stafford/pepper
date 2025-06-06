@@ -935,12 +935,12 @@ class ProcessorBasicPhysics(pepper.Processor):
         if j_puId == "skip":
             has_puId = True
         elif ((not is2016 and j_puId == "cut:loose")
-               or (is2016 and j_puId == "cut:tight")):
+              or (is2016 and j_puId == "cut:tight")):
             has_puId = ak.values_astype(jets["puId"] & 0b100, bool)
         elif j_puId == "cut:medium":
             has_puId = ak.values_astype(jets["puId"] & 0b10, bool)
         elif ((not is2016 and j_puId == "cut:tight")
-               or (is2016 and j_puId == "cut:loose")):
+              or (is2016 and j_puId == "cut:loose")):
             has_puId = ak.values_astype(jets["puId"] & 0b1, bool)
         else:
             raise pepper.config.ConfigError(
