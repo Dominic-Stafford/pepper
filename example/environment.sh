@@ -8,7 +8,7 @@ fi
 # Please do not forget to run voms-proxy-init --voms cms --out $X509_USER_PROXY
 export X509_USER_PROXY=~/.globus/x509up
 # Load LCG
-source /cvmfs/sft.cern.ch/lcg/views/setupViews.sh LCG_104 x86_64-el9-gcc11-opt
+source /cvmfs/sft.cern.ch/lcg/views/setupViews.sh LCG_107a x86_64-el9-gcc14-opt
 
 # Load your virtual environment - comment this out if you use one!
 # source /INSERT/ABSOLUTE/PATH/TO/YOUR/ENVIRONMENT/bin/activate
