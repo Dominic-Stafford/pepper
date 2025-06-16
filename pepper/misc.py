@@ -307,18 +307,22 @@ def onedimeval(func, *arrays, tonumpy=True, output_like=0):
     counts_all_arrays = []
     flattened_arrays = []
     for array in arrays:
-        flattened = array
-        counts = []
-        for i in range(flattened.ndim - 1):
-            if isinstance(flattened.type.type, ak.types.RegularType):
-                counts.append(flattened.type.type.size)
-            else:
-                counts.append(ak.num(flattened))
-            flattened = ak.flatten(flattened)
-        if tonumpy:
-            flattened = np.asarray(flattened)
-        counts_all_arrays.append(counts)
-        flattened_arrays.append(flattened)
+        if isinstance(array, str):
+            flattened_arrays.append(array)
+            counts_all_arrays.append(0)
+        else:
+            flattened = array
+            counts = []
+            for i in range(flattened.ndim - 1):
+                if isinstance(flattened.type.type, ak.types.RegularType):
+                    counts.append(flattened.type.type.size)
+                else:
+                    counts.append(ak.num(flattened))
+                flattened = ak.flatten(flattened)
+            if tonumpy:
+                flattened = np.asarray(flattened)
+            counts_all_arrays.append(counts)
+            flattened_arrays.append(flattened)
     res = func(*flattened_arrays)
     for count in reversed(counts_all_arrays[output_like]):
         res = ak.unflatten(res, count)
