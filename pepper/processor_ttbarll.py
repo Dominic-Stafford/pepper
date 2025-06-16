@@ -137,6 +137,9 @@ class Processor(pepper.ProcessorBasicPhysics):
             selector.add_cut("Blinding", partial(self.blinding, is_mc))
         selector.add_cut("Lumi", partial(self.good_lumimask, is_mc, dsname))
 
+        if self.config.get("jet_veto_maps"):
+            selector.add_cut("JetVeto", self.apply_jet_veto_map)
+
         pos_triggers, neg_triggers = pepper.misc.get_trigger_paths_for(
             dsname, is_mc, self.config["dataset_trigger_map"],
             self.config["dataset_trigger_order"], era=era)

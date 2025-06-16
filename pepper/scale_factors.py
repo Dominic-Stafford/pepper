@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from collections.abc import Mapping
 import numpy as np
 import coffea
 from coffea.lookup_tools.extractor import file_converters
@@ -204,9 +205,9 @@ class ScaleFactors:
             try:
                 val = kwargs[key]
             except KeyError:
-                raise ValueError("Scale factor depends on \"{}\" but no such "
-                                 "argument was not provided"
-                                 .format(key))
+                raise ValueError(
+                    f"Scale factor depends on \"{key}\" but no such "
+                    f"argument was not provided")
             if isinstance(val, ak.Array):
                 counts = []
                 for i in range(val.ndim - 1):
@@ -224,6 +225,99 @@ class ScaleFactors:
     def dimlabels(self):
         """The names of the variables the scale factor depends on"""
         return self._bins.keys()
+
+
+class CorrLibSFs:
+    def __init__(self, sysnaming, jsonfile, corrname, add_args):
+        self.corrset = \
+            correctionlib.CorrectionSet.from_file(jsonfile)[corrname]
+        self.names = [i.name for i in self.corrset.inputs]
+        self.add_args = add_args
+        self.sysnaming = sysnaming
+
+    def __call__(self, variation="central", **kwargs):
+        """Evaluate the scale factor
+
+        Parameters
+        ----------
+        variation
+            Direction of the systematic variation. One of "central", "up"
+            or "down"
+        **kwargs
+            The parameters the scale factor depends on. For example
+            the pt, eta and so on.
+
+        Returns
+        -------
+            Array of scale factors
+        """
+        if variation not in ("central", "up", "down"):
+            raise ValueError("variation must be one of 'central', 'up', "
+                             "'down'")
+        arrays = dict()  # Since python 3.7 dicts are ordered
+        output_like = None
+        correction_ranges = []
+        correction_ranges_arg_idx = -1
+        for i, in_name in enumerate(self.names):
+            if in_name in ["ValType", "scale_factors"]:
+                arrays[in_name] = self.sysnaming[variation]
+            elif in_name in self.add_args:
+                # Check if arg is a mapping
+                if isinstance(self.add_args[in_name], Mapping):
+                    # Save the argument index of the correction ranges. ie
+                    # what index to put the argument when calling evaluate.
+                    correction_ranges_arg_idx = i
+                    # Insert all correction ranges into the arrays
+                    for corr, (low, high) in self.add_args[in_name].items():
+                        correction_ranges.append(
+                                (corr, float(low), float(high)))
+                else:
+                    arrays[in_name] = self.add_args[in_name]
+            elif in_name in kwargs:
+                arrays[in_name] = kwargs[in_name]
+                output_like = i
+            else:
+                raise ValueError(
+                    f"Scale factor depends on \"{in_name}\" but no such "
+                    f"argument was not provided")
+        if correction_ranges_arg_idx == -1:
+            # No correction ranges were provided, so we can just evaluate
+            # the scale factor
+            return onedimeval(self.corrset.evaluate, *arrays.values(),
+                              output_like=output_like)
+        counts = ak.num(arrays["pt"])
+        flattened_arrays = dict()  # Since python 3.7 dicts are ordered
+        for key, arr in arrays.items():
+            if isinstance(arr, str):
+                flattened_arrays[key] = arr
+            else:
+                flattened = arr
+                for i in range(flattened.ndim - 1):
+                    flattened = ak.flatten(flattened)
+                flattened_arrays[key] = np.asarray(flattened)
+        pt = flattened_arrays["pt"]
+        result = np.empty_like(pt, dtype=np.float64)
+        for key, low, high in correction_ranges:
+            mask = (low <= pt) & (pt < high)
+            if not np.any(mask):
+                continue
+            eval_args = list(flattened_arrays.values())
+            # Only use masked data for all input arrays i.e. mask non-strings
+            for i, arr in enumerate(flattened_arrays.values()):
+                if isinstance(arr, np.ndarray):
+                    eval_args[i] = arr[mask]
+            # Insert the correction range key at the correct position
+            eval_args.insert(correction_ranges_arg_idx, key)
+            chunk_result = self.corrset.evaluate(*eval_args)
+            result[mask] = chunk_result
+        return ak.unflatten(result, counts)
+
+    @property
+    def dimlabels(self):
+        """The names of the variables the scale factor depends on"""
+        return [in_name for in_name in self.names if (
+                (in_name not in ["ValType", "scale_factors"])
+                and in_name not in self.add_args)]
 
 
 class MuonScaleFactor:

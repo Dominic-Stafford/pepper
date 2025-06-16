@@ -1,9 +1,11 @@
 from functools import reduce
+import functools
 import numpy as np
 import awkward as ak
 import coffea
 import coffea.lumi_tools
 import coffea.jetmet_tools
+import correctionlib
 import uproot
 import logging
 from dataclasses import dataclass
@@ -12,6 +14,7 @@ from typing import Optional, Tuple
 import pepper
 from pepper import sonnenschein, betchart
 import pepper.config
+from pepper.misc import onedimeval
 
 
 @dataclass
@@ -895,6 +898,71 @@ class ProcessorBasicPhysics(pepper.Processor):
         if is_mc and jer is not None:
             ret["jerfac"] = jerfac
         return ret
+
+    def apply_jet_veto_map(self, data):
+        """Apply jet veto map according to the recommendations here:
+        https://cms-jerc.web.cern.ch/Recommendations/#jet-veto-maps.
+        First, a loose nominal selection is made and then veto events if any
+        jet fulfill the loose selection criteratia and lies in the jet veto
+        region."""
+        # TODO: This should probably be defined somewhere once and for all?
+        run_2_years = {
+            "2016",
+            "2017",
+            "2018",
+            "ul2016pre",
+            "ul2016post",
+            "ul2017",
+            "ul2018",
+        }
+        jets = data["Jet"]
+        muons = data["Muon"]
+        dr = jets.metric_table(muons)
+        no_muon_overlap = ~ak.any(dr < 0.2, axis=2)
+        nominal_selection_mask = (
+            (jets.pt > 15)
+            & (jets.isTight)
+            & ((jets.chEmEF + jets.neEmEF) < 0.9)
+            # jets that don’t overlap with PF muon (dR < 0.2)
+            & (no_muon_overlap)
+        )
+        if self.config["year"] in run_2_years:
+            nominal_selection_mask = (nominal_selection_mask
+                                      & self.has_puid(jets))
+        veto_maps = self.config["jet_veto_maps"]
+        if len(veto_maps) > 1:
+            msg = (
+                "Multiple veto maps currently not supported. "
+                "Length of jet_veto_maps must be 1."
+            )
+            raise NotImplementedError(msg)
+        veto_map = veto_maps[0]
+        if (
+            not isinstance(veto_map, list)
+            or len(veto_map) != 2
+            or len(veto_map[1]) != 2
+        ):
+            raise pepper.config.ConfigError(
+                "jet veto map needs to be list of 2-elements in "
+                "form of [`path`, [`correction_name`, `key`]]"
+            )
+        path, (key, correction_map) = veto_map
+        if not (path.endswith(".json") or path.endswith(".json.gz")):
+            msg = (
+                "Jet veto map corrections should be in json format. "
+                "Under the hood we use correctionlib."
+            )
+            raise pepper.config.ConfigError(msg)
+        evaluator = correctionlib.CorrectionSet.from_file(path)[key]
+        # Evaluate the correction on flat numpy arrays
+        corrections_awkward = onedimeval(
+            functools.partial(evaluator.evaluate, correction_map),
+            jets.eta, jets.phi)
+        # Find events in nominal selection and check if they should be vetoed
+        # veto jets are non-zero.
+        veto_jets = nominal_selection_mask & (corrections_awkward > 0)
+        mask = ak.any(veto_jets > 0, axis=1)
+        return ~mask
 
     def good_jet(self, data):
         """Apply some basic jet quality cuts."""

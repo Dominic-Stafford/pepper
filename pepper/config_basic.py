@@ -15,7 +15,8 @@ from pepper.scale_factors import (
     get_evaluator,
     ScaleFactors,
     MuonScaleFactor,
-    JetPuIdWeighter
+    JetPuIdWeighter,
+    CorrLibSFs
 )
 
 
@@ -67,25 +68,46 @@ class ConfigBasicPhysics(pepper.Config):
             }
         )
 
-    def _get_scalefactor(self, sfpath):
-        if not isinstance(sfpath, list) or len(sfpath) < 2:
+    def _get_scalefactor(self, sfpath, sysnaming={
+            "central": "sf", "up": "sfup", "down": "sfdown"}):
+        if not isinstance(sfpath, list) or len(sfpath) != 3:
             raise pepper.config.ConfigError(
-                "scale factors needs to be list of 2-element-lists in "
-                "form of [rootfile, histname]")
-        with uproot.open(self._get_path(sfpath[0])) as f:
-            hist = f[sfpath[1]]
-        return ScaleFactors.from_hist(hist, sfpath[2])
+                "Scale factors needs to be list of 3-element-lists "
+                "in form of [rootfile, histname, inputs] or"
+                "[jsonfile, corrname, additional_args]")
+        if sfpath[0].endswith(".root"):
+            with uproot.open(self._get_path(sfpath[0])) as f:
+                hist = f[sfpath[1]]
+            return ScaleFactors.from_hist(hist, sfpath[2])
+        elif sfpath[0].endswith(".json") or sfpath[0].endswith(".json.gz"):
+            return CorrLibSFs(sysnaming, self._get_path(sfpath[0]),
+                              sfpath[1], sfpath[2])
 
-    def _get_scalefactors(self, value):
-        return [self._get_scalefactor(sfpath) for sfpath in value]
+    def _get_scalefactors(self, value, sysnaming={
+            "central": "sf", "up": "sfup", "down": "sfdown"}):
+        return [self._get_scalefactor(sfpath, sysnaming) for sfpath in value]
 
     def _get_muonscalefactor(self, value):
+        run_3_years = {"2022pre", "2022post", "2023pre", "2023post"}
         if ("split_muon_uncertainty" not in self
                 or not self["split_muon_uncertainty"]):
-            return self._get_scalefactors(value)
+            if self["year"] in run_3_years:
+                # In Run 3, central is called "nominal"
+                return self._get_scalefactors(
+                    value, {"central": "nominal", "up": "systup",
+                            "down": "systdown"})
+            else:
+                # In Run 2,  central is called "sf"
+                return self._get_scalefactors(
+                    value, {"central": "sf", "up": "systup",
+                            "down": "systdown"})
 
         sfs = []
         for sfpath in value:
+            if not sfpath[0].endswith(".root"):
+                raise NotImplementedError(
+                    "Split muon uncertainties only implemented "
+                    "for ROOT based SFs")
             nominal = self._get_scalefactor(sfpath)
             sfpath_stat = sfpath.copy()
             sfpath_stat[1] += "_stat"
