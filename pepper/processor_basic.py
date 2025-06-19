@@ -151,7 +151,8 @@ class ProcessorBasicPhysics(pepper.Processor):
                 "MEfac",
                 data["LHEScaleWeight"][:, idx[2]] * abs(norm[idx[2]]),
                 data["LHEScaleWeight"][:, idx[3]] * abs(norm[idx[3]]))
-        elif ("LHEScaleWeight" in ak.fields(data)
+        elif (not self.config["mc_lumifactors"]
+              and "LHEScaleWeight" in ak.fields(data)
               and ak.num(data["LHEScaleWeight"])[0] > 0):
             idx = pepper.misc.get_lhe_scale_idxs(
                 len(data["LHEScaleWeight"][0]))
