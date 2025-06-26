@@ -1097,7 +1097,13 @@ class ProcessorBasicPhysics(pepper.Processor):
         If varation is 'up' or 'down', the unclustered MET varation (up or
         down) will be applied. If it is None or 'central', nominal MET is
         used."""
-        met = data["MET"]
+        nano_met_name = None
+        if get_run_for_year(self.config["year"]) == "Run3":
+            default_nano_met_name = "PuppiMET"
+        else:
+            default_nano_met_name = "MET"
+        nano_met_name = self.config.get("jet_type", default_nano_met_name)
+        met = data[nano_met_name]
         metx = met.pt * np.cos(met.phi)
         mety = met.pt * np.sin(met.phi)
         if ("MET_xy_shifts" in self.config and era != "no_events"):
