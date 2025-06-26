@@ -7,6 +7,7 @@ from copy import copy
 
 import pepper
 import pepper.config
+from pepper.misc import get_run_for_year
 
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,9 @@ class Processor(pepper.ProcessorBasicPhysics):
         if "muon_rochester" not in config:
             logger.warning("No Rochster corrections for muons specified")
 
-        if "jet_puid_sf" not in config:
+        if ("jet_puid_sf" not in config and
+                get_run_for_year(config["year"]) == "Run2"):
+            # Jet PU ID SFs are only needed for Run2
             logger.warning("No jet PU ID SFs specified")
 
         if ("reco_algorithm" in config and "reco_info_file" not in config):

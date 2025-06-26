@@ -14,7 +14,7 @@ from typing import Optional, Tuple
 import pepper
 from pepper import sonnenschein, betchart
 import pepper.config
-from pepper.misc import onedimeval
+from pepper.misc import get_run_for_year, onedimeval
 
 
 @dataclass
@@ -473,12 +473,11 @@ class ProcessorBasicPhysics(pepper.Processor):
             passing_filters = (
                 passing_filters & data["Flag"]["eeBadScFilter"])
 
-        if year in ("2016", "2017", "2018", "ul2016pre", "ul2016post",
-                    "ul2017", "ul2018"):
+        if get_run_for_year(year) == "Run2":
             passing_filters = (
                 passing_filters & data["Flag"]["HBHENoiseFilter"]
                 & data["Flag"]["HBHENoiseIsoFilter"])
-        elif year in ("2022post", "2022pre", "2023post", "2023pre"):
+        elif get_run_for_year(year) == "Run3":
             passing_filters = (
                 passing_filters & data["Flag"]["BadPFMuonDzFilter"]
                 & data["Flag"]["hfNoisyHitsFilter"])
@@ -497,7 +496,7 @@ class ProcessorBasicPhysics(pepper.Processor):
 
     def electron_id(self, e_id, electron):
         """Check if electrons have ID specified in the config file."""
-        run_3_years = {"2022pre", "2022post", "2023pre", "2023post"}
+        year = self.config["year"]
         if e_id == "skip":
             has_id = True
         if e_id == "cut:loose":
@@ -507,22 +506,22 @@ class ProcessorBasicPhysics(pepper.Processor):
         elif e_id == "cut:tight":
             has_id = electron["cutBased"] >= 4
         elif e_id == "mva:noIso80":
-            if self.config["year"] in run_3_years:
+            if get_run_for_year(year) == "Run3":
                 has_id = electron["mvaNoIso_WP80"]
             else:
                 has_id = electron["mvaFall17V2noIso_WP80"]
         elif e_id == "mva:noIso90":
-            if self.config["year"] in run_3_years:
+            if get_run_for_year(year) == "Run3":
                 has_id = electron["mvaNoIso_WP90"]
             else:
                 has_id = electron["mvaFall17V2noIso_WP90"]
         elif e_id == "mva:Iso80":
-            if self.config["year"] in run_3_years:
+            if get_run_for_year(year) == "Run3":
                 has_id = electron["mvaIso_WP80"]
             else:
                 has_id = electron["mvaFall17V2Iso_WP80"]
         elif e_id == "mva:Iso90":
-            if self.config["year"] in run_3_years:
+            if get_run_for_year(year) == "Run3":
                 has_id = electron["mvaIso_WP90"]
             else:
                 has_id = electron["mvaFall17V2Iso_WP90"]
@@ -905,16 +904,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         First, a loose nominal selection is made and then veto events if any
         jet fulfill the loose selection criteratia and lies in the jet veto
         region."""
-        # TODO: This should probably be defined somewhere once and for all?
-        run_2_years = {
-            "2016",
-            "2017",
-            "2018",
-            "ul2016pre",
-            "ul2016post",
-            "ul2017",
-            "ul2018",
-        }
+        year = self.config["year"]
         jets = data["Jet"]
         muons = data["Muon"]
         dr = jets.metric_table(muons)
@@ -926,7 +916,7 @@ class ProcessorBasicPhysics(pepper.Processor):
             # jets that don’t overlap with PF muon (dR < 0.2)
             & (no_muon_overlap)
         )
-        if self.config["year"] in run_2_years:
+        if get_run_for_year(year) == "Run3":
             nominal_selection_mask = (nominal_selection_mask
                                       & self.has_puid(jets))
         veto_maps = self.config["jet_veto_maps"]
