@@ -63,7 +63,7 @@ class Config(MutableMapping):
         self.required_args = [
             "exp_datasets",
             "mc_datasets",
-            "mc_lumifactors"
+            "mc_lumifactors",
         ]
 
     def check_required_args(self):
