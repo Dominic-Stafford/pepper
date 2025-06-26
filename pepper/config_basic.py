@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from pepper.misc import get_run_for_year
 import uproot
 import hjson
 import coffea
@@ -88,10 +89,10 @@ class ConfigBasicPhysics(pepper.Config):
         return [self._get_scalefactor(sfpath, sysnaming) for sfpath in value]
 
     def _get_muonscalefactor(self, value):
-        run_3_years = {"2022pre", "2022post", "2023pre", "2023post"}
+        year = self["year"]
         if ("split_muon_uncertainty" not in self
                 or not self["split_muon_uncertainty"]):
-            if self["year"] in run_3_years:
+            if get_run_for_year(year) == "Run3":
                 # In Run 3, central is called "nominal"
                 return self._get_scalefactors(
                     value, {"central": "nominal", "up": "systup",

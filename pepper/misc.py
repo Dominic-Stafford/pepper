@@ -5,7 +5,7 @@ import gc
 from itertools import product
 from functools import wraps, partial
 from concurrent.futures import ThreadPoolExecutor
-
+import typing
 import numpy as np
 import awkward as ak
 import hist as hi
@@ -24,6 +24,65 @@ XROOTDTIMEOUT
 
 
 XROOTDTIMEOUT = 10  # 10 s, no need to bother with slow sites
+
+
+_RUNS = {
+        "Run2": [
+            "2016",
+            "2017",
+            "2018",
+            "ul2016pre",
+            "ul2016post",
+            "ul2017",
+            "ul2018"
+        ],
+        "Run3": [
+            "2022pre",
+            "2022post",
+            "2023pre",
+            "2023post"
+        ]
+    }
+
+
+def get_run_for_year(year: str) -> typing.Literal["Run2", "Run3"]:
+    """Get the run name for a given year.
+
+    Parameters
+    ----------
+    year
+        Year to get the run name for, e.g. "2018" or "2022pre"
+
+    Returns
+    -------
+    run_name
+        Run name literal, e.g. "Run2" or "Run3"
+    """
+    for run_name, years in _RUNS.items():
+        if year in years:
+            return run_name
+    raise NotImplementedError(f"Year {year} not recognized. "
+                              f"Contact the pepper developers to add it.")
+
+
+def get_years_for_run(run_name: typing.Literal["Run2", "Run3"]) -> list[str]:
+    """Get the years for a given run name.
+
+    Parameters
+    ----------
+    run_name
+        Run name literals, e.g. "Run2" or "Run3"
+
+    Returns
+    -------
+    years
+        List of years, e.g. ["2022pre", "2022post", "2023pre", "2023post"]
+    """
+    if run_name not in _RUNS:
+        msg = f"Run name {run_name} not recognized. " \
+              f"Contact the pepper developers to add it."
+        raise NotImplementedError(msg)
+    return _RUNS[run_name]
 
 
 def normalize_trigger_path(path):
