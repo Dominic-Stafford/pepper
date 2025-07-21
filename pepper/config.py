@@ -58,6 +58,7 @@ class Config(MutableMapping):
             "file_blacklist": self._get_maybe_external,
             "local_file_blacklist": self._get_maybe_external,
             "xrootd_url_blacklist": self._get_maybe_external,
+            "mc_lumifactors": self._get_maybe_external,
             "hists": self._get_hists
         }
         self.required_args = [

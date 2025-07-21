@@ -140,7 +140,7 @@ Data pickers are arrays, specifying to use something from the `data` array of th
 - `jet_pt_num_satisfied`: Same as `lep_pt_num_satisfied` for jets.
 - `btag`: String, indicating what is considered as b tagged. Can be either `"deepcsv:"` or `"deepjet:"`, giving the b tagging algorithm to use, followed by a working point (either `"loose"`, `"medium"` or `"tight"`).
 - `num_atleast_btagged`: Integer, number of b tagged jets in the corresponding cut.
-- `btag_wp`: Optional, Object or path to json file containing Object. Should define for any b-tagging algorithms the name (with appropriate capitilisation), the working points for the different years and for each available workingpoint, the name and one-letter abreviation. [example/btag_wps.json](example/btag_wps.json) should suffice in most cases.
+- `btag_wp`: Object or path to json file containing Object (can be ommited if not requiring b-tags). Should define for any b-tagging algorithms the name (with appropriate capitilisation), the working points for the different years and for each available workingpoint, the name and one-letter abreviation. [example/btag_wps.json](example/btag_wps.json) should suffice in most cases.
 
 ## Kinematic reconstruction
 - `reco_info_file`: Needed if `reco_algorithm` is present, path to a ROOT file produced by the `compute_kinreco_hists.py` script.
