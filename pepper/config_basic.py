@@ -60,7 +60,6 @@ class ConfigBasicPhysics(pepper.Config):
                     self._get_jet_general, evaltype="jersf",
                     cls=coffea.jetmet_tools.JetResolutionScaleFactor),
                 "MET_xy_shifts": self._get_maybe_external,
-                "mc_lumifactors": self._get_maybe_external,
                 "crosssection_uncertainty": self._get_maybe_external,
                 "reco_info_file": self._get_path,
                 "store": self._get_path,
@@ -173,8 +172,9 @@ class ConfigBasicPhysics(pepper.Config):
     def _get_puid_sf(self, value):
         if not isinstance(value, list) or len(value) > 2:
             raise pepper.config.ConfigError(
-                "jet_puid_sf should be a list of either the SFs, or "
-                "SFs, efficiency")
+                "jet_puid_sf should either be a one element list of the SF "
+                "json (if this also contains the efficienices), or a two "
+                "element list of SFs, efficiency")
         return JetPuIdWeighter(*[self._get_path(path) for path in value])
 
     def _get_btag_corr(self, value):

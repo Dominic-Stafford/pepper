@@ -1,7 +1,12 @@
 import os
-import pepper
+import logging
+
 import hist as hi
 import uproot
+
+import pepper
+
+logger = logging.getLogger(__name__)
 
 
 class Processor(pepper.Processor):
@@ -37,18 +42,38 @@ class Processor(pepper.Processor):
             "fill": {
                 self.axisname: [
                     "Pileup",
-                    "nTrueInt"
+                    "nTrueInt",
+                    {"function": "int"}
                 ]
             }
         }
-        if isinstance(datahist.axes[0], hi.axis.Regular):
+        if (isinstance(datahist.axes[0], hi.axis.Regular)
+                or isinstance(datahist.axes[0], hi.axis.Integer)):
             ax = datahist.axes[0]
+            lo_edge = ax.value(0)
+            hi_edge = ax.value(len(ax))
             hist_config["bins"][0].update({
                 "n_or_arr": len(ax),
-                "lo": ax.value(0),
-                "hi": ax.value(len(ax))
+                "lo": lo_edge,
+                "hi": hi_edge
             })
+            if (int(lo_edge) == lo_edge) and (int(hi_edge) == hi_edge):
+                # Integer bin edges may cause numerical problems for regular
+                # axes - use integer axis if possible
+                if (hi_edge - lo_edge) == len(ax):
+                    hist_config["bins"][0].update({
+                        "lo": int(lo_edge),
+                        "hi": int(hi_edge),
+                        "type": "int"
+                    })
+                else:
+                    logger.warning(
+                        "Using regular axis, which may have issues with "
+                        "integer bin edges - please check your output")
         else:
+            logger.warning(
+                "Using variable axis, which may have issues with integer bin "
+                "edges - please check your output")
             hist_config["bins"][0]["n_or_arr"] = datahist.axes[0].edges
         config["hists"] = {"pileup": pepper.HistDefinition(hist_config)}
         if "hists_to_do" in config:
@@ -57,7 +82,7 @@ class Processor(pepper.Processor):
             del config["cuts_to_histogram"]
         config["compute_systematics"] = False
         # Treat all datasets as normal datasets, instead of using them as
-        # systematic
+        # systematics
         config["dataset_for_systematics"] = {}
 
         super().__init__(config, eventdir)
@@ -87,7 +112,7 @@ class Processor(pepper.Processor):
         return datahist, datahistup, datahistdown
 
     @staticmethod
-    def _save_hists(self, hist, datahist, datahistup, datahistdown, filename,
+    def _save_hists(hist, datahist, datahistup, datahistdown, filename,
                     sum_datasets):
         datasets = ["all_datasets"] if sum_datasets else hist.axes["dataset"]
 

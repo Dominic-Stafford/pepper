@@ -41,6 +41,13 @@ def concatenate(*arr, axis=0):
     return ak.concatenate(arr_processed, axis=axis)
 
 
+def to_int(num_or_arr):
+    if isinstance(num_or_arr, np.ndarray) or isinstance(num_or_arr, ak.Array):
+        return ak.values_astype(num_or_arr, "int")
+    else:
+        return int(num_or_arr)
+
+
 func_dict = {
     "sin": np.sin,
     "cos": np.cos,
@@ -65,6 +72,7 @@ func_dict = {
     "equal": equal,
     "leaddiff": leaddiff,
     "concatenate": concatenate,
+    "int": to_int,
 
     "sum": lambda x: ak.sum(x, axis=1),
     "num": ak.num,
