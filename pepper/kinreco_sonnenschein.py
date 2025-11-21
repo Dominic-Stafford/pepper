@@ -31,7 +31,7 @@ def _rotate_axis(vec, axis, angle):
     # Taken from uproot_methods.TVector3
     # Using TVector3 directly led to many kinds of complications
     vx, vy, vz = np.rollaxis(vec, -1)
-    ux, uy, uz = np.rollaxis(vec, -1)
+    ux, uy, uz = np.rollaxis(axis, -1)
     c = np.cos(angle)
     s = np.sin(angle)
     c1 = 1 - c
@@ -178,6 +178,9 @@ def sonnenschein(lep, antilep, b, antib, met, mwp=80.3, mwm=80.3, mt=172.5,
     if num_smear == 0:
         num_smear = None
 
+    mat_input = mat
+    mt_input = mt
+
     behav = lep.behavior
     # Use 2d numpy arrays. Use first axis for events, second for smearing
     num_events = len(lep)
@@ -195,10 +198,10 @@ def sonnenschein(lep, antilep, b, antib, met, mwp=80.3, mwm=80.3, mt=172.5,
                            - by + b.y[:, None] - aby + antib.y[:, None])
     METy = np.asarray(METy)
 
-    mwp = _maybe_sample(mwp, (num_events, 1), rng)
-    mwm = _maybe_sample(mwm, (num_events, 1), rng)
-    mat = _maybe_sample(mat, (num_events, 1), rng)
-    mt = _maybe_sample(mt, (num_events, 1), rng)
+    mwp = _maybe_sample(mwp, (num_events, num_smear), rng)
+    mwm = _maybe_sample(mwm, (num_events, num_smear), rng)
+    mat = _maybe_sample(mat, (num_events, num_smear), rng)
+    mt = _maybe_sample(mt, (num_events, num_smear), rng)
     # Compute masses, make sure they are real
     lp = np.sqrt(lx**2 + ly**2 + lz**2)
     lE = np.where(lE < lp, lp, lE)
@@ -259,7 +262,7 @@ def sonnenschein(lep, antilep, b, antib, met, mwp=80.3, mwm=80.3, mt=172.5,
            - 8 * (alE ** 2 - alz ** 2) * a1 * a2 / (a4 ** 2)
            - 8 * alx * alz * a1 / a4)
     c22 = ((mwp ** 2 - mal ** 2) ** 2 - 4 * (alE ** 2 - alz ** 2)
-           * (a1 / a4) ** 2 - 4 * mwp ** 2 * alz * a1 / a4)
+           * (a1 / a4) ** 2 - 4 * (mwp ** 2 - mal ** 2) * alz * a1 / a4)
     del mal
 
     d00 = (- 4 * (lE ** 2 - ly ** 2) - 4 * (lE ** 2 - lz ** 2)
@@ -275,7 +278,7 @@ def sonnenschein(lep, antilep, b, antib, met, mwp=80.3, mwm=80.3, mt=172.5,
             - 8 * (lE ** 2 - lz ** 2) * b1 * b2 / (b4 ** 2)
             - 8 * lx * lz * b1 / b4)
     d22p = ((mwm ** 2 - ml ** 2) ** 2 - 4 * (lE ** 2 - lz ** 2)
-            * (b1 / b4) ** 2 - 4 * mwm ** 2 * lz * b1 / b4)
+            * (b1 / b4) ** 2 - 4 * (mwm ** 2 - ml ** 2) * lz * b1 / b4)
     del ml
 
     d11 = - d11p - 2 * METy * d00 - METx * d10
@@ -379,8 +382,11 @@ def sonnenschein(lep, antilep, b, antib, met, mwp=80.3, mwm=80.3, mt=172.5,
         with_name="LorentzVector")[has_solution] / sum_weights
 
     # Top mass got changed by the averaging. Set to input mass again
-    t["t"] = np.sqrt(mt ** 2 + t.rho2)
-    at["t"] = np.sqrt(mat ** 2 + at.rho2)
+    # ... but only if the top mass is fixed and not smeared
+    if isinstance(mt_input, (int, float)):
+        t["t"] = np.sqrt(mt_input ** 2 + t.rho2)
+    if isinstance(mat_input, (int, float)):
+        at["t"] = np.sqrt(mat_input ** 2 + at.rho2)
 
     return t, at
 
