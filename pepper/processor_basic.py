@@ -1179,13 +1179,13 @@ class ProcessorBasicPhysics(pepper.Processor):
         keep = np.full(len(data), True)
         if cut_ele:
             ele = data["Electron"]
-            keep = keep & (~self.in_hem1516(ele.phi, ele.eta).any())
+            keep = keep & (~ak.any(self.in_hem1516(ele.phi, ele.eta)))
         if cut_muon:
             muon = data["Muon"]
-            keep = keep & (~self.in_hem1516(muon.phi, muon.eta).any())
+            keep = keep & (~ak.any(self.in_hem1516(muon.phi, muon.eta)))
         if cut_jet:
             jet = data["Jet"]
-            keep = keep & (~self.in_hem1516(jet.phi, jet.eta).any())
+            keep = keep & (~ak.any(self.in_hem1516(jet.phi, jet.eta)))
         return keep
 
     def lep_pt_requirement(self, data):
