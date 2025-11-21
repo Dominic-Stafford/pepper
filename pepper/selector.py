@@ -218,7 +218,7 @@ class Selector:
         Parameters
         ----------
         name
-            Name of the categorization
+            Name of the categorisation
         categories
             Categories inside the categorisation. Each category must also be
             a field in ``data``
@@ -229,15 +229,24 @@ class Selector:
                  silently cut away (if not included in any catgories) or
                  double counted (if appearing in multiple categories)
         """
-        if safe:
-            selected = np.zeros(len(self.data), dtype=int)
-            for cat in categories:
-                selected = selected + self.data[cat]
-            if not ak.all(selected == 1):
-                raise ValueError(
-                    "Not all events fit into exactly one category")
-        for exist_categories in self.cats.values():
-            if exist_categories & categories:
+        logger.info(
+            f"Setting categorisation '{name}' with categories: {categories}")
+        selected = np.zeros(len(self.data), dtype=int)
+        for cat in categories:
+            if ak.any(ak.is_none(self.data[cat])):
+                logger.warn(
+                    f"Category '{cat}' contains 'None' values. Assuming "
+                    f"this is a subcategory and setting these to False.")
+                self.data[cat] = ak.fill_none(self.data[cat], False)
+            selected = selected + self.data[cat]
+        if safe and not ak.all(selected == 1):
+            raise ValueError(
+                "Not all events fit into exactly one category")
+        for cat_name, exist_categories in self.cats.items():
+            if cat_name == name:
+                logger.warn(
+                    f"Warning! Overwriting existing categorisation '{name}'.")
+            elif exist_categories & categories:
                 raise ValueError(
                     f"The following category(s) are already used in "
                     f"a previous categorisation, please rename: "
