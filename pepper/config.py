@@ -4,6 +4,7 @@ import hjson
 import os
 import logging
 from collections.abc import MutableMapping
+import re
 
 import pepper
 from pepper import HistDefinition
@@ -239,7 +240,9 @@ class Config(MutableMapping):
             if ((dstype == "mc" and dataset not in self["mc_datasets"])
                     or (dstype == "data"
                         and dataset not in self["exp_datasets"])
-                    or (include is not None and dataset not in include)
+                    or (include is not None and not
+                        any([re.compile(frag).match(dataset)
+                             for frag in include]))
                     or (exclude is not None and dataset in exclude)):
                 del datasets[dataset]
         requested_datasets = datasets.keys()
