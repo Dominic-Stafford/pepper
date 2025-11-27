@@ -55,8 +55,9 @@ def run_processor(processor_class=None, description=None, mconly=False):
         help="Can be specified multiple times. Ignore datasets given in "
         "config and instead process these. Can be specified multiple times.")
     parser.add_argument(
-        "--dataset", action="append", help="Only process this dataset. Can be "
-        "specified multiple times.")
+        "--dataset", action="append", help="Only process this dataset. Will "
+        "also match regex expressions, though these need to be given inside "
+        "quoted strings in the command line. Can be specified multiple times.")
     if not mconly:
         parser.add_argument(
             "--mc", action="store_true", help="Only process MC files. Ignored "
