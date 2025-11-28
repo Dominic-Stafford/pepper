@@ -150,6 +150,14 @@ class HistDefinition:
             self.weight = config["weight"]
         else:
             self.weight = None
+        if "weight_factor" in config:
+            if "weight" in config:
+                raise HistDefinitionError(
+                    "The 'weight_factor' option cannot be used in "
+                    "conjuction with the 'weight' option")
+            self.weight_fac = config["weight_factor"]
+        else:
+            self.weight_fac = None
         for axisname, method in config["fill"].items():
             if axisname in [b.name for b in bins]:
                 self.bin_fills[axisname] = method
@@ -321,6 +329,12 @@ class HistDefinition:
                 raise HistFillError(
                     "Weight specified in hist config not available")
             weight = {None: new_weight}
+        elif self.weight_fac is not None:
+            weight_fac = DataPicker(self.weight_fac)(data)
+            if weight_fac is None:
+                raise HistFillError(
+                    "Weight factor specified in hist config not available")
+            weight = {k: v * weight_fac for k, v in weight.items()}
 
         # Add categories explicitly defined in the histogram config
         # to those already present from the processor
