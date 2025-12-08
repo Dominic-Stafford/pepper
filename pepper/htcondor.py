@@ -87,6 +87,8 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GiB", disk="3 GiB",
     if condorsubmit is not None:
         for param in condorsubmit.split("\n"):
             # Need to parse, HTCondorCluster only takes a dict
+            if param.strip() == "":
+                continue
             key, val = param.split("=", 1)
             key = key.strip()
             val = val.strip()

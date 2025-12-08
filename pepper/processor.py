@@ -803,8 +803,10 @@ class Processor(coffea.processor.ProcessorABC):
                             output["gen_sumws"][dsname]["gen_sumw"]
                             / output["gen_sumws"][dsname][key])
                 for hkey, hist in output["hists"][dsname].items():
-                    if (hkey[0] != "BeforeCuts" and dsname not in
-                            self.config["dataset_for_systematics"]):
+                    if (hkey[0] != "BeforeCuts"
+                            and dsname not in
+                            self.config["dataset_for_systematics"]
+                            and len(hist.axes["sys"]) > 0):
                         pepper.hist_utils.scale_histogram(hist, "sys", factors)
         return output
 
