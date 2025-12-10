@@ -1114,11 +1114,66 @@ class ProcessorBasicPhysics(pepper.Processor):
             mety = mety - (metshifts["METycorr"][era][0]
                            * data["PV"]["npvs"]
                            + metshifts["METycorr"][era][1])
-
         if variation == "up":
+            if nano_met_name == "PuppiMET":
+                # Sometimes nans are in the variations as documented here:
+                # https://cms-talk.web.cern.ch/t/nan-values-in-puppimet-variations/127652/2
+                # which according to JetMET POG may be related to this issue
+                # https://github.com/cms-sw/cmssw/issues/39110. Currently,
+                # we just fall back to nominal MET in such cases but emit a
+                # warning. TODO: Remove this workaround once the issue is fixed.
+                if (
+                    np.isnan(met.ptUnclusteredUp).any()
+                    or np.isnan(met.phiUnclusteredUp).any()
+                   ):
+                    import warnings
+                    warnings.warn(
+                        "NaN values found in PuppiMET unclustered energy "
+                        "up variation. Falling back to nominal MET for "
+                        "these events.")
+                    met["pt"] = np.where(np.isnan(met.ptUnclusteredUp),
+                                         met.pt,
+                                         met.ptUnclusteredUp
+                                         )
+                    met["phi"] = np.where(np.isnan(met.phiUnclusteredUp),
+                                          met.phi,
+                                          met.phiUnclusteredUp
+                                          )
+                else:
+                    met["pt"] = met.ptUnclusteredUp
+                    met["phi"] = met.phiUnclusteredUp
+                return met
             metx = metx + met.MetUnclustEnUpDeltaX
             mety = mety + met.MetUnclustEnUpDeltaY
         elif variation == "down":
+            if nano_met_name == "PuppiMET":
+                # See comment in 'up' variation
+                if (
+                    np.isnan(met.ptUnclusteredDown).any()
+                    or np.isnan(met.phiUnclusteredDown).any()
+                   ):
+                    import warnings
+                    warnings.warn(
+                        "NaN values found in PuppiMET unclustered energy "
+                        "down variation. Falling back to nominal MET for "
+                        "these events.")
+                    met["pt"] = np.where(np.isnan(met.ptUnclusteredDown),
+                                         met.pt,
+                                         met.ptUnclusteredDown
+                                         )
+                    met["phi"] = np.where(np.isnan(met.phiUnclusteredDown),
+                                          met.phi,
+                                          met.phiUnclusteredDown
+                                          )
+                else:
+                    met["pt"] = met.ptUnclusteredDown
+                    met["phi"] = met.phiUnclusteredDown
+                # TODO: reconsider this method. If PuppiMET is renamed to MET
+                # in the future, this will break.
+                # TODO: Implement JET corrections for PuppiMET
+                met["pt"] = np.where(np.isnan(met.ptUnclusteredDown), met.pt, met.ptUnclusteredDown)
+                met["phi"] = np.where(np.isnan(met.phiUnclusteredDown), met.phi, met.phiUnclusteredDown)
+                return met
             metx = metx - met.MetUnclustEnUpDeltaX
             mety = mety - met.MetUnclustEnUpDeltaY
         elif variation != "central" and variation is not None:
