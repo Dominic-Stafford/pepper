@@ -1123,8 +1123,8 @@ class ProcessorBasicPhysics(pepper.Processor):
                 # we just fall back to nominal MET in such cases but emit a
                 # warning. TODO: Remove this workaround once the issue is fixed.
                 if (
-                    np.isnan(met.ptUnclusteredUp).any()
-                    or np.isnan(met.phiUnclusteredUp).any()
+                    np.any(np.isnan(met.ptUnclusteredUp))
+                    or np.any(np.isnan(met.phiUnclusteredUp))
                    ):
                     import warnings
                     warnings.warn(
@@ -1149,8 +1149,8 @@ class ProcessorBasicPhysics(pepper.Processor):
             if nano_met_name == "PuppiMET":
                 # See comment in 'up' variation
                 if (
-                    np.isnan(met.ptUnclusteredDown).any()
-                    or np.isnan(met.phiUnclusteredDown).any()
+                    np.any(np.isnan(met.ptUnclusteredDown))
+                    or np.any(np.isnan(met.phiUnclusteredDown))
                    ):
                     import warnings
                     warnings.warn(
