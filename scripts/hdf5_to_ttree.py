@@ -37,14 +37,13 @@ def process(directory, titles, mergesys, ignore, maskval=999,
                 if column in ignore:
                     continue
                 observable = events[column]
-
-                for i in range(observable.ndim):
-                    if i == 0:
-                        fill = maskval
-                    else:
-                        idx = (0,) * (observable.ndim - i)
-                        fill = ak.full_like(observable[idx], maskval)
-                    observable = ak.fill_none(observable, fill, axis=-i - 1)
+                if len(observable.fields) > 0:
+                    observable = ak.zip({
+                        f: ak.fill_none(observable[f], maskval, axis=-1)
+                        for f in observable.fields
+                    }, behavior=observable.behavior)
+                else:
+                    observable = ak.fill_none(observable, maskval, axis=-1)
                 tree[column].append(observable)
             if "weight" in data.keys():
                 systree["weight"].append(data["weight"])
@@ -72,23 +71,21 @@ def process(directory, titles, mergesys, ignore, maskval=999,
     tree = defaultdict(list)
     systree = None if mergesys else defaultdict(list)
     numevents = 0
+    size = 0
     for fname in tqdm(os.listdir(directory)):
         if not any(fname.endswith(ext) for ext in [".hdf5", ".h5"]):
             continue
         fpath = os.path.join(directory, fname)
         numevents += read_input(fpath, tree, systree)
+        size += os.path.getsize(fpath)
 
-        size = sum(np.asarray(v[0]).dtype.itemsize
-                   * numevents for v in tree.values())
-        if systree is not None:
-            size += sum(np.asarray(v[0]).dtype.itemsize
-                        * numevents for v in systree.values())
         if size > max_size_bytes:
             save_output(f, tree, systree)
 
             tree = defaultdict(list)
             systree = None if mergesys else {}
             numevents = 0
+            size = 0
 
     if numevents != 0:
         save_output(f, tree, systree if not mergesys else None)
@@ -120,13 +117,25 @@ if __name__ == "__main__":
     parser.add_argument(
         "-i", "--ignore_column", action="append",
         help="Ignore a column from the HDF5 (can be normal column or a "
-        "systematic")
+        "systematic", default=[])
     parser.add_argument(
         "-s", "--skip", action="store_true",
         help="Skip recreating existing output files")
     parser.add_argument(
         "--condorlogdir", help="Directory to store stdout and stderr logs "
         "running on HTCondor. Default is pepper_logs", default="pepper_logs")
+    parser.add_argument(
+        "--condorinit",
+        help="Shell script that will be sourced by an HTCondor job after "
+        "starting. This can be used to setup environment variables, if using "
+        "for example CMSSW. If not provided, the local content of the "
+        "environment variable PEPPER_CONDOR_ENV will be used as path to the "
+        "script instead.")
+    parser.add_argument(
+        "--condorsubmit",
+        help="Text file containing additional parameters to put into the "
+        "HTCondor job submission file that is used for condor_submit"
+    )
     args = parser.parse_args()
 
     if args.title is not None:
