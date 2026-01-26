@@ -636,8 +636,9 @@ class ProcessorBasicPhysics(pepper.Processor):
         muons = data["Muon"]
         return muons[self.muon_cuts(muons, good_lep=True)]
 
-    def apply_rochester_corr(self, muons, rng, is_mc):
+    def apply_rochester_corr(self, rng, is_mc, data):
         """Apply Rochester corrections for muons."""
+        muons = data["Muon"]
         if not is_mc:
             dtSF = self.config["muon_rochester"].kScaleDT(
                 muons["charge"], muons["pt"], muons["eta"], muons["phi"]
@@ -672,13 +673,10 @@ class ProcessorBasicPhysics(pepper.Processor):
             muons["pt"] = muons["pt"] * mcSF
         return muons
 
-    def build_lepton_column(self, is_mc, rng, data):
+    def build_lepton_column(self, data):
         """Build a lepton column containing electrons and muons."""
         electron = data["Electron"]
         muon = data["Muon"]
-        # Apply Rochester corrections to muons
-        if "muon_rochester" in self.config:
-            muon = self.apply_rochester_corr(muon, rng, is_mc)
         columns = ["pt", "eta", "phi", "mass", "pdgId"]
         lepton = {}
         for column in columns:
