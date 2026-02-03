@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from pepper.misc import get_run_for_year
+from pepper.misc import get_run_for_year, LHCRun
 import uproot
 import hjson
 import coffea
@@ -91,7 +91,7 @@ class ConfigBasicPhysics(pepper.Config):
         year = self["year"]
         if ("split_muon_uncertainty" not in self
                 or not self["split_muon_uncertainty"]):
-            if get_run_for_year(year) == "Run3":
+            if get_run_for_year(year) == LHCRun.Run3:
                 # In Run 3, central is called "nominal"
                 return self._get_scalefactors(
                     value, {"central": "nominal", "up": "systup",

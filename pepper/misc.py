@@ -1,3 +1,4 @@
+import enum
 import os
 from glob import glob
 import inspect
@@ -5,7 +6,6 @@ import gc
 from itertools import product
 from functools import wraps, partial
 from concurrent.futures import ThreadPoolExecutor
-import typing
 import numpy as np
 import awkward as ak
 import hist as hi
@@ -26,8 +26,13 @@ XROOTDTIMEOUT
 XROOTDTIMEOUT = 10  # 10 s, no need to bother with slow sites
 
 
+class LHCRun(enum.Enum):
+    Run2 = "Run 2"
+    Run3 = "Run 3"
+
+
 _RUNS = {
-        "Run2": [
+        LHCRun.Run2: [
             "2016",
             "2017",
             "2018",
@@ -36,7 +41,7 @@ _RUNS = {
             "ul2017",
             "ul2018"
         ],
-        "Run3": [
+        LHCRun.Run3: [
             "2022pre",
             "2022post",
             "2023pre",
@@ -46,7 +51,7 @@ _RUNS = {
     }
 
 
-def get_run_for_year(year: str) -> typing.Literal["Run2", "Run3"]:
+def get_run_for_year(year: str) -> LHCRun:
     """Get the run name for a given year.
 
     Parameters
@@ -66,7 +71,7 @@ def get_run_for_year(year: str) -> typing.Literal["Run2", "Run3"]:
                               f"Contact the pepper developers to add it.")
 
 
-def get_years_for_run(run_name: typing.Literal["Run2", "Run3"]) -> list[str]:
+def get_years_for_run(run_name: str | LHCRun) -> list[str]:
     """Get the years for a given run name.
 
     Parameters
@@ -79,6 +84,13 @@ def get_years_for_run(run_name: typing.Literal["Run2", "Run3"]) -> list[str]:
     years
         List of years, e.g. ["2022pre", "2022post", "2023pre", "2023post"]
     """
+    if type(run_name) is str:
+        try:
+            run_name = LHCRun[run_name]
+        except KeyError:
+            msg = f"Run name {run_name} not recognized. " \
+                  f"Contact the pepper developers to add it."
+            raise NotImplementedError(msg)
     if run_name not in _RUNS:
         msg = f"Run name {run_name} not recognized. " \
               f"Contact the pepper developers to add it."

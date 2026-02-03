@@ -12,7 +12,7 @@ from itertools import islice
 import warnings
 import logging
 
-from pepper.misc import onedimeval
+from pepper.misc import onedimeval, LHCRun, get_run_for_year
 
 
 logger = logging.getLogger(__name__)
@@ -484,7 +484,7 @@ class BTagWeighter:
             if method == "fixedwp":
                 self.eff_evaluator = get_evaluator(eff_filename)
                 correset = correctionlib.CorrectionSet.from_file(sf_filename)
-                if "2022" in year or "2023" in year:
+                if get_run_for_year(year) == LHCRun.Run3:
                     self.sf = [correset[f"{wps.name}_{meastype}"],
                                correset[f"{wps.name}_light"]]
                 else:

@@ -14,7 +14,7 @@ from typing import Optional, Tuple
 import pepper
 from pepper import sonnenschein, betchart
 import pepper.config
-from pepper.misc import get_run_for_year, onedimeval
+from pepper.misc import get_run_for_year, onedimeval, LHCRun
 
 
 @dataclass
@@ -474,11 +474,11 @@ class ProcessorBasicPhysics(pepper.Processor):
             passing_filters = (
                 passing_filters & data["Flag"]["eeBadScFilter"])
 
-        if get_run_for_year(year) == "Run2":
+        if get_run_for_year(year) == LHCRun.Run2:
             passing_filters = (
                 passing_filters & data["Flag"]["HBHENoiseFilter"]
                 & data["Flag"]["HBHENoiseIsoFilter"])
-        elif get_run_for_year(year) == "Run3":
+        elif get_run_for_year(year) == LHCRun.Run3:
             passing_filters = (
                 passing_filters & data["Flag"]["BadPFMuonDzFilter"]
                 & data["Flag"]["hfNoisyHitsFilter"])
@@ -507,22 +507,22 @@ class ProcessorBasicPhysics(pepper.Processor):
         elif e_id == "cut:tight":
             has_id = electron["cutBased"] >= 4
         elif e_id == "mva:noIso80":
-            if get_run_for_year(year) == "Run3":
+            if get_run_for_year(year) == LHCRun.Run3:
                 has_id = electron["mvaNoIso_WP80"]
             else:
                 has_id = electron["mvaFall17V2noIso_WP80"]
         elif e_id == "mva:noIso90":
-            if get_run_for_year(year) == "Run3":
+            if get_run_for_year(year) == LHCRun.Run3:
                 has_id = electron["mvaNoIso_WP90"]
             else:
                 has_id = electron["mvaFall17V2noIso_WP90"]
         elif e_id == "mva:Iso80":
-            if get_run_for_year(year) == "Run3":
+            if get_run_for_year(year) == LHCRun.Run3:
                 has_id = electron["mvaIso_WP80"]
             else:
                 has_id = electron["mvaFall17V2Iso_WP80"]
         elif e_id == "mva:Iso90":
-            if get_run_for_year(year) == "Run3":
+            if get_run_for_year(year) == LHCRun.Run3:
                 has_id = electron["mvaIso_WP90"]
             else:
                 has_id = electron["mvaFall17V2Iso_WP90"]
@@ -917,7 +917,7 @@ class ProcessorBasicPhysics(pepper.Processor):
             # jets that don’t overlap with PF muon (dR < 0.2)
             & (no_muon_overlap)
         )
-        if get_run_for_year(year) == "Run3":
+        if get_run_for_year(year) == LHCRun.Run3:
             nominal_selection_mask = (nominal_selection_mask
                                       & self.has_puid(jets))
         veto_maps = self.config["jet_veto_maps"]
@@ -1098,7 +1098,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         down) will be applied. If it is None or 'central', nominal MET is
         used."""
         nano_met_name = None
-        if get_run_for_year(self.config["year"]) == "Run3":
+        if get_run_for_year(self.config["year"]) == LHCRun.Run3:
             default_nano_met_name = "PuppiMET"
         else:
             default_nano_met_name = "MET"
