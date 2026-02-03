@@ -839,6 +839,18 @@ class ProcessorBasicPhysics(pepper.Processor):
             junc = ak.where(mask, junc, ak.ones_like(junc))
         return junc
 
+    def find_matched_genjet(self, jer, jets):
+        """Find a matched GenJet for the purpose of JER smearing,
+        passing the requirements for matching according to JME.
+        See https://cms-jerc.web.cern.ch/JER """
+        genjet = jets.matched_gen
+        deltar = jets.delta_r(genjet)
+        rel_dpt = abs(jets.pt - genjet.pt)/jets.pt
+
+        is_matched = (deltar < 0.2) & (rel_dpt < 3 * jer)
+        genjets_matched = ak.mask(genjet, is_matched)
+        return genjets_matched
+
     def compute_jer_factor(self, data, rng, variation="central", pt=None,
                            eta=None, hybrid=True):
         """Return jet energy resolution factor."""
@@ -872,7 +884,8 @@ class ProcessorBasicPhysics(pepper.Processor):
         factor_stoch = 1 + np.sqrt(np.maximum(jersf**2 - 1, 0)) * jersmear
         if hybrid:
             # Hybrid method: Apply scaling relative to genpt if possible
-            genpt = data["Jet"].matched_gen.pt
+            matched_genjets = self.find_matched_genjet(jer, data["Jet"])
+            genpt = matched_genjets.pt
             factor_scale = 1 + (jersf - 1) * (pt - genpt) / pt
             factor = ak.where(
                 ak.is_none(genpt, axis=1), factor_stoch, factor_scale)
