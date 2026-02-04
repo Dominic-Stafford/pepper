@@ -1,0 +1,44 @@
+/* Make logo match the size of FA icons and Pandas/NumPy style */
+.navbar-brand img {
+    height: 64px;      /* adjust if needed */
+    width: auto;
+}
+
+/* Improve alignment in the navbar */
+.navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;       /* spacing between logo and title */
+}
+
+/* Ensure the project name uses the navbar’s text color */
+.navbar-brand .navbar-brand-text {
+    color: var(--pst-color-text-base);
+}
+
+/* Mattermost SVG icon in header */
+.header-icon-link img[src$="mattermost.svg"] {
+    width: 1.2em;
+    height: 1.2em;
+    vertical-align: middle;
+    transition: color 0.3s ease;
+    color: var(--color-icon); /* inherits theme color */
+}
+
+/* Hover effect like Font Awesome */
+.header-icon-link:hover img[src$="mattermost.svg"] {
+    color: var(--color-icon-hover);
+}
+
+/*The header paragraph */
+.logo__title {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 40px;
+    font-weight: 700; /* bold */
+    line-height: 1;
+    letter-spacing: 0.5px;
+    text-decoration: none;
+}
+.logo__title:hover {
+    text-decoration: none;
+}

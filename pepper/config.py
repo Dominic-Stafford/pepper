@@ -21,6 +21,25 @@ class Config(MutableMapping):
     def __init__(self, path, textparser=hjson.load, cwd="."):
         """Initialize the configuration.
 
+        The default list of required arguments, behaviours, and  special variables
+        is:
+
+        - Required Args:
+            - exp_datasets
+            - mc_datasets
+            - mc_lumifactors
+        - Behaviors:
+            - file_blacklist: load from external file if a string is given
+            - local_file_blacklist: load from external file if a string is given
+            - xrootd_url_blacklist: load from external file if a string is given
+            - mc_lumifactors: load from external file if a string is given
+            - hists: load from external file if a string is given, parse into
+              HistDefinition objects
+        - Special Vars:
+            - $DATADIR: replaced with the value of ``datadir`` in the config
+            - $CONFDIR: replaced with the directory containing the config file
+            - $STOREDIR: replaced with the value of ``store`` in the config
+
         Parameters
         ----------
         path
