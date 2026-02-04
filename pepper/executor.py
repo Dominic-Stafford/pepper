@@ -324,7 +324,7 @@ class Runner(coffea.processor.Runner):
     """
     @staticmethod
     def resolve_lfn(lfn, store, xrootddomain, local_file_blacklist,
-                    url_blacklist=None):
+                    url_blacklist=None, use_eos_redirector=True):
         """Converts logical file names (LFNs) to physical file names that can
         be understood by ``uproot.open``
 
@@ -343,6 +343,9 @@ class Runner(coffea.processor.Runner):
         url_blacklist
             Optional; a blacklist of XRootD URLs which should not be used for
             resolving the file
+        use_eos_redirector
+            If True and the file is located on EOS, the EOS redirector URL will
+            be used instead of the direct EOS path.
 
         Returns
         -------
@@ -351,7 +354,8 @@ class Runner(coffea.processor.Runner):
         """
         if lfn.startswith("cmslfn://"):
             filepaths = pepper.datasets.resolve_lfn(lfn, store, xrootddomain,
-                                                    url_blacklist)
+                                                    url_blacklist,
+                                                    use_eos_redirector)
         else:
             filepaths = [lfn]
         if xrootddomain is not None and local_file_blacklist is not None:
@@ -365,7 +369,8 @@ class Runner(coffea.processor.Runner):
             item.filename, item.metadata["store_path"],
             item.metadata["xrootddomain"],
             item.metadata["local_file_blacklist"],
-            item.metadata["url_blacklist"])
+            item.metadata["url_blacklist"],
+            item.metadata.get("use_eos_redirector", True))
         for filepath in filepaths:
             try:
                 with uproot.open(
@@ -424,7 +429,7 @@ class Runner(coffea.processor.Runner):
         filepaths = Runner.resolve_lfn(
             item.filename, metadata["store_path"],
             metadata["xrootddomain"], metadata["local_file_blacklist"],
-            metadata["url_blacklist"])
+            metadata["url_blacklist"], metadata.get("use_eos_redirector", True))
 
         for filepath in filepaths:
             try:

@@ -431,6 +431,32 @@ def akremask(array, mask):
     return ak.mask(array[offsets], mask)
 
 
+def eos_path_to_url(path):
+    """Convert an EOS path to a XRootD URL
+
+    Parameters
+    ----------
+    path
+        EOS path, e.g. /eos/cms/store/...
+
+    Returns
+    -------
+    url
+        XRootD URL, e.g. root://eoscms.cern.ch//store/...
+    """
+    if path.startswith("/eos/user"):
+        return "root://eosuser.cern.ch/" + path
+    elif path.startswith("/eos/home-"):
+        return path.replace("/eos/home-", "root://eosuser.cern.ch//eos/user/")
+    elif path.startswith("/eos/cms/store/cmst3"):
+        return path.replace("/eos/cms/store",
+                            "root://eoscms.cern.ch//store/group")
+    elif path.startswith("/eos/cms/store"):
+        return path.replace("/eos/cms/store", "root://eoscms.cern.ch//store")
+    else:
+        raise ValueError(f"Unknown eos path: {path}")
+
+
 class VirtualArrayCopier:
     """Create a shallow copy of the an awkward Record Array such as NanoEvents
     while trying to not make virtual subarrays load their contents.

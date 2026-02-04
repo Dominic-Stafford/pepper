@@ -8,6 +8,7 @@ import urllib.request
 import ssl
 import json
 
+import pepper.misc
 
 logger = logging.getLogger(__name__)
 __cernrootcert = None
@@ -107,7 +108,8 @@ def lfn_to_xrootd_path(lfn, xrootddomain):
     return f"root://{xrootddomain}/" + lfn
 
 
-def resolve_lfn(lfn, store=None, xrootddomain=None, url_blacklist=None):
+def resolve_lfn(lfn, store=None, xrootddomain=None, url_blacklist=None,
+                use_eos_redirector=True):
     """Get paths and URLs for a file given a specific logical file name (LFN).
 
     Parameters
@@ -122,6 +124,9 @@ def resolve_lfn(lfn, store=None, xrootddomain=None, url_blacklist=None):
     url_blacklist
         Optional; a blacklist of XRootD URLs which should not be used for
         resolving the file
+    use_eos_redirector
+        If True and the file is located on EOS, the EOS redirector URL will
+        be used instead of the direct EOS path.
 
     Returns
     -------
@@ -132,7 +137,9 @@ def resolve_lfn(lfn, store=None, xrootddomain=None, url_blacklist=None):
         lfn = lfn.split("cmslfn:/", 1)[1]
     if store is not None:
         path = lfn_to_local_path(lfn, store)
-        if os.path.exists(path):
+        if use_eos_redirector and os.path.exists(path):
+            if path.startswith("/eos/"):
+                path = pepper.misc.eos_path_to_url(path)
             pfns.append(path)
     if xrootddomain is not None:
         import XRootD.client
@@ -187,7 +194,8 @@ def dataset_to_lfns(dataset, store=None, ext=".root", mode="local"):
     return lfns
 
 
-def read_paths(source, store=None, ext=".root", mode="local"):
+def read_paths(source, store=None, ext=".root", mode="local",
+               use_eos_redirector=True):
     """Get all file names of a dataset, which can be interpreted from a
     source
 
@@ -203,6 +211,8 @@ def read_paths(source, store=None, ext=".root", mode="local"):
         See ``expand_datasetdict``
     mode
         See ``expand_datasetdict``
+    use_eos_redirector
+        See ``resolve_lfn``
 
     Returns
     -------
@@ -211,6 +221,12 @@ def read_paths(source, store=None, ext=".root", mode="local"):
     paths = []
     if source.endswith(ext):
         paths = glob(source)
+        if use_eos_redirector:
+            paths = [
+                pepper.misc.eos_path_to_url(p)
+                if p.startswith("/eos/") else p
+                for p in paths
+            ]
     elif (source.count("/") == 3
             and (source.endswith("NANOAOD")
                  or source.endswith("NANOAODSIM")
@@ -237,7 +253,7 @@ def read_paths(source, store=None, ext=".root", mode="local"):
 
 
 def expand_datasetdict(datasets, store=None, ignore_path=None, ext=".root",
-                       mode="local"):
+                       mode="local", use_eos_redirector=True):
     """Interpred a dict of dataset names or paths
 
     Parameters
@@ -260,6 +276,9 @@ def expand_datasetdict(datasets, store=None, ignore_path=None, ext=".root",
         to xrootd URLs. If 'local+xrootd' only files that are not present
         locally are returned with an xrootd URL, otherwise local file paths
         are returned.
+    use_eos_redirector
+        If True and the file is located on EOS, the EOS redirector URL will
+        be used instead of the direct EOS path.
 
     Returns
     -------
@@ -272,7 +291,7 @@ def expand_datasetdict(datasets, store=None, ignore_path=None, ext=".root",
     for key in datasets.keys():
         paths = list(dict.fromkeys([
             a for b in datasets[key] for a in read_paths(
-                b, store, ext, mode)]))
+                b, store, ext, mode, use_eos_redirector)]))
         if ignore_path:
             processed_paths = []
             for path in paths:

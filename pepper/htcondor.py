@@ -6,6 +6,7 @@ import dask.distributed
 import dask_jobqueue
 import shlex
 import traceback
+import socket
 from collections import defaultdict
 
 import pepper.config
@@ -30,7 +31,7 @@ def get_site():
         return hostname
 
 
-def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GiB", disk="3 GiB",
+def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GiB", disk="0 GiB",
                      cores=1, *, condorsubmit=None, condorenv=None,
                      logdir=None):
     """Get a Dask Jobqueue HTCondor cluster for a host
@@ -69,8 +70,12 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GiB", disk="3 GiB",
         "lxplus": {
             # lxplus has a firewall in place, only allowing specific ports
             # https://batchdocs.web.cern.ch/specialpayload/dask.html
-            "scheduler_options": {"port": 8786, "dashboard_address": ":0"},
-            "worker_extra_args": ["--worker-port", "10000:10100"],
+            "scheduler_options": {
+                "port": 8786,
+                "dashboard_address": ":0",
+                'host': socket.gethostname()
+            },
+            "worker_extra_args": ["--worker-port", "10000:10100"]
         }
     }
 
@@ -79,11 +84,19 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GiB", disk="3 GiB",
     # We don't want this, because usually one can use more memory than
     # requested through Condor. Thus explicitly set RequestMemory.
     memory = dask.utils.parse_bytes(memory)
+
+    site = get_site()
+
     job_extra_directives = {
         "RequestMemory": str(int(memory / 2**20)),
         "+RequestRuntime": str(int(runtime)),
         "+MaxRuntime": str(int(runtime))
     }
+    if site == "lxplus":
+        job_extra_directives.update({
+            "Stream_Output": False,
+            "Stream_Error": False
+        })
     if condorsubmit is not None:
         for param in condorsubmit.split("\n"):
             # Need to parse, HTCondorCluster only takes a dict
@@ -107,9 +120,20 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GiB", disk="3 GiB",
         # Set port parameters to 0 to use random ports
         scheduler_options={"dashboard_address": ":0"}
     )
-    site = get_site()
+
     config.update(site_config.get(site, {}))
-    cluster = dask_jobqueue.htcondor.HTCondorCluster(**config)
+    if site == "lxplus" and logdir.startswith("/eos/"):
+        try:
+            import dask_lxplus
+        except ImportError:
+            logger.error(
+                "dask-lxplus is not installed. "
+                "Please install it to run on lxplus HTCondor with a "
+                "logdir on eos.")
+            raise
+        cluster = dask_lxplus.CernCluster(**config)
+    else:
+        cluster = dask_jobqueue.htcondor.HTCondorCluster(**config)
     cluster.adapt(maximum_jobs=num_jobs)
 
     return cluster
@@ -240,7 +264,7 @@ class Cluster:
             Request memory. String with a unit like "GiB" or an int.
         """
         self.logdir = self.get_enumerated_dir(logdir)
-        if num_jobs is None:
+        if num_jobs is None or num_jobs == 0:
             # Run locally
             self.client = None
         else:
