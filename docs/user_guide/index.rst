@@ -1,0 +1,101 @@
+User Guide
+==========
+
+.. toctree::
+   :hidden:
+
+   Get Started <getting_started>
+   Concepts <conceptual_overview>
+   Configuration <config>
+   The Config Object <config_object>
+   Pepper Scripts <scripts>
+   Run Your Analysis <running_a_processor>
+   Accessing Remote Data <remote_data>
+   Scale Factors <scale_factors>
+
+This section contains user guides for various features of Pepper.
+
+- Conceptual Overview
+- Tips n Tricks
+- Accessing remote data
+
+.. grid:: 2 3 3 4
+   :gutter: 2
+
+   .. grid-item-card::
+      :link: getting_started
+      :link-type: doc
+      :text-align: center
+
+      Get Started
+      ^^^^^^^^^^^
+      Get started here!
+
+
+   .. grid-item-card::
+      :link: conceptual_overview
+      :link-type: doc
+      :text-align: center
+
+      Concepts
+      ^^^^^^^^
+      Understand the core concepts.
+
+   .. grid-item-card::
+      :link: config
+      :link-type: doc
+      :text-align: center
+
+      Configuration
+      ^^^^^^^^^^^^^
+      Understand the options when configuring an analysis.
+
+   .. grid-item-card::
+      :link: config_object
+      :link-type: doc
+      :text-align: center
+
+      The Config Object
+      ^^^^^^^^^^^^^^^^^^
+      Understand the flexibility of the ``Config`` object and how to extend it.
+
+.. grid:: 2 3 3 4
+   :gutter: 2
+
+   .. grid-item-card::
+      :link: scripts
+      :link-type: doc
+      :text-align: center
+
+      Pepper Scripts
+      ^^^^^^^^^^^^^^^
+      Perform common tasks related to running your analysis.
+
+   .. grid-item-card::
+      :link: running_a_processor
+      :link-type: doc
+      :text-align: center
+
+      Run Your Analysis
+      ^^^^^^^^^^^^^^^^^^^^^
+      How to run your analysis - locally and on the cluster.
+
+   .. grid-item-card::
+      :link: remote_data
+      :link-type: doc
+      :text-align: center
+
+      Remote Data
+      ^^^^^^^^^^^^^^
+      Learn how to access and process data from remote sources.
+
+   .. grid-item-card::
+      :link: scale_factors
+      :link-type: doc
+      :text-align: center
+
+      Scale Factors
+      ^^^^^^^^^^^^^
+      Learn about scale factors and how to apply them in your analysis.
+
+

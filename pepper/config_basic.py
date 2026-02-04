@@ -25,6 +25,46 @@ class ConfigBasicPhysics(pepper.Config):
     def __init__(self, path_or_file, textparser=hjson.load, cwd="."):
         """Initialize the configuration.
 
+        The default list of required arguments, behaviours, and  special variables
+        is:
+
+        - Required Args (inherited from Config):
+            - exp_datasets
+            - mc_datasets
+            - mc_lumifactors
+        - Behaviors (inherited from Config and extended):
+            - file_blacklist: load from external file if a string is given
+            - local_file_blacklist: load from external file if a string is given
+            - xrootd_url_blacklist: load from external file if a string is given
+            - mc_lumifactors: load from external file if a string is given
+            - hists: load from external file if a string is given, parse into
+              HistDefinition objects
+            - year: convert to string
+            - crosssections: load from external file if a string is given
+            - top_pt_reweighting: parse into TopPtWeighter object
+            - pileup_reweighting: parse into PileupWeighter object
+            - electron_sf: parse into list of ScaleFactors objects
+            - muon_sf: parse into list of MuonScaleFactor objects
+            - btag_sf: parse into list of BTagWeighter objects
+            - btag_wps: parse into BTagWPs object
+            - jet_puid_sf: parse into JetPuIdWeighter object
+            - jet_correction_mc: parse into FactorizedJetCorrector object
+            - jet_correction_data: parse into dict of FactorizedJetCorrector objects
+            - jet_uncertainty: parse into JetCorrectionUncertainty object
+            - jet_resolution: parse into JetResolution object
+            - jet_ressf: parse into JetResolutionScaleFactor object
+            - MET_xy_shifts: load from external file if a string is given
+            - crosssection_uncertainty: load from external file if a string is given
+            - reco_info_file: resolve path
+            - store: resolve path
+            - lumimask: resolve path
+            - rng_seed_file: resolve path
+        - Special Vars (inherited from Config):
+            - $DATADIR: replaced with the value of ``datadir`` in the config
+            - $CONFDIR: replaced with the directory containing the config file
+            - $STOREDIR: replaced with the value of ``store`` in the config
+
+
         Parameters
         ----------
         path
