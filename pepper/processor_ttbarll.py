@@ -154,12 +154,15 @@ class Processor(pepper.ProcessorBasicPhysics):
 
         selector.add_cut("METFilters", partial(self.met_filters, is_mc))
 
+        if "muon_rochester" in self.config:
+            # Override muon column to apply Rochester corrections
+            selector.set_column("Muon", partial(
+                self.apply_rochester_corr, selector.rng, is_mc))
         selector.add_cut("NoAddLeps",
                          partial(self.no_additional_leptons, is_mc))
         selector.set_column("Electron", self.pick_electrons)
         selector.set_column("Muon", self.pick_muons)
-        selector.set_column("Lepton", partial(
-            self.build_lepton_column, is_mc, selector.rng))
+        selector.set_column("Lepton", self.build_lepton_column)
         # Wait with hists filling after channel masks are available
         selector.add_cut("AtLeast2Leps", partial(self.lepton_pair, is_mc),
                          no_callback=True)
