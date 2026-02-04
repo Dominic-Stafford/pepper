@@ -79,7 +79,8 @@ class Config(MutableMapping):
             "local_file_blacklist": self._get_maybe_external,
             "xrootd_url_blacklist": self._get_maybe_external,
             "mc_lumifactors": self._get_maybe_external,
-            "hists": self._get_hists
+            "hists": self._get_hists,
+            "columns_to_save": self._get_maybe_external
         }
         self.required_args = [
             "exp_datasets",
@@ -277,10 +278,11 @@ class Config(MutableMapping):
                     (lfn.startswith("cmslfn:/")
                      and lfn[len('cmslfn:/'):] in file_blacklist)
             ignore_path = is_lfn_in_bad_paths
+        use_eos_redirector = self.get("use_eos_redirector", True)
         logger.debug("Finding files for data sets")
         datasets, paths2dsname = pepper.datasets.expand_datasetdict(
             datasets, store=store, mode=mode,
-            ignore_path=ignore_path)
+            ignore_path=ignore_path, use_eos_redirector=use_eos_redirector)
         missing_datasets = requested_datasets - datasets.keys()
         if len(missing_datasets) > 0:
             raise ConfigError("Could not find files for: "
@@ -320,10 +322,12 @@ class Config(MutableMapping):
             xrootddomain = self["xrootddomain"]
             if "xrootd_url_blacklist" in self:
                 xrootd_url_blacklist = self["xrootd_url_blacklist"]
+        use_eos_redirector = self.get("use_eos_redirector", True)
 
         if lfn.startswith("cmslfn://"):
             filepaths = pepper.datasets.resolve_lfn(lfn, store, xrootddomain,
-                                                    xrootd_url_blacklist)
+                                                    xrootd_url_blacklist,
+                                                    use_eos_redirector)
         else:
             filepaths = [lfn]
         if local_file_blacklist is not None:

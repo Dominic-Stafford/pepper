@@ -14,6 +14,9 @@ from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 import concurrent.futures
 from tqdm import tqdm
+from tempfile import mkdtemp
+import subprocess
+import shutil
 
 import pepper
 from pepper import Selector, OutputFiller, HDF5File
@@ -22,6 +25,114 @@ import pepper.htcondor
 
 
 logger = logging.getLogger(__name__)
+
+
+class EventOutputFile():
+    """Class to represent an output file for per-event data
+
+    This is used to save the per-event data in a file. The file is created
+    with a unique name, so that it does not overwrite existing files.
+
+    If use_temp is True, the file is first created in a temporary local
+    directory, and then copied to the final destination when closed.
+    If the file is supposed to be saved on eos, the eos command line tool
+    is used to copy the file.
+    """
+    def __init__(self, eventdir, dsname, identifier, filetype, use_temp):
+        self.eventdir = os.path.realpath(eventdir)
+        self.dsname = dsname
+        self.identifier = identifier
+        self.filetype = filetype
+        self.use_temp = use_temp
+        self.file = None
+        self.actual_filepath = None
+
+        if self.filetype == "root":
+            self.ext = ".root"
+        elif self.filetype == "hdf5":
+            self.ext = ".h5"
+        else:
+            raise ValueError(f"Invalid filetype: {self.filetype}")
+
+    def get_random_filename(self):
+        filehash = hash((*self.identifier, time_ns()))
+        filename = "{:016x}".format(filehash % 16**16) + self.ext
+        return filename
+
+    def __enter__(self):
+        dsname = self.dsname.replace("/", "_")
+        if self.use_temp:
+            dsdir = mkdtemp()
+        else:
+            dsdir = os.path.join(self.eventdir, dsname)
+            os.makedirs(dsdir, exist_ok=True)
+        while True:
+            filename = self.get_random_filename()
+            filepath = os.path.join(dsdir, filename)
+            if os.path.exists(filepath):
+                logger.warn("Got a file locking conflict for path "
+                            f"'{filepath}'. Continuing with next file")
+                continue
+
+            # Open in exclusive file mode
+            # to prevent race conditions with other processes
+            try:
+                if self.filetype == "root":
+                    # Pass through open() to use the exclusive
+                    # file mode 'x'
+                    self.file = uproot.recreate(open(filepath, "x+b"))
+                elif self.filetype == "hdf5":
+                    # h5py supports the 'x' mode directly
+                    self.file = h5py.File(filepath, "x")
+
+                self.actual_filepath = filepath
+            except (FileExistsError, OSError, BlockingIOError):
+                logger.warn("Got a file locking conflict for path "
+                            f"'{filepath}'. Continuing with next file")
+                continue
+            else:
+                break
+        logger.debug(f"Opened output {filepath}")
+        return self.file
+
+    def _copy_directly(self, dsdir, dest_path):
+        if not os.path.exists(dsdir):
+            os.makedirs(dsdir, exist_ok=True)
+        shutil.copy2(self.actual_filepath, dest_path)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.file.close()
+
+        if self.use_temp:
+            dsname = self.dsname.replace("/", "_")
+            dsdir = os.path.join(self.eventdir, dsname)
+
+            filename = os.path.basename(self.actual_filepath)
+            while os.path.exists(os.path.join(dsdir, filename)):
+                logger.warn("Got a file locking conflict for eos path "
+                            f"'{os.path.join(dsdir, filename)}'. Continuing "
+                            "with next file")
+                filename = self.get_random_filename()
+            dest_path = os.path.join(dsdir, filename)
+            if self.eventdir.startswith("/eos"):
+                dest_url = pepper.misc.eos_path_to_url(dest_path)
+                try:
+                    subprocess.run(
+                        ["eos", "cp", "-p", self.actual_filepath, dest_url],
+                        check=True)
+                except subprocess.CalledProcessError as e:
+                    logger.warning(f"Failed to copy file to eos: {e}")
+                    logger.warning("Trying using system command directly")
+                    self._copy_directly(dsdir, dest_path)
+                else:
+                    os.remove(self.actual_filepath)
+                    logger.debug(f"Copied output file to eos: {dest_path}")
+            else:
+                logger.debug(f"Copying output file to {dest_path}")
+                self._copy_directly(dsdir, dest_path)
+
+            # Clean up temporary directory
+            shutil.rmtree(os.path.dirname(self.actual_filepath))
 
 
 class Processor(coffea.processor.ProcessorABC):
@@ -57,6 +168,10 @@ class Processor(coffea.processor.ProcessorABC):
         self.config = config
         if eventdir is not None:
             self.eventdir = os.path.realpath(eventdir)
+            if "use_temp_eventdir" in self.config:
+                self.use_temp_eventdir = self.config["use_temp_eventdir"]
+            else:
+                self.use_temp_eventdir = self.eventdir.startswith("/eos")
         else:
             self.eventdir = None
 
@@ -226,60 +341,6 @@ class Processor(coffea.processor.ProcessorABC):
         """
         return accumulator
 
-    def _open_output(self, dsname, identifier, filetype):
-        """Try to open an output file for writing the per-event data. It is
-        ensured the file is newly created and does not overwrite existing data.
-
-        Parameters
-        ----------
-        dsname
-            Name of the data set of the data
-        identifier
-            Tuple that uniquely identifies the data that goes into the file
-        filetype
-            Either "root" or "hdf5". The type of the output file
-
-        Returns
-        -------
-            File object of the opened file
-        """
-        if filetype == "root":
-            ext = ".root"
-        elif filetype == "hdf5":
-            ext = ".h5"
-        else:
-            raise ValueError(f"Invalid filetype: {filetype}")
-        dsname = dsname.replace("/", "_")
-        dsdir = os.path.join(self.eventdir, dsname)
-        os.makedirs(dsdir, exist_ok=True)
-        while True:
-            filehash = hash((*identifier, time_ns()))
-            filename = "{:016x}".format(filehash % 16**16) + ext
-            filepath = os.path.join(dsdir, filename)
-            if os.path.exists(filepath):
-                logger.warn("Got a file locking conflict for path "
-                            f"'{filepath}'. Continuing with next file")
-                continue
-
-            # Open in exclusive file mode
-            # to prevent race conditions with other processes
-            try:
-                if filetype == "root":
-                    # Pass through open() to use the exclusive
-                    # file mode 'x'
-                    f = uproot.recreate(open(filepath, "x+b"))
-                elif filetype == "hdf5":
-                    # h5py supports the 'x' mode directly
-                    f = h5py.File(filepath, "x")
-            except (FileExistsError, OSError, BlockingIOError):
-                logger.warn("Got a file locking conflict for path "
-                            f"'{filepath}'. Continuing with next file")
-                continue
-            else:
-                break
-        logger.debug(f"Opened output {filepath}")
-        return f
-
     def _prepare_saved_columns(self, selector):
         """Creates an array to be saved as per-event data. The content is taken
         from the selectors and the data pickers defined in the config."""
@@ -330,7 +391,8 @@ class Processor(coffea.processor.ProcessorABC):
         elif selector.systematics is not None:
             out_dict["weight"] = ak.flatten(
                 selector.systematics["weight"], axis=0)
-        with self._open_output(dsname, identifier, "hdf5") as f:
+        with EventOutputFile(self.eventdir, dsname, identifier, "hdf5",
+                             self.use_temp_eventdir) as f:
             outf = HDF5File(f)
             for key in out_dict.keys():
                 outf[key] = out_dict[key]
@@ -408,7 +470,9 @@ class Processor(coffea.processor.ProcessorABC):
                         self._separate_masks_for_root(
                             {f: ak.packed(cats[cat][f])
                              for f in ak.fields(cats[cat])})
-        with self._open_output(dsname, identifier, "root") as outf:
+        with EventOutputFile(
+                self.eventdir, dsname, identifier, "root",
+                self.use_temp_eventdir) as outf:
             for key in out_dict.keys():
                 outf[key] = out_dict[key]
 

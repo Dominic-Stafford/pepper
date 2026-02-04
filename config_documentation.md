@@ -23,6 +23,7 @@ Inside the string values of a configuration variable the following placeholders 
 - `file_blacklist`: Optional, array or path to a JSON file containing an array of files or logical file names to skip.
 - `local_file_blacklist`: Optional, array or path to a JSON file containing an array of paths or logical file names to resolve remotely via xrootd even if they are available locally. Only possible if `file_mode` is `local+xrootd`.
 - `xrootd_url_blacklist`: Optional, a list of xrootd URLs (e.g. `"rl.ac.uk"`) that should not be used for resolving files via xrootd. Parts of an URL are acceptable, i.e. `".fr"` to blacklist all French storage sites.
+- `use_eos_redirector`: Optional, boolean. Only relevant on LXPLUS. If `true` and the datasets are located on CERN EOS (i.e. the filepath starts with `/eos/`), use the xrootd redirector instead of the EOS file system mount, which is faster and more stable. Default is `true`.
 - `store`: A string used as value for `$STOREDIR` and is used to find files from plain data set names.
 - `exp_datasets`: Object containing arrays. The arrays contain strings, which are either paths (or xrootd URLs) to NanoAOD ROOT files or data set names (containing three slashes). Paths can contain wildcards. The keys inside this object indicates what name to use as data set name during processing. These NanoAODs are used at experimental data input.
 - `MET_trigger_datasets`: Object containing arrays. Datasets to use as cross-trigger datasets for trigger SF calculation. Same format as `exp_datasets`
@@ -74,6 +75,7 @@ These determine various calibrations and weightings. In case they are optional a
 ## Output
 - `columns_to_save`: Optional, array of data pickers or object of data pickers. The data pickers specify which observables should be saved as per-event output. If this is an object, the keys will be used inside the output file for the corresponding observable. Per-event output must be turned on manually, even if this variable is present.
 - `column_output_format`: Optional, string indicating the file format which is used to save the columns named by `columns_to_save`. This can either be `"root"` or `"hdf5"`. By default the root format is used.
+- `use_temp_eventdir`: Optional, bool. Write out the per-event output in a temporary directory on the worker, and then copy it to the final destination afterwards. On CERN EOS, `eos cp` is used for the copying instead of the file system mount, which should be more stable. Default is `true` on EOS and `false` otherwise.
 - `save_categories_per_event`: Optional, bool, default `True`. Whether to save all of the categories in the per-event output. If only specific categories are desired, this can be to `False` and individual columns specified in ``columns_to_save`.
 - `hists`: Path to a JSON file containing the histogram definitions as object. The keys decide the name of the histogram. For its elements, see the Histogram Definition subparagraph.
 - `cuts_to_histogram`: Optional, array of strings. If this is present, histograms will only be created for cuts whose names are in this array.

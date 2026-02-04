@@ -267,7 +267,7 @@ def run_processor(processor_class=None, description=None, mconly=False):
         retries=args.retries,
         exit_on_failed_jobs=exit_on_failed_jobs,
         mc_dsnames=list(config["mc_datasets"].keys()),
-        logdir=args.condorlogdir,
+        logdir=os.path.realpath(args.condorlogdir),
         memory=str(args.memory) + " GiB",
         runtime=int(args.runtime*60*60)
     )
@@ -322,9 +322,11 @@ def run_processor(processor_class=None, description=None, mconly=False):
     xrootd_url_blacklist = None
     if "xrootd_url_blacklist" in config:
         xrootd_url_blacklist = config["xrootd_url_blacklist"]
+    use_eos_redirector = config.get("use_eos_redirector", True)
     metadata = {"store_path": store, "xrootddomain": xrootddomain,
                 "local_file_blacklist": local_file_blacklist,
-                "url_blacklist": xrootd_url_blacklist}
+                "url_blacklist": xrootd_url_blacklist,
+                "use_eos_redirector": use_eos_redirector}
     # Give metadata for the processing step
     processor.pepperitemmetadata = metadata
     # For the preprocessing step, add metadata also to the file meta
