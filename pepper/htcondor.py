@@ -95,7 +95,8 @@ def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GiB", disk="0 GiB",
     if site == "lxplus":
         job_extra_directives.update({
             "Stream_Output": False,
-            "Stream_Error": False
+            "Stream_Error": False,
+            "remote_initialdir": os.getcwd()
         })
     if condorsubmit is not None:
         for param in condorsubmit.split("\n"):
