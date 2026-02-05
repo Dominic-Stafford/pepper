@@ -11,7 +11,7 @@ A Python framework for analyzing NanoAODs. Easy to use and highly configurable.
 .. caution::
 
    This documentation website is currently work-in-progress. If you encounter any issues or have suggestions for 
-   improvement, please feel free to reach out to Mads on `e-mail <mailto:mads.baattrup@desy.de?subject=Feedback\ on\ Pepper\ Documentation>`__.
+   improvement, please feel free to reach out to Mads on `e-mail <mailto:mads.baattrup@desy.de?subject=Feedback\ on\ Pepper\ Documentation>`__ or Mattermost.
 
 
 Citing Pepper
