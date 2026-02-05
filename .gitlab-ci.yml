@@ -4,6 +4,7 @@ stages:
   - flake8
   - test
   - build-docs
+  - pages  # aka publish to GitLab Pages (naming matters)
 before_script:
   - sudo yum install -y python3 python3-pip python3-devel > /dev/null
   - sudo pip3 install pep8-naming > /dev/null
@@ -13,6 +14,8 @@ flake8:
   stage: flake8
   script:
     - flake8 --extend-ignore N806
+  rules:
+    - when: always
 
 test:
   stage: test
@@ -23,6 +26,8 @@ test:
     - python3 -m pip install --upgrade --upgrade-strategy eager --editable .
     - cd example
     - python3 -m pepper.runproc example_processor.py test_config.json
+  rules:
+    - when: always
   artifacts:
     expire_in: 10 hours
     paths:
@@ -31,13 +36,35 @@ test:
 
 build-docs:
   stage: build-docs
+  tags:
+    - cvmfs
   script:
-    - python3 -m pip install -U -e .[docs]
+    - source example/environment.sh
+    - python3 -m pip install --upgrade --upgrade-strategy eager --editable .[docs]
     - cd docs
     - make html
-    - mv _build/html ../public
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'  # Always run on master branch
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - docs/**/*
+        - "*.md"
+        - pepper/**/*.py
+  artifacts:
+    paths:
+      - docs/_build/html
+
+
+pages:
+  stage: pages
+  tags:
+    - cvmfs
+  dependencies:
+    - build-docs
+  script:
+    - mv docs/_build/html public
   artifacts:
     paths:
       - public
-  only:
-    - master
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
