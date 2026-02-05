@@ -14,7 +14,6 @@ import logging
 
 from pepper.misc import onedimeval, LHCRun, get_run_for_year
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -958,3 +957,55 @@ class TopPtWeigter:
         sf = self.sffunc(toppt)
         antisf = self.sffunc(antitoppt)
         return np.sqrt(sf * antisf) * self.scale
+
+
+class JetIdProducer:
+    def __init__(self, jettype, jsonfile):
+        """Module to determine jetID variables (passTight, passTightLepVeto),
+        packed in Jet_jetId as in nanoAODv12
+
+        Parameters
+        ----------
+        json
+            jetID json file provided by the JetMET POG
+        jettype
+            jet type used in the analysis ("AK4PUPPI" or "AK4CHS")
+        """
+        self.corrset = correctionlib.CorrectionSet.from_file(jsonfile)
+        self.tight = self.corrset[f"{jettype}_Tight"]
+        self.tightLepVeto = self.corrset[f"{jettype}_TightLeptonVeto"]
+
+    def evaluate(self, jet):
+
+        multiplicity = jet.chMultiplicity + jet.neMultiplicity
+
+        passTight = onedimeval(
+            self.tight.evaluate,
+            jet.eta,
+            jet.chHEF,
+            jet.neHEF,
+            jet.chEmEF,
+            jet.neEmEF,
+            jet.muEF,
+            jet.chMultiplicity,
+            jet.neMultiplicity,
+            multiplicity,
+        )
+
+        passTightLepVeto = onedimeval(
+            self.tightLepVeto.evaluate,
+            jet.eta,
+            jet.chHEF,
+            jet.neHEF,
+            jet.chEmEF,
+            jet.neEmEF,
+            jet.muEF,
+            jet.chMultiplicity,
+            jet.neMultiplicity,
+            multiplicity,
+        )
+
+        passTight = ak.values_astype(passTight, bool)
+        passTightLepVeto = ak.values_astype(passTightLepVeto, bool)
+
+        return passTight, passTightLepVeto
