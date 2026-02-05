@@ -973,15 +973,27 @@ class ProcessorBasicPhysics(pepper.Processor):
         j_id, lep_dist, eta_min, eta_max, pt_min = self.config[[
             "good_jet_id", "good_jet_lepton_distance",
             "good_jet_eta_min", "good_jet_eta_max", "good_jet_pt_min"]]
+
+        if "jetId" in jets.fields:  # Legacy jet ID
+            loose_id = jets.isLoose
+            tight_id = jets.isTight
+            tight_lep_veto_id = jets.isTightLeptonVeto
+        else:
+            jet_id_evaluator = self.config["jet_ids"]
+            tight_id, tight_lep_veto_id = jet_id_evaluator.evaluate(jets)
+            loose_id = None
+
         if j_id == "skip":
             has_id = True
         elif j_id == "cut:loose":
-            has_id = jets.isLoose
+            if loose_id is None:
+                raise ValueError("Loose jet ID is not supported for this data era.")
+            has_id = loose_id
             # Always False in 2017 and 2018
         elif j_id == "cut:tight":
-            has_id = jets.isTight
+            has_id = tight_id
         elif j_id == "cut:tightlepveto":
-            has_id = jets.isTightLeptonVeto
+            has_id = tight_lep_veto_id
         else:
             raise pepper.config.ConfigError(
                     "Invalid good_jet_id: {}".format(j_id))

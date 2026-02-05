@@ -17,6 +17,7 @@ from pepper.scale_factors import (
     ScaleFactors,
     MuonScaleFactor,
     JetPuIdWeighter,
+    JetIdProducer,
     CorrLibSFs
 )
 
@@ -87,6 +88,7 @@ class ConfigBasicPhysics(pepper.Config):
                 "muon_rochester": self._get_rochester_corr,
                 "btag_sf": self._get_btag_sf,
                 "btag_wps": self._get_btag_wps,
+                "jet_ids": self._get_jet_ids,
                 "jet_puid_sf": self._get_puid_sf,
                 "jet_correction_mc": self._get_jet_correction,
                 "jet_correction_data": self._get_jet_correction_dict,
@@ -259,3 +261,7 @@ class ConfigBasicPhysics(pepper.Config):
     def _get_jet_general(self, value, evaltype, cls):
         evaluator = get_evaluator(self._get_path(value), "txt", evaltype)
         return cls(**evaluator)
+
+    def _get_jet_ids(self, value):
+        # value = [jetType, jsonfile]
+        return JetIdProducer(value[0], self._get_path(value[1]))
