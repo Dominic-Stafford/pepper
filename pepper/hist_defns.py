@@ -183,6 +183,10 @@ class HistDefinition:
             self.sel_cats = config["selector_cats"]
         else:
             self.sel_cats = True
+        if "only_for_cats" in config:
+            self.only_for_cats = config["only_for_cats"]
+        else:
+            self.only_for_cats = None
 
     @staticmethod
     def _prepare_fills(fill_vals):
@@ -311,6 +315,24 @@ class HistDefinition:
                 "selector_cats must be either a list or a boolean")
         elif not self.sel_cats:
             categorizations = {}
+
+        if self.only_for_cats is not None:
+            if not isinstance(self.only_for_cats, dict):
+                raise HistDefinitionError(
+                    "only_for_cats must be a dictionary")
+            categorizations = categorizations.copy()
+            for catname, catvals in self.only_for_cats.items():
+                if not isinstance(catvals, list):
+                    catvals = [catvals]
+                if catname not in categorizations:
+                    raise HistFillError(
+                        "Category {catname} required in histogram, but "
+                        "not set in selector")
+                if not all(v in categorizations[catname] for v in catvals):
+                    raise HistFillError(
+                        "Not all required values for category {catname} are "
+                        "set in the selector")
+                categorizations[catname] = set(catvals)
 
         hist = self.create_hist(categorizations, has_systematic)
 
