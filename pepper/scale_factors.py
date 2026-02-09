@@ -258,7 +258,7 @@ class CorrLibSFs:
         correction_ranges = []
         correction_ranges_arg_idx = -1
         for i, in_name in enumerate(self.names):
-            if in_name in ["ValType", "scale_factors"]:
+            if in_name in ["ValType", "scale_factors", "weights"]:
                 arrays[in_name] = self.sysnaming[variation]
             elif in_name in self.add_args:
                 # Check if arg is a mapping
@@ -855,14 +855,14 @@ class PileupWeighter:
             raise ValueError(
                 "Missing up/down or central weights for some datasets")
 
-    def __call__(self, dsname, ntrueint, variation="central"):
+    def __call__(self, dsname, NumTrueInteractions, variation="central"):  # noqa: N803
         """Compute the weights for given events
 
         Parameters
         ----------
         dsname
             Name of the data set
-        ntrueint
+        NumTrueInteractions
             Number of true pileup per event. Pileup_ntrueint in NanoAOD
 
         Returns
@@ -875,11 +875,11 @@ class PileupWeighter:
         else:
             key = dsname
         if variation == "up":
-            return self.up[key](ntrueint=ntrueint)
+            return self.up[key](ntrueint=NumTrueInteractions)
         elif variation == "down":
-            return self.down[key](ntrueint=ntrueint)
+            return self.down[key](ntrueint=NumTrueInteractions)
         elif variation == "central":
-            return self.central[key](ntrueint=ntrueint)
+            return self.central[key](ntrueint=NumTrueInteractions)
         else:
             raise ValueError("variation must be either 'up', 'down' or "
                              f"'central', not {variation}")

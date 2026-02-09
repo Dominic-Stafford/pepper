@@ -401,6 +401,10 @@ def onedimeval(func, *arrays, tonumpy=True, output_like=0):
         res = ak.unflatten(res, count)
     for name, val in ak.parameters(arrays[output_like]).items():
         res = ak.with_parameter(res, name, val)
+    if isinstance(res, np.ndarray):
+        # Convert any remaining regular numpy arrays to awkward
+        # so they can get behaviours
+        res = ak.Array(res)
     res.behavior = arrays[output_like].behavior
     return res
 

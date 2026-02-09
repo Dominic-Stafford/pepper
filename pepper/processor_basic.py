@@ -124,12 +124,12 @@ class ProcessorBasicPhysics(pepper.Processor):
         """Pileup reweighting"""
         ntrueint = data["Pileup"]["nTrueInt"]
         weighter = self.config["pileup_reweighting"]
-        weight = weighter(dsname, ntrueint)
+        weight = weighter(dsname=dsname, NumTrueInteractions=ntrueint)
         if self.config["compute_systematics"]:
             # If central is zero, let up and down factors also be zero
             weight_nonzero = np.where(weight == 0, np.inf, weight)
-            up = weighter(dsname, ntrueint, "up")
-            down = weighter(dsname, ntrueint, "down")
+            up = weighter(dsname=dsname, NumTrueInteractions=ntrueint, variation="up")
+            down = weighter(dsname=dsname, NumTrueInteractions=ntrueint, variation="down")
             sys = {"pileup": (up / weight_nonzero, down / weight_nonzero)}
             return weight, sys
         return weight
