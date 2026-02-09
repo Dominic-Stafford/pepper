@@ -169,9 +169,29 @@ class ConfigBasicPhysics(pepper.Config):
         return TopPtWeigter(**value)
 
     def _get_pileup_reweighting(self, value):
-        with uproot.open(self._get_path(value)) as f:
-            weighter = PileupWeighter(f)
-        return weighter
+        if isinstance(value, str):
+            # Legacy root format
+            with uproot.open(self._get_path(value)) as f:
+                return PileupWeighter(f)
+        elif isinstance(value, list):
+            sysnaming = {"central": "nominal", "up": "up", "down": "down"}
+            if len(value) == 2:
+                path, correction_name = value
+                add_args = []
+            elif len(value) == 3:
+                path, correction_name, add_args = value
+            else:
+                raise pepper.config.ConfigError(
+                    "Pileup Reweighting should be a path to a root file (legacy) "
+                    "or for a correctionlib a list of [jsonfile, corrname, "
+                    "additional_args], where the final element is optional.")
+            path = self._get_path(path)
+            return CorrLibSFs(sysnaming, path, correction_name, add_args)
+        else:
+            raise pepper.config.ConfigError(
+                "Pileup Reweighting should be a path to a root file (legacy) "
+                "or for a correctionlib a list of [jsonfile, corrname, "
+                "additional_args], where the final element is optional.")
 
     def _get_btag_wps(self, value):
         value = self._get_maybe_external(value)
