@@ -109,7 +109,7 @@ def lfn_to_xrootd_path(lfn, xrootddomain):
 
 
 def resolve_lfn(lfn, store=None, xrootddomain=None, url_blacklist=None,
-                use_eos_redirector=True):
+                use_eos_redirector=True, url_priority=None):
     """Get paths and URLs for a file given a specific logical file name (LFN).
 
     Parameters
@@ -127,6 +127,9 @@ def resolve_lfn(lfn, store=None, xrootddomain=None, url_blacklist=None,
     use_eos_redirector
         If True and the file is located on EOS, the EOS redirector URL will
         be used instead of the direct EOS path.
+    url_priority
+        Optional; a list of strings. If given, XRootD URLs containing any of
+        these strings will be preferred over other URLs for the same file.
 
     Returns
     -------
@@ -152,6 +155,14 @@ def resolve_lfn(lfn, store=None, xrootddomain=None, url_blacklist=None,
         if loc is None:
             raise OSError("XRootD error: " + status.message)
         domains = [r.address for r in loc]
+        if url_priority is not None:
+            domains_sorted = []
+            for url in url_priority:
+                for d in domains:
+                    if url in d and d not in domains_sorted:
+                        domains_sorted.append(d)
+            domains_sorted.extend(d for d in domains if not d in domains_sorted)
+            domains = domains_sorted
         if url_blacklist is not None:
             domains = [d for d in domains if not any(
                     blacklisted in d for blacklisted in url_blacklist)]
