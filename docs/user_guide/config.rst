@@ -305,7 +305,7 @@ optional parameter is missing, the corresponding procedure will be skipped.
    If true, undo existing NanoAOD jet corrections and reapply
    ``jet_correction`` and ``jet_correction_data``.
 
-- ``jme_correctionlib_corrections`` (dict, optional)
+``jme_correctionlib_corrections`` (dict, optional)
     Starting in Run 3, this is the prefered way to define JME corrections using a single correctionlib file. 
     Needed if ``reapply_jec`` is true. Must point to a dictionary with the following keys:
 
