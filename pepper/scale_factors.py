@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import abc
 from collections.abc import Mapping
 import numpy as np
 import coffea
@@ -150,7 +151,7 @@ class ScaleFactors:
                 return [get_factors(depth-1, h) for h in hists]
 
         tmp_hists = hists
-        for i, k in enumerate(kwargs):
+        for _i, _k in enumerate(kwargs):
             tmp_hists = tmp_hists[0]
         hist_edges = list(tmp_hists.to_numpy(flow=True)[1:])
         edges = list(kwargs.values()) + hist_edges
@@ -209,7 +210,7 @@ class ScaleFactors:
                     f"argument was not provided")
             if isinstance(val, ak.Array):
                 counts = []
-                for i in range(val.ndim - 1):
+                for _i in range(val.ndim - 1):
                     counts.append(ak.num(val))
                     val = ak.flatten(val)
                 val = np.asarray(val)
@@ -228,11 +229,24 @@ class ScaleFactors:
 
 class CorrLibSFs:
     def __init__(self, sysnaming, jsonfile, corrname, add_args):
-        self.corrset = \
-            correctionlib.CorrectionSet.from_file(jsonfile)[corrname]
+        self.corrname = corrname
+        self.corrset = self._read_correctionfile(jsonfile, corrname)
         self.names = [i.name for i in self.corrset.inputs]
         self.add_args = add_args
         self.sysnaming = sysnaming
+
+    @staticmethod
+    def _read_correctionfile(jsonfile, corrname):
+        try:
+            corrset = correctionlib.CorrectionSet.from_file(jsonfile)[corrname]
+        except IndexError as e:
+            raise ValueError(
+                f"Correction '{corrname}' not found in file "
+                f"'{jsonfile}'") from e
+        return corrset
+
+    def __repr__(self) -> str:
+        return f"CorrLibSFs(corrname={self.corrname})"
 
     def __call__(self, variation="central", **kwargs):
         """Evaluate the scale factor
@@ -258,7 +272,7 @@ class CorrLibSFs:
         correction_ranges = []
         correction_ranges_arg_idx = -1
         for i, in_name in enumerate(self.names):
-            if in_name in ["ValType", "scale_factors", "weights"]:
+            if in_name in ["ValType", "scale_factors", "weights", "systematic"]:
                 arrays[in_name] = self.sysnaming[variation]
             elif in_name in self.add_args:
                 # Check if arg is a mapping
@@ -291,7 +305,7 @@ class CorrLibSFs:
                 flattened_arrays[key] = arr
             else:
                 flattened = arr
-                for i in range(flattened.ndim - 1):
+                for _i in range(flattened.ndim - 1):
                     flattened = ak.flatten(flattened)
                 flattened_arrays[key] = np.asarray(flattened)
         pt = flattened_arrays["pt"]
@@ -957,6 +971,147 @@ class TopPtWeigter:
         sf = self.sffunc(toppt)
         antisf = self.sffunc(antitoppt)
         return np.sqrt(sf * antisf) * self.scale
+
+
+class JetCorrectionAdapterBase(abc.ABC):
+    """Base adapter for jet corrections"""
+
+    @abc.abstractmethod
+    def __call__(self, **kwargs):
+        pass
+
+
+class LegacyJetAdapter(JetCorrectionAdapterBase):
+    """Generic adapter for legacy coffea jetmet_tools objects"""
+    def __init__(self, legacy_obj, method_name):
+        """
+        Args:
+            legacy_obj: The coffea jetmet_tools object
+            method_name: Name of method to call (e.g., 'getCorrection', 'getUncertainty')
+        """
+        self.legacy_obj = legacy_obj
+        self.method = getattr(legacy_obj, method_name)
+
+    @property
+    def levels(self):
+        return self.legacy_obj.levels
+
+    def __call__(self, **kwargs):
+        return self.method(**kwargs)
+
+
+class CorrectionlibAdapter(JetCorrectionAdapterBase):
+    """
+    Generic adapter for correctionlib corrections.
+    Passes kwargs directly to correctionlib evaluate().
+    """
+
+    def __init__(self, path, correction_name: str, sysnaming={
+            "central": "nom", "up": "up", "down": "down"},
+            is_uncertainty: bool = False):
+        """
+        Args:
+            cset: CorrectionSet from correctionlib
+            correction_name: Correction name (str) or empty string/None
+        """
+        self.path = path
+        self._is_uncertainty = is_uncertainty
+        # Only allow exactly one correction_name
+        if not isinstance(correction_name, str):
+            msg = f"'correction_name' must be a string, got {type(correction_name)}."
+            raise ValueError(msg)
+        self.correction_name = correction_name
+        # Create CorrLibSFs wrapper
+        self.corr = CorrLibSFs(sysnaming, path, self.correction_name, {})
+
+    def __call__(self, **kwargs):
+        """Pass kwargs directly to correctionlib evaluate()"""
+        if self.corr is None:
+            # Return trivial result for empty correction
+            if self._is_uncertainty:
+                return 0.0
+            else:
+                return 1.0
+        # Broadcast to match all array types.
+        # Separate arrays from non-arrays while preserving order
+        # Slightly involved, but we want to maintain original ordering of kwargs
+        array_keys = [k for k, v in kwargs.items() if isinstance(v, (ak.Array, np.ndarray))]
+        array_values = [kwargs[k] for k in array_keys]
+
+        # Broadcast only the arrays
+        if array_values:
+            broadcasted = dict(zip(array_keys, ak.broadcast_arrays(*array_values)))
+
+            # Rebuild kwargs in original order
+            kwargs = {k: broadcasted.get(k, v) for k, v in kwargs.items()}
+        return self.corr(**kwargs)
+
+
+class CorrectionlibCompoundAdapter(JetCorrectionAdapterBase):
+    """
+    Adapter for compound corrections (JEC only).
+    Applies multiple corrections sequentially: L1 * L2 * L3 * ...
+    """
+
+    def __init__(self, path, correction_names: str | list[str], sysnaming={
+            "central": "sf", "up": "sfup", "down": "sfdown"}):
+        """
+        Args:
+            cset: CorrectionSet from correctionlib
+            correction_names: Single name (str) or list of names to apply sequentially
+        """
+        self.path = path
+
+        # Normalize to list
+        if isinstance(correction_names, str):
+            self.correction_names = [correction_names] if correction_names else []
+        else:
+            self.correction_names = correction_names if correction_names else []
+
+        # Create CorrLibSFs wrappers for each correction
+        self.corrections = {}
+        for name in self.correction_names:
+            if name:
+                try:
+                    corr = CorrLibSFs(sysnaming, path, name, {})
+                    self.corrections[name] = corr
+                except Exception as e:
+                    raise ValueError(
+                        f"Correction '{name}' not found in CorrectionSet at {path}. "
+                        f"Error: {e}"
+                    )
+
+    def __call__(self, **kwargs):
+        """
+        Apply corrections sequentially, updating JetPt after each correction.
+
+        Args:
+            **kwargs: Must include JetPt, and typically JetEta, JetA, Rho
+
+        Returns:
+            Combined correction factor
+        """
+        if "JetPt" not in kwargs:
+            msg = "'JetPt' must be provided in kwargs for compound correction."
+            raise ValueError(msg)
+
+        if not self.corrections:
+            return 1.0
+
+        correction_factor = 1.0
+        current_kwargs = kwargs.copy()
+        for corr in self.corrections.values():
+            # Check if we need to broadcast anything
+            current_kwargs = dict(zip(
+                current_kwargs.keys(),
+                ak.broadcast_arrays(*current_kwargs.values())
+            ))
+            factor = corr(**current_kwargs)
+            correction_factor = correction_factor * factor
+
+            # Update pt for next correction in chain
+            current_kwargs['JetPt'] = current_kwargs['JetPt'] * factor
+        return correction_factor
 
 
 class JetIdProducer:

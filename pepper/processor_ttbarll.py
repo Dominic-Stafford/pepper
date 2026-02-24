@@ -7,7 +7,7 @@ from copy import copy
 
 import pepper
 import pepper.config
-from pepper.misc import get_run_for_year
+from pepper.misc import get_run_for_year, LHCRun
 
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,55 @@ class Processor(pepper.ProcessorBasicPhysics):
 
     def __init__(self, config, eventdir):
         super().__init__(config, eventdir)
+
+    def _validate_jec_requirements(self, config):
+        """
+        Validate that required JEC corrections are present for JER smearing and reapply_jec.
+        """
+        use_correctionlib = "jme_correctionlib_corrections" in config
+        reapply_jec = config.get("reapply_jec", False)
+
+        # Helper to check if a value is non-empty
+        def is_populated(val):
+            if not val:
+                return False
+            if isinstance(val, (list, dict)):
+                return len(val) > 0
+            if isinstance(val, str):
+                return val.strip() != ""
+            return True
+
+        # Get the config section to check
+        jme_config = (
+            config["jme_correctionlib_corrections"]
+            if use_correctionlib
+            else config
+        )
+
+        # Check if JER is configured (needs both resolution and SF)
+        has_jer = (
+            is_populated(jme_config.get("jet_resolution")) and
+            is_populated(jme_config.get("jet_ressf"))
+        )
+
+        # Check MC corrections requirement
+        has_jet_correction_mc = is_populated(jme_config.get("jet_correction_mc"))
+
+        if not has_jet_correction_mc and (has_jer or reapply_jec):
+            prefix = "jme_correctionlib_corrections." if use_correctionlib else ""
+            raise pepper.config.ConfigError(
+                f"Need {prefix}jet_correction_mc for propagating jet "
+                "smearing/variation to MET or because reapply_jec is true"
+            )
+
+        # Check data corrections requirement (only needed when reapply_jec is true)
+        has_jet_correction_data = is_populated(jme_config.get("jet_correction_data"))
+
+        if not has_jet_correction_data and reapply_jec:
+            prefix = "jme_correctionlib_corrections." if use_correctionlib else ""
+            raise pepper.config.ConfigError(
+                f"Need {prefix}jet_correction_data because reapply_jec is true"
+            )
 
     def _check_config_integrity(self, config):
         """Check integrity of configuration file."""
@@ -42,29 +91,26 @@ class Processor(pepper.ProcessorBasicPhysics):
         if "btag_sf" not in config or len(config["btag_sf"]) == 0:
             logger.warning("No btag scale factor specified")
 
-        if ("jet_uncertainty" not in config and config["compute_systematics"]):
+        jet_uncertainty_in_config = (
+            "jet_uncertainty" in config or
+            "jet_uncertainty" in config.get("jme_correctionlib_corrections", {})
+        )
+        if (not jet_uncertainty_in_config and config["compute_systematics"]):
             logger.warning("No jet uncertainty specified")
 
-        if ("jet_resolution" not in config or "jet_ressf" not in config):
+        self._validate_jec_requirements(config)
+        if (("jet_resolution" not in config or "jet_ressf" not in config) and
+                ("jet_resolution" not in config.get("jme_correctionlib_corrections", {}) or
+                    "jet_ressf" not in config.get("jme_correctionlib_corrections", {}))):
             logger.warning("No jet resolution or no jet resolution scale "
                            "factor specified. This is necessary for "
                            "smearing, even if not computing systematics")
-        if "jet_correction_mc" not in config and (
-                ("jet_resolution" in config and "jet_ressf" in config) or
-                ("reapply_jec" in config and config["reapply_jec"])):
-            raise pepper.config.ConfigError(
-                "Need jet_correction_mc for propagating jet "
-                "smearing/variation to MET or because reapply_jec is true")
-        if ("jet_correction_data" not in config and "reapply_jec" in config
-                and config["reapply_jec"]):
-            raise pepper.config.ConfigError(
-                "Need jet_correction_data because reapply_jec is true")
 
         if "muon_rochester" not in config:
             logger.warning("No Rochster corrections for muons specified")
 
         if ("jet_puid_sf" not in config and
-                get_run_for_year(config["year"]) == "Run2"):
+                get_run_for_year(config["year"]) == LHCRun.Run2):
             # Jet PU ID SFs are only needed for Run2
             logger.warning("No jet PU ID SFs specified")
 

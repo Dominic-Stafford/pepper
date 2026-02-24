@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import os
 from pepper.misc import get_run_for_year, LHCRun
 import uproot
 import hjson
@@ -17,8 +17,11 @@ from pepper.scale_factors import (
     ScaleFactors,
     MuonScaleFactor,
     JetPuIdWeighter,
+    CorrLibSFs,
+    LegacyJetAdapter,
+    CorrectionlibAdapter,
+    CorrectionlibCompoundAdapter,
     JetIdProducer,
-    CorrLibSFs
 )
 
 
@@ -77,6 +80,7 @@ class ConfigBasicPhysics(pepper.Config):
             config. The actual working directory of the process might change
         """
         super().__init__(path_or_file, textparser, cwd)
+        self._check_integrity_jet_corrections()
         self.behaviors.update(
             {
                 "year": self._get_year,
@@ -90,16 +94,17 @@ class ConfigBasicPhysics(pepper.Config):
                 "btag_wps": self._get_btag_wps,
                 "jet_ids": self._get_jet_ids,
                 "jet_puid_sf": self._get_puid_sf,
-                "jet_correction_mc": self._get_jet_correction,
-                "jet_correction_data": self._get_jet_correction_dict,
+                "jme_correctionlib_corrections": self._get_jme_corrections,
+                "jet_correction_mc": self._get_jet_correction_legacy,
+                "jet_correction_data": self._get_jet_correction_legacy_dict,
                 "jet_uncertainty": partial(
-                    self._get_jet_general, evaltype="junc",
+                    self._get_jet_general_legacy, evaltype="junc",
                     cls=coffea.jetmet_tools.JetCorrectionUncertainty),
                 "jet_resolution": partial(
-                    self._get_jet_general, evaltype="jr",
+                    self._get_jet_general_legacy, evaltype="jr",
                     cls=coffea.jetmet_tools.JetResolution),
                 "jet_ressf": partial(
-                    self._get_jet_general, evaltype="jersf",
+                    self._get_jet_general_legacy, evaltype="jersf",
                     cls=coffea.jetmet_tools.JetResolutionScaleFactor),
                 "MET_xy_shifts": self._get_maybe_external,
                 "crosssection_uncertainty": self._get_maybe_external,
@@ -109,6 +114,62 @@ class ConfigBasicPhysics(pepper.Config):
                 "rng_seed_file": self._get_path,
             }
         )
+
+    def _check_integrity_jet_corrections(self):
+        """
+        Validate that either correctionlib OR legacy corrections are specified, not both.
+
+        Raises:
+            ConfigError: If both approaches are used or neither is properly configured
+        """
+        config = self  # readability - self is the config object
+        has_correctionlib = "jme_correctionlib_corrections" in config
+
+        legacy_keys = [
+            "jet_correction_data",
+            "jet_correction_mc",
+            "jet_uncertainty",
+            "jet_resolution",
+            "jet_ressf"
+        ]
+
+        # Check if any legacy keys exist at top level and have non-empty values
+        has_legacy = any(
+            key in config and config[key] and (
+                # Non-empty list
+                (isinstance(config[key], list) and len(config[key]) > 0) or
+                # Non-empty string
+                (isinstance(config[key], str) and config[key].strip()) or
+                # Non-empty dict
+                (isinstance(config[key], dict) and len(config[key]) > 0)
+            )
+            for key in legacy_keys
+        )
+
+        if has_correctionlib and has_legacy:
+            raise pepper.config.ConfigError(
+                "Configuration error: Cannot use both 'jme_correctionlib_corrections' "
+                "and legacy correction keys (jet_correction_data, jet_correction_mc, etc.) "
+                "Please use only one approach."
+            )
+
+        # If using correctionlib, validate its structure
+        if has_correctionlib:
+            clib_config = config["jme_correctionlib_corrections"]
+
+            if "path" not in clib_config:
+                raise pepper.config.ConfigError(
+                    "Configuration error: 'jme_correctionlib_corrections' must contain 'path'"
+                )
+            mandatory_keys = ["jet_correction_data", "jet_correction_mc", "jet_uncertainty"]
+            # Validate that correction name keys are present
+            missing_keys = [key for key in mandatory_keys if key not in clib_config]
+            if missing_keys:
+                raise pepper.config.ConfigError(
+                    f"Configuration error: 'jme_correctionlib_corrections' missing keys: {missing_keys}"
+                )
+
+        return has_correctionlib
 
     def _get_scalefactor(self, sfpath, sysnaming={
             "central": "sf", "up": "sfup", "down": "sfdown"}):
@@ -261,26 +322,111 @@ class ConfigBasicPhysics(pepper.Config):
         )
         return rochester
 
-    def _get_jet_correction(self, value):
+    def _get_jme_corrections(self, value):
+        """Get JME corrections.
+        """
+        if not isinstance(value, dict):
+            msg = f"'jme_correctionlib_corrections' config should be a dict, got {type(value)}"
+            raise pepper.config.ConfigError(msg)
+        # Manually get the path to avoid recursion error
+        try:
+            correctionlib_path = self._get_path(value['path'])
+        except KeyError as e:
+            msg = f"Missing 'path' key in 'jme_correctionlib_corrections' config: {e}"
+            raise pepper.config.ConfigError(msg) from e
+
+        behaviours = {
+            "path": self._get_path,
+            "jet_uncertainty_template": lambda x: x,
+            "jet_correction_mc": partial(self._get_jet_correction, correctionlib_path=correctionlib_path),
+            "jet_correction_data": partial(self._get_jet_correction_dict, correctionlib_path=correctionlib_path),
+            "jet_uncertainty": partial(
+                self._get_jet_general,
+                correctionlib_path=correctionlib_path),
+            "jet_resolution": partial(
+                self._get_jet_general,
+                correctionlib_path=correctionlib_path),
+            "jet_ressf": partial(
+                self._get_jet_general,
+                correctionlib_path=correctionlib_path),
+        }
+        updated_conf = {}
+        for key, value in value.items():
+            if key in behaviours:
+                updated_conf[key] = behaviours[key](value)
+            else:
+                msg = f"Unknown JME configuration key: '{key}'."
+                raise pepper.config.ConfigError(msg)
+        return updated_conf
+
+    def _get_jet_correction(self, value, correctionlib_path: os.PathLike):
+        return CorrectionlibCompoundAdapter(correctionlib_path, value)
+
+    def _get_jet_correction_dict(self, value, correctionlib_path: os.PathLike):
+        if isinstance(value, dict):
+            corrs = {}
+            for era, val in value.items():
+                corrs[era] = self._get_jet_correction(val, correctionlib_path=correctionlib_path)
+            return corrs
+        else:
+            return self._get_jet_correction(value, correctionlib_path=correctionlib_path)
+
+    def _get_jet_correction_legacy(self, value):
+        # TODO: remove when we upgrade and only support correctionlib recipes.
         evaluators = {}
         for path in value:
             path = self._get_path(path)
             evaluators.update(get_evaluator(path, "txt", "jec"))
         fjc = coffea.jetmet_tools.FactorizedJetCorrector(**evaluators)
-        return fjc
+        return LegacyJetAdapter(fjc, 'getCorrection')
 
-    def _get_jet_correction_dict(self, value):
+    def _get_jet_correction_legacy_dict(self, value):
+        # TODO: remove when we upgrade and only support correctionlib recipes.
         if isinstance(value, dict):
             corrs = {}
             for era, val in value.items():
-                corrs[era] = self._get_jet_correction(val)
+                corrs[era] = self._get_jet_correction_legacy(val)
             return corrs
         else:
-            return self._get_jet_correction(value)
+            return self._get_jet_correction_legacy(value)
 
-    def _get_jet_general(self, value, evaltype, cls):
+    def _get_jet_general(self, value, correctionlib_path=os.PathLike):
+        """
+        Create general jet correction objects (uncertainty, resolution, SF).
+        These are SIMPLE (non-compound) corrections.
+        sle
+        Args:
+            value: For legacy: file path
+                For correctionlib: str or list[str] (first element used)
+            correctionlib_path: Path to the correctionlib json file
+        """
+        # All non-JEC types are simple (single correction)
+        if isinstance(value, list):
+            template_string = self._config["jme_correctionlib_corrections"]["jet_uncertainty_template"]
+            return {
+                v: CorrectionlibAdapter(correctionlib_path, template_string.replace("[UNC]", v)) for v in value
+                }
+        else:
+            return CorrectionlibAdapter(correctionlib_path, value)
+
+    def _get_jet_general_legacy(self, value, evaltype, cls):
+        # Legacy code
+        # TODO: remove when we upgrade and only support correctionlib recipes.
         evaluator = get_evaluator(self._get_path(value), "txt", evaltype)
-        return cls(**evaluator)
+        legacy_obj = cls(**evaluator)
+
+        # Map evaltype to method name
+        method_map = {
+            "junc": "getUncertainty",
+            "jr": "getResolution",
+            "jersf": "getScaleFactor",
+        }
+
+        method_name = method_map.get(evaltype)
+        if method_name is None:
+            raise pepper.config.ConfigError(f"Unknown evaltype: {evaltype}")
+
+        return LegacyJetAdapter(legacy_obj, method_name)
 
     def _get_jet_ids(self, value):
         # value = [jetType, jsonfile]

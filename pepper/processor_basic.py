@@ -56,34 +56,63 @@ class ProcessorBasicPhysics(pepper.Processor):
         """Get a list of varations that should be done for the Jet/MET
         uncertainties"""
         ret = []
-        if ("jet_resolution" not in self.config
-                or "jet_ressf" not in self.config):
-            jer = None
-        else:
-            jer = "central"
-        ret.append(VariationArg("UncMET_up", met="up", jer=jer))
-        ret.append(VariationArg("UncMET_down", met="down", jer=jer))
-        if "jet_uncertainty" in self.config:
-            junc = self.config["jet_uncertainty"]
-            if "junc_sources_to_use" in self.config:
-                levels = self.config["junc_sources_to_use"]
+        # We split the code into two branches where code may be duplicated.
+        # TODO: remove the legacy branch when we upgrade pepper to only
+        # support new JME implementation.
+        if "jme_correctionlib_corrections" in self.config:
+            jme_config = self.config["jme_correctionlib_corrections"]
+            if ("jet_resolution" not in jme_config
+                    or "jet_ressf" not in jme_config):
+                jer = None
             else:
-                levels = junc.levels
-            for source in levels:
-                if source not in junc.levels:
-                    raise pepper.config.ConfigError(
-                        f"Source not in jet uncertainties: {source}")
-                if source == "jes":
-                    name = "Junc_"
+                jer = "central"
+            ret.append(VariationArg("UncMET_up", met="up", jer=jer))
+            ret.append(VariationArg("UncMET_down", met="down", jer=jer))
+            if "jet_uncertainty" in jme_config:
+                junc = jme_config["jet_uncertainty"]
+                levels = junc.keys()
+                for source in levels:
+                    if source == "jes":
+                        name = "Junc_"
+                    else:
+                        name = f"Junc{source.replace('_', '')}_"
+                    ret.append(VariationArg(
+                        name + "up", junc=("up", source), jer=jer))
+                    ret.append(VariationArg(
+                        name + "down", junc=("down", source), jer=jer))
+            if ("jet_resolution" in jme_config
+                    and "jet_ressf" in jme_config):
+                ret.append(VariationArg("Jer_up", jer="up"))
+                ret.append(VariationArg("Jer_down", jer="down"))
+        else:  # TODO: delete this branch when removing support for legacy JME
+            if ("jet_resolution" not in self.config
+                    or "jet_ressf" not in self.config):
+                jer = None
+            else:
+                jer = "central"
+            ret.append(VariationArg("UncMET_up", met="up", jer=jer))
+            ret.append(VariationArg("UncMET_down", met="down", jer=jer))
+            if "jet_uncertainty" in self.config:
+                junc = self.config["jet_uncertainty"]
+                if "junc_sources_to_use" in self.config:
+                    levels = self.config["junc_sources_to_use"]
                 else:
-                    name = f"Junc{source.replace('_', '')}_"
-                ret.append(VariationArg(
-                    name + "up", junc=("up", source), jer=jer))
-                ret.append(VariationArg(
-                    name + "down", junc=("down", source), jer=jer))
-        if "jet_resolution" in self.config and "jet_ressf" in self.config:
-            ret.append(VariationArg("Jer_up", jer="up"))
-            ret.append(VariationArg("Jer_down", jer="down"))
+                    levels = junc.levels
+                for source in levels:
+                    if source not in junc.levels:
+                        raise pepper.config.ConfigError(
+                            f"Source not in jet uncertainties: {source}")
+                    if source == "jes":
+                        name = "Junc_"
+                    else:
+                        name = f"Junc{source.replace('_', '')}_"
+                    ret.append(VariationArg(
+                        name + "up", junc=("up", source), jer=jer))
+                    ret.append(VariationArg(
+                        name + "down", junc=("down", source), jer=jer))
+            if "jet_resolution" in self.config and "jet_ressf" in self.config:
+                ret.append(VariationArg("Jer_up", jer="up"))
+                ret.append(VariationArg("Jer_down", jer="down"))
         return ret
 
     def get_jetmet_nominal_arg(self):
@@ -788,18 +817,27 @@ class ProcessorBasicPhysics(pepper.Processor):
         if raw_factor is None:
             raw_factor = 1 - data["Jet"]["rawFactor"]
         if is_mc:
-            jec = self.config["jet_correction_mc"]
+            if self.config.get('jme_correctionlib_corrections'):
+                jec = self.config['jme_correctionlib_corrections']["jet_correction_mc"]
+            else:
+                jec = self.config["jet_correction_mc"]
         else:
-            jec = self.config["jet_correction_data"]
+            if self.config.get('jme_correctionlib_corrections'):
+                jec = self.config['jme_correctionlib_corrections']["jet_correction_data"]
+            else:
+                jec = self.config["jet_correction_data"]
             if isinstance(jec, dict):
                 jec = jec[era]
 
         raw_pt = pt * raw_factor
-        if self.config["year"] == "2023post":
-            l1l2l3 = jec.getCorrection(
+        if self.config.get("jme_correctionlib_corrections"):
+            l1l2l3 = jec(
+                JetPt=raw_pt, JetEta=eta, JetPhi=phi, JetA=area, Rho=rho, run=data.run)
+        elif self.config["year"] == "2023post":
+            l1l2l3 = jec(
                 JetPt=raw_pt, JetEta=eta, JetPhi=phi, JetA=area, Rho=rho)
         else:
-            l1l2l3 = jec.getCorrection(
+            l1l2l3 = jec(
                 JetPt=raw_pt, JetEta=eta, JetA=area, Rho=rho)
         return raw_factor * l1l2l3
 
@@ -818,8 +856,6 @@ class ProcessorBasicPhysics(pepper.Processor):
         """Return jet energy correction uncertainty factor."""
         if variation not in ("up", "down"):
             raise ValueError("variation must be either 'up' or 'down'")
-        if source not in self.config["jet_uncertainty"].levels:
-            raise ValueError(f"Jet uncertainty not found: {source}")
         if pt is None:
             pt = data["Jet"].pt
         if eta is None:
@@ -829,9 +865,16 @@ class ProcessorBasicPhysics(pepper.Processor):
         counts = ak.num(pt)
         if ak.sum(counts) == 0:
             return ak.unflatten([], counts)
-        junc = dict(self.config["jet_uncertainty"].getUncertainty(
-            JetPt=pt, JetEta=eta))[source]
-        junc = junc[:, :, 0 if variation == "up" else 1]
+        if "jme_correctionlib_corrections" in self.config:
+            junc = self.config['jme_correctionlib_corrections']["jet_uncertainty"][source](
+                JetPt=pt, JetEta=eta)
+            # Symmetric according to this:
+            # https://cms-jerc.web.cern.ch/JECUncertaintySources/#description
+            junc = 1+junc if variation == "up" else 1-junc
+        else:
+            junc = dict(self.config["jet_uncertainty"](
+                JetPt=pt, JetEta=eta))[source]
+            junc = junc[:, :, 0 if variation == "up" else 1]
         mask = self.get_junc_factor_mask(data, source, pt, eta, flavor)
         if mask is not None:
             junc = ak.where(mask, junc, ak.ones_like(junc))
@@ -865,20 +908,25 @@ class ProcessorBasicPhysics(pepper.Processor):
             rho = data["Rho"]["fixedGridRhoFastjetAll"]
         else:
             rho = data["fixedGridRhoFastjetAll"]
-        jer = self.config["jet_resolution"].getResolution(
-            JetPt=pt, JetEta=eta, Rho=rho)
-        jersf = self.config["jet_ressf"].getScaleFactor(
-            JetPt=pt, JetEta=eta, Rho=rho)
-        jersmear = jer * rng.normal(size=len(jer))
-        if variation == "central":
-            jersf = jersf[:, :, 0]
-        elif variation == "up":
-            jersf = jersf[:, :, 1]
-        elif variation == "down":
-            jersf = jersf[:, :, 2]
+        if self.config.get('jme_correctionlib_corrections'):
+            jer = self.config["jme_correctionlib_corrections"]["jet_resolution"](
+                JetPt=pt, JetEta=eta, Rho=rho)
+            jersf = self.config["jme_correctionlib_corrections"]["jet_ressf"](
+                JetPt=pt, JetEta=eta, Rho=rho, systematic=variation)
         else:
-            raise ValueError("variation must be one of 'central', 'up' or "
-                             "'down'")
+            jer = self.config["jet_resolution"](
+                JetPt=pt, JetEta=eta, Rho=rho)
+            jersf = self.config["jet_ressf"](
+                JetPt=pt, JetEta=eta, Rho=rho)
+            if variation == "central":
+                jersf = jersf[:, :, 0]
+            elif variation == "up":
+                jersf = jersf[:, :, 1]
+            elif variation == "down":
+                jersf = jersf[:, :, 2]
+            else:
+                raise ValueError("variation must be one of 'central', 'up' or 'down'")
+        jersmear = jer * rng.normal(size=len(jer))
         factor_stoch = 1 + np.sqrt(np.maximum(jersf**2 - 1, 0)) * jersmear
         if hybrid:
             # Hybrid method: Apply scaling relative to genpt if possible
