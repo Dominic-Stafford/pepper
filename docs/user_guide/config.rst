@@ -309,13 +309,13 @@ optional parameter is missing, the corresponding procedure will be skipped.
     Starting in Run 3, this is the prefered way to define JME corrections using a single correctionlib file. 
     Needed if ``reapply_jec`` is true. Must point to a dictionary with the following keys:
 
-      - ``path``: Path to the correctionlib json file
-      - ``jet_correction_data``: Array of corrections within file to compound and apply to data
-      - ``jet_correction_mc``: Array of corrections within file to compound and apply to MC
-      - ``jet_uncertainty_template``: A template string for how the uncertainties are called. In Run 3 2023Bpix this could be ``Summer23BPixPrompt23_V3_MC_[UNC]_AK4PFPuppi``. Notice the wildcard ``[UNC]`` which will be substituted with the items in ``jet_uncertainty`` to find the specific uncertainty.
-      - ``jet_uncertainty``: Array of strings. Each string is the name of a jet uncertainty to be applied. The name is substituted into ``jet_uncertainty_template``.
-      - ``jet_resolution``: A string with the jet resolution correcion name.
-      - ``jet_ressf``: A string with the jet resolution scale factor name.
+   - ``path``: Path to the correctionlib json file
+   - ``jet_correction_data``: Array of corrections within file to compound and apply to data
+   - ``jet_correction_mc``: Array of corrections within file to compound and apply to MC
+   - ``jet_uncertainty_template``: A template string for how the uncertainties are called. In Run 3 2023Bpix this could be ``Summer23BPixPrompt23_V3_MC_[UNC]_AK4PFPuppi``. Notice the wildcard ``[UNC]`` which will be substituted with the items in ``jet_uncertainty`` to find the specific uncertainty.
+   - ``jet_uncertainty``: Array of strings. Each string is the name of a jet uncertainty to be applied. The name is substituted into ``jet_uncertainty_template``.
+   - ``jet_resolution``: A string with the jet resolution correcion name.
+   - ``jet_ressf``: A string with the jet resolution scale factor name.
 
 ``jet_correction_mc`` (array)
    Array of paths to AK4PFchs MC JEC TXT files (L1, L2, L3). Needed if
