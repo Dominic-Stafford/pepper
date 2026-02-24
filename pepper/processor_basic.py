@@ -61,6 +61,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         # support new JME implementation.
         if "jme_correctionlib_corrections" in self.config:
             jme_config = self.config["jme_correctionlib_corrections"]
+
             if ("jet_resolution" not in jme_config
                     or "jet_ressf" not in jme_config):
                 jer = None
@@ -117,7 +118,11 @@ class ProcessorBasicPhysics(pepper.Processor):
 
     def get_jetmet_nominal_arg(self):
         """Get a ``VariationArg`` describing the nominal evaluation"""
-        if "jet_resolution" in self.config and "jet_ressf" in self.config:
+        if "jme_correctionlib_corrections" in self.config:
+            jme_conf = self.config["jme_correctionlib_corrections"]
+        else:
+            jme_conf = self.config
+        if "jet_resolution" in jme_conf and "jet_ressf" in jme_conf:
             return VariationArg(None)
         else:
             return VariationArg(None, jer=None)
