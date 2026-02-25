@@ -306,8 +306,8 @@ optional parameter is missing, the corresponding procedure will be skipped.
    ``jet_correction`` and ``jet_correction_data``.
 
 ``jme_correctionlib_corrections`` (dict, optional)
-    Starting in Run 3, this is the prefered way to define JME corrections using a single correctionlib file. 
-    Needed if ``reapply_jec`` is true. Must point to a dictionary with the following keys:
+   Starting in Run 3, this is the prefered way to define JME corrections using a single correctionlib file.
+   Needed if ``reapply_jec`` is true. Must point to a dictionary with the following keys:
 
    - ``path``: Path to the correctionlib json file
    - ``jet_correction_data``: Array of corrections within file to compound and apply to data
