@@ -6,6 +6,7 @@ import hjson
 import coffea
 from coffea import lookup_tools
 from functools import partial
+import correctionlib
 
 import pepper
 from pepper.scale_factors import (
@@ -329,8 +330,10 @@ class ConfigBasicPhysics(pepper.Config):
             msg = f"'jme_correctionlib_corrections' config should be a dict, got {type(value)}"
             raise pepper.config.ConfigError(msg)
         # Manually get the path to avoid recursion error
+        # and already open the correctionlib file for speed
         try:
             correctionlib_path = self._get_path(value['path'])
+            corrset = correctionlib.CorrectionSet.from_file(correctionlib_path)
         except KeyError as e:
             msg = f"Missing 'path' key in 'jme_correctionlib_corrections' config: {e}"
             raise pepper.config.ConfigError(msg) from e
@@ -338,17 +341,17 @@ class ConfigBasicPhysics(pepper.Config):
         behaviours = {
             "path": self._get_path,
             "jet_uncertainty_template": lambda x: x,
-            "jet_correction_mc": partial(self._get_jet_correction, correctionlib_path=correctionlib_path),
-            "jet_correction_data": partial(self._get_jet_correction_dict, correctionlib_path=correctionlib_path),
+            "jet_correction_mc": partial(self._get_jet_correction, correctionlib_path=corrset),
+            "jet_correction_data": partial(self._get_jet_correction_dict, correctionlib_path=corrset),
             "jet_uncertainty": partial(
                 self._get_jet_general,
-                correctionlib_path=correctionlib_path),
+                correctionlib_path=corrset),
             "jet_resolution": partial(
                 self._get_jet_general,
-                correctionlib_path=correctionlib_path),
+                correctionlib_path=corrset),
             "jet_ressf": partial(
                 self._get_jet_general,
-                correctionlib_path=correctionlib_path),
+                correctionlib_path=corrset),
         }
         updated_conf = {}
         for key, value in value.items():
@@ -359,10 +362,10 @@ class ConfigBasicPhysics(pepper.Config):
                 raise pepper.config.ConfigError(msg)
         return updated_conf
 
-    def _get_jet_correction(self, value, correctionlib_path: os.PathLike):
+    def _get_jet_correction(self, value, correctionlib_path: os.PathLike | correctionlib.CorrectionSet):
         return CorrectionlibCompoundAdapter(correctionlib_path, value)
 
-    def _get_jet_correction_dict(self, value, correctionlib_path: os.PathLike):
+    def _get_jet_correction_dict(self, value, correctionlib_path: os.PathLike | correctionlib.CorrectionSet):
         if isinstance(value, dict):
             corrs = {}
             for era, val in value.items():
@@ -390,7 +393,7 @@ class ConfigBasicPhysics(pepper.Config):
         else:
             return self._get_jet_correction_legacy(value)
 
-    def _get_jet_general(self, value, correctionlib_path=os.PathLike):
+    def _get_jet_general(self, value, correctionlib_path: os.PathLike | correctionlib.CorrectionSet):
         """
         Create general jet correction objects (uncertainty, resolution, SF).
         These are SIMPLE (non-compound) corrections.
