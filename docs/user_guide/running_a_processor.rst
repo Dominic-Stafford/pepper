@@ -1,3 +1,5 @@
+.. _running-your-processor:
+
 Running Your Processor
 ======================
 
@@ -44,4 +46,18 @@ Further options can be seen by running ``python -m pepper.runproc -h``.
 When Running a Processor Fails
 -------------------------------
 
-``delete_duplicate:outputs.py```
+If the processor fails partway through, it does not need to be restarted from
+scratch. Resume processing by running the same command again with the
+``--resume`` flag:
+
+.. code-block:: bash
+
+   python -m pepper.runproc <custom_processor.py> --config <path_to_config_file> --output <output_directory> --resume
+
+Once the processor has completed successfully, run the cleanup script to remove
+any duplicate outputs that may have been produced across the original and
+resumed runs:
+
+.. code-block:: bash
+
+   python scripts/delete_duplicate_outputs.py

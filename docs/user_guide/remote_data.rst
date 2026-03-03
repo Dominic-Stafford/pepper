@@ -2,12 +2,18 @@ Accessing Remote Data
 =====================
 The data and MC NanoAODs are stored on various CERN Tier 2 computing clusters worldwide and Pepper is able to access data sets from remote servers using XRootD. You should specify ``"file_mode": "local+xrootd"`` and ``"xrootddomain": "xrootd-cms.infn.it"`` in your config to enable it. 
 There are four requirements to get it working (also in conjunction with HTCondor):
- - xrootd must be installed. You can check with ``python3 -m pip show xrootd``
- - The CMS Grid environment needs to be sourced (also inside the HTCondor job). This is done by the [example environment script](example/environment.sh).
- - The environment variable ``X509_USER_PROXY`` needs to be set to a file path accessible by Condor (/tmp/ is not). As above this is also needed inside the Condor job and is cone by the script.
- - A VOMS proxy needs to be created at the path pointed to by ``X509_USER_PROXY``. To do this please once run: ``voms-proxy-init --voms cms --out $X509_USER_PROXY``.
 
-If you get the error 'sslv3 alert certificate expired', please run the voms-proxy-init command again.
+- xrootd must be installed. You can check with ``python3 -m pip show xrootd``
+- The CMS Grid environment needs to be sourced (also inside the HTCondor job). This is already done when using the :repo:`example environment script <example/environment.sh>`.
+- The environment variable ``X509_USER_PROXY`` needs to be set to a file path accessible by Condor (/tmp/ is not). As above this is also needed inside the Condor job and is cone by the script.
+- A VOMS proxy needs to be created at the path pointed to by ``X509_USER_PROXY``. To do this please once run:
+
+.. code-block:: bash
+
+    voms-proxy-init --voms cms --out $X509_USER_PROXY
+
+
+If you get the error ``sslv3 alert certificate expired``, please run the voms-proxy-init command again.
 
 File Transfer Request
 ----------------------

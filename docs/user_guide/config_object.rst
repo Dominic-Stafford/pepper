@@ -31,6 +31,12 @@ In the constructor method of the ``Config`` class, the following groups are defi
 
 The list of standard required keys, behaviours and special variables can be seen in the reference describing the ``Config`` class [here].
 
+
+.. hint:: 
+
+    The ``Config`` class automatically caches the result of configuration lookups such that subsequent accesses to a key will return the cached value instead of re-evaluating the configuration. 
+    This is particularly useful for expensive or time-consuming configuration behaviours that would otherwise need to be re-evaluated on each access.
+
 -----------------------------------
 The ``ConfigBasicPhysics`` Subclass
 -----------------------------------
@@ -46,3 +52,16 @@ The list of additional required keys, behaviours and special variables can be se
     Users can further extend both the ``Config`` and ``ConfigBasicPhysics`` classes by subclassing them to introduce custom configuration options or modify existing ones to better suit their analysis needs.\
     This is particularly useful for analyses with specialized requirements not covered by the default configuration schema.
 
+
+-------------------
+Config Inheritance
+-------------------
+
+The config ``json`` files support inheritance, which allows users to create new configuration files that inherit settings from existing ones. 
+This is achieved through the use of the ``import`` special variable, which specifies the path to the parent configuration file. 
+When a configuration file is loaded, any settings defined in the child file will override those in the parent file, while any settings not defined in the child will be inherited from the parent. 
+This feature promotes reusability and modularity in configuration management, allowing users to create a base configuration with common settings and then extend it for specific analyses without having to duplicate all the settings.
+
+This can be particularly useful when working on a large analysis with multiple data-taking eras for instance. 
+You can create a base configuration file with common settings for all eras and then create separate configuration files for each era that inherit from the base configuration and only specify the settings that differ between eras.
+Please refer to the example page :ref:`config-inheritance-example` for an example of how to use config inheritance in practice.
