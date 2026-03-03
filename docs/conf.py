@@ -20,7 +20,8 @@ sys.path.insert(0, os.path.abspath('..'))
 project = 'Pepper'
 copyright = f'{dt.datetime.now().year}, Pepper Maintainers'
 author = 'Pepper Maintainers'
-
+mattermost_channel_url = "https://mattermost.web.cern.ch/cms-exp/channels"
+gitlab_repository_url = "https://gitlab.cern.ch/cms-analysis/general/pepper"
 
 # -- General configuration ---------------------------------------------------
 
@@ -31,6 +32,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
+    "sphinx.ext.extlinks",
     "sphinx_autodoc_typehints",
     "sphinx_design",
     "sphinx_copybutton",
@@ -83,13 +85,13 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "GitLab",
-            "url": "https://gitlab.cern.ch/pepper/pepper",
+            "url": gitlab_repository_url,
             "icon": "fab fa-gitlab",      # FontAwesome icon
             "type": "fontawesome",
         },
         {
             "name": "CERN Mattermost",
-            "url": "https://mattermost.web.cern.ch/cms-exp/channels/pepper-users",
+            "url": f"{mattermost_channel_url}/pepper-users",
             "icon": "fa-custom fa-mattermost",
             "type": "fontawesome",
         }
@@ -109,3 +111,8 @@ html_css_files = [
 html_js_files = [
    "js/mattermost-icon.js",
 ]
+
+extlinks = {
+    "repo": (f"{gitlab_repository_url}/-/blob/master/%s", "%s"),
+    "mattermost": (f"{mattermost_channel_url}/%s", "%s")
+}

@@ -1,3 +1,5 @@
+.. _conceptual-overview:
+
 Conceptual Overview
 ===================
 
@@ -42,13 +44,13 @@ to Coffea's processor class.
 
 .. image:: /img/banana.png
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The ``process_selection`` Method
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The signature of the ``process_selection`` method is as follows:
 
-.. code-block:: python3
+.. code-block:: python
 
     def process_selection(self,
                           selector: Selector,
@@ -64,7 +66,7 @@ as the ``selector`` handles output filling automatically when cuts or derived qu
 
 A simple example implementation of the ``process_selection`` method which is found in the ``examples/example_processor.py`` example script is as follows:
 
-.. code-block:: python3
+.. code-block:: python
 
     def process_selection(self, selector, dsname, is_mc, filler):
         # Implement the selection steps: add cuts, define objects and/or
@@ -109,15 +111,219 @@ we get access to several utility methods such as ``good_lumimask`` and ``pick_el
 Most cuts can be configured through the config file which is passed to the processor upon initialization and the config file can be 
 further customized to suit specific user needs as described in detail on [this] page.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Defining Columns and Applying Cuts
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Running Your Processor
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Use ``pepper.runproc``. Refer to this other page for a more detailed guide on how to run your analysis.
+The two primary operations within ``process_selection`` are defining columns on the
+selector and adding cuts. These correspond to object selection and event-level selection
+respectively.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+""""""""""""""""""""
+Defining columns
+""""""""""""""""""""
+
+Object selections are imposed by setting columns on the selector using ``set_column``.
+For example, to apply standard electron selections::
+
+    selector.set_column("Electron", self.pick_electrons)
+
+This tells the selector to set - in this case overwriting - the column named
+``"Electron"`` using the function ``pick_electrons``, which is called with all data
+currently in the selector. Users can define this function themselves for non-standard
+object definitions, but for standard POG-recommended selections the function is already
+implemented in ``ProcessorBasicPhysics``. In that case, the user only needs to specify
+the desired cuts in the configuration file:
+
+.. code-block:: json
+
+    "ele_cut_transreg": true,
+    "ele_eta_min": -2.4,
+    "ele_eta_max": 2.4,
+    "good_ele_id": "mva:Iso90",
+    "good_ele_pt_min": 20.0,
+
+""""""""""""""""""""
+Adding cuts
+""""""""""""""""""""
+
+Event-level cuts are applied using ``add_cut``::
+
+    selector.add_cut("AtLeast2Leps", partial(self.lepton_pair, is_mc))
+
+Here ``"AtLeast2Leps"`` is the name of the cut, implemented by the ``lepton_pair``
+function. The function is also passed a flag indicating whether the current dataset is
+Monte Carlo simulation or observed data, since different selections or corrections may
+apply to each.
+
+A cut function can return either a boolean array, where ``False`` entries are removed,
+or a numeric array, where zero entries are discarded and all surviving events are scaled
+by the corresponding value. Pepper uses this convention to encapsulate scale factor
+corrections together with the selection step they correct for. For example:
+
+.. code-block:: python
+
+    def lepton_pair(self, is_mc, data):
+        """Select events that contain at least two leptons."""
+        accept = np.asarray(ak.num(data["Lepton"]) >= 2)
+        if is_mc:
+            weight, systematics = self.compute_lepton_sf(data[accept])
+            accept = accept.astype(float)
+            accept[accept.astype(bool)] *= np.asarray(weight)
+            return accept, systematics
+        else:
+            return accept
+
+For MC events, the systematic weight variations corresponding to the lepton scale factors
+are returned as a dictionary alongside the selection array. If systematics computation is
+disabled in the config, this dictionary will be empty.
+
+""""""""""""""""""""
+Categorisations
+""""""""""""""""""""
+
+Analyses often define different event categories with slightly different selections. Once
+boolean arrays have been computed for each category - for instance the lepton-flavour
+channels in a :math:`t\bar{t}` analysis - a categorisation can be registered as:
+
+.. code-block:: python
+
+    selector.set_cat("channel", {"is_ee", "is_em", "is_mm"})
+
+where ``"channel"`` is the name of the categorisation. All histograms produced will by
+default be split according to this categorisation. A special case is a categorisation named
+``"dataset"``: if set, it is used in place of the dataset name when filling histograms.
+This is particularly useful for unfolding measurements that need to split signals into
+different particle-level bins.
+
+""""""""""""""""""""""""""""""""""""""""
+Jet energy scale systematics
+""""""""""""""""""""""""""""""""""""""""
+
+One set of systematic variations that cannot be handled as simple event weights are jet
+energy scale variations, since all selection steps involving jets must be re-performed for
+each variation. It is recommended to implement these in a separate function
+``process_selection_jet_part``, which can then be called once per variation. Pepper
+provides utilities for rescaling jets according to each variation. Other sample-based
+systematics need only be declared in the config file, and Pepper will record them in
+histograms as a systematic entry on the corresponding dataset.
+
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Defining Histograms
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Histograms are defined in the HJSON configuration file rather than in the processor code.
+Each histogram is an entry in the ``hists`` object, and its fill values are specified using
+Pepper's ``DataPicker`` syntax, which selects columns stored in the selector. For example:
+
+.. code-block:: json
+
+    "leading_electron_pt": {
+        "bins": [
+            {
+                "name": "pt",
+                "label": "Electron $p_{\\mathrm{T}}$",
+                "n_or_arr": 100,
+                "lo": 0,
+                "hi": 400,
+            }
+        ],
+        "fill": {
+            "pt": [
+                "Electron",
+                "pt",
+                {"leading": 1}
+            ]
+        }
+    },
+
+The DataPicker syntax supports a number of useful operations beyond simple column
+selection, such as selecting the leading object per event (as shown above with
+``{"leading": 1}``) and simple aggregation functions such as ``"sum"``, allowing
+simple derived quantities to be plotted without defining them explicitly in the processor.
+Multi-dimensional histograms can be defined using the same syntax by specifying multiple
+entries in ``bins``.
+
+By default, histograms are filled after every cut for which the fill value is defined, which
+is useful during the early stages of analysis optimisation. Users can restrict when
+histograms are produced using the ``step_requirement`` key in the histogram definition,
+reducing memory overhead for large analyses.
+
+Per-event output can also be saved - for instance for machine learning workflows - by
+specifying columns in ``columns_to_save`` using the same DataPicker syntax. Output can
+be written in either HDF5 or ROOT format, controlled by ``column_output_format``.
+
+For a full description of all available histogram and output configuration options, see
+the configuration reference.
+
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Deferring Cut Application
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+By default, every call to ``add_cut`` immediately discards events that fail the cut from
+the selector's internal data array. This behaviour can be suspended by setting:
+
+.. code-block:: python
+
+    selector.applying_cuts = False
+
+While ``applying_cuts`` is ``False``, calls to ``add_cut`` store the cut in an internal
+queue (``unapplied_cuts``) rather than removing any rows. The full event array is
+preserved, and the combined effect of all queued cuts is accessible through two
+properties:
+
+- ``selector.final`` - the data array masked to only the events that pass all queued cuts.
+- ``selector.final_systematics`` - the corresponding systematics, masked in the same way.
+- ``selector.num_final`` - the count of events passing all queued cuts.
+
+Callbacks triggered by ``add_cut`` still fire during this mode, but they receive
+``selector.final`` and ``selector.final_systematics`` rather than the full array, so they
+see only the would-be-selected events.
+
+""""""""""""""""""""""""""""""""""""""""
+Re-enabling cut application
+""""""""""""""""""""""""""""""""""""""""
+
+When ``applying_cuts`` is set back to ``True``, any accumulated unapplied cuts are
+flushed immidiately - all events failing the queued cuts are discarded at once:
+
+.. code-block:: python
+
+    selector.applying_cuts = True   # triggers apply_all_cuts() if cuts are pending
+
+""""""""""""""""""""""""""""""""""""""""
+Defining columns under deferred cuts
+""""""""""""""""""""""""""""""""""""""""
+
+The ``set_column`` method accepts an ``all_cuts`` keyword argument. When set to
+``True`` and ``applying_cuts`` is ``False``, the column callable is invoked only on
+the events that pass all currently queued cuts (i.e. on ``selector.final``). The result is
+then re-expanded back to the full data array size using masking, so the column remains
+aligned with the unfiltered event array:
+
+.. code-block:: python
+
+    selector.set_column("MyDerivedQuantity", my_function, all_cuts=True)
+
+This is useful when the column computation is expensive or only meaningful for events
+that would survive the full selection, while still keeping the full array intact.
+For example, in a dileptonic :math:`t\bar{t}` analysis, the reconstruction method only has 
+:math:`90\%` efficiency but it may be of interest to also sometimes consider events where
+the reconstruction method fails.
+
+""""""""""""""""""""""""""""""""""""""""
+When to use deferred cuts
+""""""""""""""""""""""""""""""""""""""""
+
+Deferring cut application is useful when you want to record the effect of multiple cuts
+without committing to a particular order of removal - for example, when building a
+complete cutflow that evaluates all cut combinations simultaneously, or when a derived
+column must be computed before any rows are dropped but only needs to run on passing
+events. The accumulated cuts and their combined boolean product remain available via
+``selector.unapplied_cuts`` and ``selector.unapplied_product`` respectively.
+
+
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Ready to Run?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Great stuff! Check out the detailed guide on how on this page: :ref:`running-your-processor`.

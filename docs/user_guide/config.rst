@@ -1,3 +1,5 @@
+.. _configuration-reference:
+
 Pepper Configuration
 ====================
 
@@ -236,9 +238,11 @@ optional parameter is missing, the corresponding procedure will be skipped.
    Path to a JSON file produced by ``compute_mc_lumifactors.py`` or
    ``false``. If ``false``, Pepper will compute lumifactors at runtime.
 
-``pileup_reweighting`` (path, optional)
+``pileup_reweighting`` (path or array (of length 2 or 3), optional)
    ROOT file containing pileup weights produced by
-   ``compute_pileup_weights.py``.
+   ``compute_pileup_weights.py`` or a list of correctionlib corrections. For each item in a correctionlib list,
+   the first element is the path to the json, the second is the key for the corrections (e.g. ``"Collisions17_UltraLegacy_goldenJSON"``),
+   and the third, which can be ommited, is a dictionary for potential extra parameters required by the corrections.
 
 ``stitching_factors`` (object, optional)
    Dictionary mapping dataset roots to stitching factors. Each factor entry
@@ -257,7 +261,7 @@ optional parameter is missing, the corresponding procedure will be skipped.
      Axis order: e.g., ``["eta", "pt"]``.
    - correctionlib: [path_to_json, correction_name, extra_info].  
      Example: ``"year"`` and ``WorkingPoint``.
-   - Can specify different correction keys for pT ranges using a dictionary:
+   - Can specify different correction keys for :math:`p_T` ranges using a dictionary:
      ``"WorkingPoint": {"Reco20to75": [20, 75], "RecoAbove75": [75, "inf"]}``.
 
 ``muon_sf`` (array of arrays, optional)
@@ -296,6 +300,16 @@ optional parameter is missing, the corresponding procedure will be skipped.
 
 ``split_btag_year_corr`` (bool, optional, deprecated)
    Replaced by ``btag_splitting_scheme``. Splits btag uncertainties across years.
+
+``jet_veto_maps`` (array of arrays, optional)
+   Each inner array must contain a string and a two-tuple. The string is the path to the JSON file with jet veto maps, and the two-tuple contains the era and the map name::
+
+      "jet_veto_maps": [
+         [
+               "path/to/jetvetomaps.json.gz",
+               ["Campaign_Name_RunEFG_V1", "jetvetomap"],
+         ]
+      ],
 
 ``jet_puid_sf`` (array, optional)
    First element: path to Jet PU ID SF JSON (correctionlib).  

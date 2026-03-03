@@ -13,11 +13,8 @@ User Guide
    Accessing Remote Data <remote_data>
    Scale Factors <scale_factors>
 
-This section contains user guides for various features of Pepper.
-
-- Conceptual Overview
-- Tips n Tricks
-- Accessing remote data
+Welcome to the Pepper user guides. Here, you can find various introductions to some of the features available in Pepper. 
+In case you have suggestions for what could also be included here, please reach out on :mattermost:`Mattermost <pepper-users>`!
 
 .. grid:: 2 3 3 4
    :gutter: 2
