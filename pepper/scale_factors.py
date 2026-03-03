@@ -229,8 +229,49 @@ class ScaleFactors:
 
 class CorrLibSFs:
     def __init__(self, sysnaming, jsonfile, corrname, add_args):
+        """Create a thin wrapper around a single correctionlib correction.
+
+        This object extracts the named correction from a correctionlib
+        CorrectionSet (either provided directly or loaded from a JSON file)
+        and records the expected input names so the correction can be
+        evaluated later using the `__call__` method.
+
+        Parameters
+        ----------
+        sysnaming
+            Mapping from variation name (e.g. "central", "up", "down") to
+            the value that should be supplied for correction inputs named
+            "ValType", "scale_factors", "weights" or "systematic". The
+            mapped value is inserted automatically based on the requested
+            variation when evaluating the correction.
+        jsonfile
+            Either a path to a correctionlib JSON file or a
+            ``correctionlib.CorrectionSet`` instance containing the
+            corrections. If a filename is given the correction set will be
+            loaded from that file.
+        corrname
+            The name of the correction within the correction set to use.
+        add_args
+            Optional dict of additional fixed arguments to pass to the
+            correction. If the value for a given input name is a Mapping,
+            it is interpreted as a set of "correction ranges" mapping a
+            correction key to a (low, high) pair; these ranges are used by
+            ``__call__`` to evaluate different correction keys over
+            disjoint ranges (e.g. different pt bins). Otherwise the value
+            is passed directly as the input for that parameter.
+        """
         self.corrname = corrname
-        self.corrset = self._read_correctionfile(jsonfile, corrname)
+        if isinstance(jsonfile, correctionlib.CorrectionSet):
+            try:
+                self.corrset = jsonfile[corrname]
+            except IndexError as e:
+                raise ValueError(
+                    f"Correction '{corrname}' not found in file "
+                    f"'{jsonfile}'") from e
+        elif isinstance(jsonfile, str):
+            self.corrset = self._read_correctionfile(jsonfile, corrname)
+        else:
+            raise ValueError(f"Invalid correctionlib file: {jsonfile}")
         self.names = [i.name for i in self.corrset.inputs]
         self.add_args = add_args
         self.sysnaming = sysnaming
