@@ -18,14 +18,14 @@ example directory:
 
 .. code-block:: bash
 
-   python -m pepper.runproc example_processor.py example_config.hjson
+   python -m pepper.runproc example_processor.py example_config.json
 
 When developing or testing, pass the ``--debug`` flag to process only the first
 chunk of each dataset rather than running over the full input:
 
 .. code-block:: bash
 
-   python -m pepper.runproc example_processor.py example_config.hjson --debug
+   python -m pepper.runproc example_processor.py example_config.json --debug
 
 A full list of available command line options can be seen by running:
 
