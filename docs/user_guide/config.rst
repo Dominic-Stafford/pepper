@@ -386,6 +386,11 @@ Output
    Whether to save all categories in per-event output. Default: ``True``.  
    If ``False``, individual columns must be specified in ``columns_to_save``.
 
+``use_temp_eventdir`` (bool, optional)
+   Write out the per-event output in a temporary directory on the worker, and then copy it to the final destination
+   afterwards. On CERN EOS, ``eos cp`` is used for the copying instead of the file system mount, 
+   which should be more stable. Default is ``true`` on EOS and ``false`` otherwise.
+
 ``hists`` (path or object)
    Path to a JSON/HJSON file containing histogram definitions as an object.  
    Keys determine histogram names. See *Histogram Definition* below.
@@ -450,6 +455,11 @@ If ``fill`` is missing, the histogram will not be filled.
 ``weight`` (data picker, optional)
    Custom event weight. If absent, uses default event weight.
 
+``weight_factor`` (data picker, optional)
+   Cannot be used in conjuction with ``weight``. Specifies a custom event weight 
+   factor using a data picker, which will multiply the event weight (including systematics).
+   Can either be one value per event, or have the same shape as the fill.
+
 ``label`` (string, optional)
    Label for the bin-height axis. Default chosen to match CMS guidelines
    (e.g., ``"Events / bin"``).
@@ -462,6 +472,11 @@ If ``fill`` is missing, the histogram will not be filled.
    
    Default: ``true``.
 
+``only_for_cats`` (dict, optional)
+   A dictionary of the form ``{"category_name": ["category_value", ...]}``. If given,
+   fill the histogram only for the given categories (e.g. to save memory). For example,
+   giving ``{"channel": ["is_ee", "is_mm"]}`` would fill the histogram only for the ``ee`` and ``mumu``
+   channels. If only a single value is given, encasing it in a list is optional (i.e. ``{"channel": "is_em"}`` is accepted).
 
 ^^^^^^^^^^^^^^^^^^^^
 Data Pickers

@@ -25,7 +25,7 @@ If you use Pepper in your research, please consider citing it in your publicatio
       author       = {Pepper Maintainers},
       title        = {Pepper - ParticlE Physics ProcEssoR},
       year         = 2025,
-      url          = {https://gitlab.cern.ch/pepper/pepper}
+      url          = {https://gitlab.cern.ch/cms-analysis/general/pepper},
    }
 
 
