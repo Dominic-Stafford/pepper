@@ -22,8 +22,8 @@ test:
   tags:
     - cvmfs
   script:
-    - source example/environment.sh
-    - python3 -m pip install --upgrade --upgrade-strategy eager --editable .
+    - bash install.sh
+    - source environment.sh
     - cd example
     - python3 -m pepper.runproc example_processor.py test_config.json
   rules:
@@ -39,7 +39,8 @@ build-docs:
   tags:
     - cvmfs
   script:
-    - source example/environment.sh
+    - bash install.sh
+    - source environment.sh
     - python3 -m pip install --upgrade --upgrade-strategy eager --editable .[docs]
     - cd docs
     - make html
