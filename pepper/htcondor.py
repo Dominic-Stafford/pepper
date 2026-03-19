@@ -31,7 +31,7 @@ def get_site():
         return hostname
 
 
-def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GiB", disk="0 GiB",
+def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GiB", disk="3 GiB",
                      cores=1, *, condorsubmit=None, condorenv=None,
                      logdir=None):
     """Get a Dask Jobqueue HTCondor cluster for a host
