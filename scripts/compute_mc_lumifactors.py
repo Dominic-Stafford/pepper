@@ -14,13 +14,13 @@ import pepper
 import pepper.htcondor
 
 
-def get_counts(lfn, config, geskey, lhesskey, lhepdfskey):
+def get_counts(file_entry, config, geskey, lhesskey, lhepdfskey):
+    lfn, process_name = file_entry
     paths = config.get_paths_for_lfn(lfn)
-    process_name = [name for name in paths[0].split('/') if '13TeV' in name]
     norm_genwgt = (("norm_genweights" in config and
                     config["norm_genweights"]) or
                    ("genweights_to_norm" in config and
-                    process_name[0] in config["genweights_to_norm"]))
+                    process_name in config["genweights_to_norm"]))
     for path in paths:
         try:
             f = uproot.open(path, timeout=pepper.misc.XROOTDTIMEOUT)
@@ -137,7 +137,7 @@ if __name__ == "__main__":
     ) as cluster:
         cluster.set_global_config()
         for result in tqdm(cluster.process(
-                get_counts, datasets.keys()), total=len(datasets)):
+                get_counts, datasets.items()), total=len(datasets)):
             add_counts(counts, datasets, lhepdfskey, result)
 
     for key in counts.keys():
