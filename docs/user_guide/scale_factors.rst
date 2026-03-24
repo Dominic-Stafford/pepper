@@ -195,13 +195,7 @@ Pileup reweighting corrects for differences in the pileup distribution between
 data and simulation. It is configured via ``pileup_reweighting``, which accepts
 either a ROOT file or a correctionlib-based list.
 
-**ROOT file** (Run 2 legacy approach)
-
-Pass the path to a ROOT file produced by ``compute_pileup_weights.py``::
-
-   "pileup_reweighting": "path/to/pileup_weights.root"
-
-**Correctionlib list** (preferred for Run 3)
+**Correctionlib list** (preferred)
 
 Pass a list defining a correctionlib correction. The elements to be specified are:
 
@@ -215,6 +209,12 @@ For example::
        "path/to/puWeights.json.gz",
        "Collisions17_UltraLegacy_goldenJSON"
      ]
+
+**ROOT file** (Legacy approach)
+
+Pass the path to a ROOT file produced by ``compute_pileup_weights.py``::
+
+   "pileup_reweighting": "path/to/pileup_weights.root"
 
 
 Photon Scale Factors
@@ -373,3 +373,22 @@ Tau Scale Factors
 Flavor Tagging Scale Factors
 -----------------------------
 
+B-tagging scale factors correct for differences in tagging efficiency between data and simulation.
+
+The b-tagging corrections are specified under the key ``btag_sf`` and require a ROOT file calculated on a
+per-analysis level using the script ``generate_btag_efficiencies.py``.
+Refer to `BTV POG documentation <https://twiki.cern.ch/twiki/bin/viewauth/CMS/BTagSFMethods>`__ for more
+details on how b-tagging efficiency corrections work.
+
+The resulting configuration entry looks like::
+
+  "btag_sf": [
+      [
+          "path/to/btagging.json.gz",
+          "path/to/btag_sf.root"
+      ],
+  ],
+
+To calculate ``btag_sf.root``, use the script ``generate_btag_efficiencies.py``.
+The script expects a ``hists.json`` file produced by your analysis processor and a ``--cut`` argument
+specifying the name of the cut immediately before the b-tagging requirements (default ``'HasJets'``).
