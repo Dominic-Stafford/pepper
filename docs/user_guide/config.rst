@@ -277,7 +277,7 @@ optional parameter is missing, the corresponding procedure will be skipped.
 ``btag_sf`` (array of arrays, optional)
    Each inner array contains exactly two paths:
 
-   1. CSV file with BTV POG scale factors.  
+   1. Correctionlib json or CSV file with BTV POG scale factors.  
    2. ROOT file with efficiencies from ``generate_btag_efficiencies.py``.
 
 ``btag_method`` (string, optional)
