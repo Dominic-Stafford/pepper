@@ -1,11 +1,8 @@
 from functools import reduce
-import functools
 import numpy as np
 import awkward as ak
 import coffea
 import coffea.lumi_tools
-import coffea.jetmet_tools
-import correctionlib
 import uproot
 import logging
 from dataclasses import dataclass
@@ -14,7 +11,7 @@ from typing import Optional, Tuple
 import pepper
 from pepper import sonnenschein, betchart
 import pepper.config
-from pepper.misc import get_run_for_year, onedimeval, LHCRun
+from pepper.misc import get_run_for_year, LHCRun
 
 
 @dataclass
@@ -963,61 +960,44 @@ class ProcessorBasicPhysics(pepper.Processor):
             ret["jerfac"] = jerfac
         return ret
 
+    def evaluate_jet_ids(self, data):
+        """Evaluate the jet IDs, which are external correctionlib files
+        starting from nano v15. They are set as separate columns since
+        they are needed for all jets (not just the ones passing the
+        analysis requirements) for the jet veto maps."""
+        jets = data["Jet"]
+        if "jetId" in jets.fields:  # Legacy jet ID
+            return {
+                "JetIdLoose": jets.isLoose,
+                "JetIdTight": jets.isTight,
+                "JetIdTightLeptonVeto": jets.isTightLeptonVeto,
+            }
+        else:
+            jet_id_evaluator = self.config["jet_ids"]
+            tight_id, tight_lep_veto_id = jet_id_evaluator.evaluate(jets)
+            return {
+                "JetIdTight": tight_id,
+                "JetIdTightLeptonVeto": tight_lep_veto_id,
+            }
+
     def apply_jet_veto_map(self, data):
         """Apply jet veto map according to the recommendations here:
         https://cms-jerc.web.cern.ch/Recommendations/#jet-veto-maps.
-        First, a loose nominal selection is made and then veto events if any
-        jet fulfill the loose selection criteratia and lies in the jet veto
+        First, a loose nominal selection is made. Then, veto events if any
+        jet fulfills the loose selection criteria and lies in the jet veto
         region."""
-        year = self.config["year"]
         jets = data["Jet"]
-        muons = data["Muon"]
-        dr = jets.metric_table(muons)
-        no_muon_overlap = ~ak.any(dr < 0.2, axis=2)
+        jetid = data["JetIdTightLeptonVeto"]
         nominal_selection_mask = (
             (jets.pt > 15)
-            & (jets.isTight)
+            & jetid
             & ((jets.chEmEF + jets.neEmEF) < 0.9)
-            # jets that don’t overlap with PF muon (dR < 0.2)
-            & (no_muon_overlap)
         )
-        if get_run_for_year(year) == LHCRun.Run3:
-            nominal_selection_mask = (nominal_selection_mask
-                                      & self.has_puid(jets))
-        veto_maps = self.config["jet_veto_maps"]
-        if len(veto_maps) > 1:
-            msg = (
-                "Multiple veto maps currently not supported. "
-                "Length of jet_veto_maps must be 1."
-            )
-            raise NotImplementedError(msg)
-        veto_map = veto_maps[0]
-        if (
-            not isinstance(veto_map, list)
-            or len(veto_map) != 2
-            or len(veto_map[1]) != 2
-        ):
-            raise pepper.config.ConfigError(
-                "jet veto map needs to be list of 2-elements in "
-                "form of [`path`, [`correction_name`, `key`]]"
-            )
-        path, (key, correction_map) = veto_map
-        if not (path.endswith(".json") or path.endswith(".json.gz")):
-            msg = (
-                "Jet veto map corrections should be in json format. "
-                "Under the hood we use correctionlib."
-            )
-            raise pepper.config.ConfigError(msg)
-        evaluator = correctionlib.CorrectionSet.from_file(path)[key]
-        # Evaluate the correction on flat numpy arrays
-        corrections_awkward = onedimeval(
-            functools.partial(evaluator.evaluate, correction_map),
-            jets.eta, jets.phi)
-        # Find events in nominal selection and check if they should be vetoed
-        # veto jets are non-zero.
-        veto_jets = nominal_selection_mask & (corrections_awkward > 0)
-        mask = ak.any(veto_jets > 0, axis=1)
-        return ~mask
+        veto_map = self.config["jet_veto_map"]
+        veto_jets = veto_map(eta=jets.eta[nominal_selection_mask],
+                             phi=jets.phi[nominal_selection_mask])
+        veto_event = ak.any(veto_jets, axis=1)
+        return ~veto_event
 
     def good_jet(self, data):
         """Apply some basic jet quality cuts."""
@@ -1027,26 +1007,18 @@ class ProcessorBasicPhysics(pepper.Processor):
             "good_jet_id", "good_jet_lepton_distance",
             "good_jet_eta_min", "good_jet_eta_max", "good_jet_pt_min"]]
 
-        if "jetId" in jets.fields:  # Legacy jet ID
-            loose_id = jets.isLoose
-            tight_id = jets.isTight
-            tight_lep_veto_id = jets.isTightLeptonVeto
-        else:
-            jet_id_evaluator = self.config["jet_ids"]
-            tight_id, tight_lep_veto_id = jet_id_evaluator.evaluate(jets)
-            loose_id = None
-
+        # Jet IDs should be set in the selector using evaluate_jet_ids
         if j_id == "skip":
             has_id = True
         elif j_id == "cut:loose":
-            if loose_id is None:
+            if "JetIdLoose" not in data.fields:
                 raise ValueError("Loose jet ID is not supported for this data era.")
-            has_id = loose_id
+            has_id = data["JetIdLoose"]
             # Always False in 2017 and 2018
         elif j_id == "cut:tight":
-            has_id = tight_id
+            has_id = data["JetIdTight"]
         elif j_id == "cut:tightlepveto":
-            has_id = tight_lep_veto_id
+            has_id = data["JetIdTightLeptonVeto"]
         else:
             raise pepper.config.ConfigError(
                     "Invalid good_jet_id: {}".format(j_id))

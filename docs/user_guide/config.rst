@@ -301,15 +301,8 @@ optional parameter is missing, the corresponding procedure will be skipped.
 ``split_btag_year_corr`` (bool, optional, deprecated)
    Replaced by ``btag_splitting_scheme``. Splits btag uncertainties across years.
 
-``jet_veto_maps`` (array of arrays, optional)
-   Each inner array must contain a string and a two-tuple. The string is the path to the JSON file with jet veto maps, and the two-tuple contains the era and the map name::
-
-      "jet_veto_maps": [
-         [
-               "path/to/jetvetomaps.json.gz",
-               ["Campaign_Name_RunEFG_V1", "jetvetomap"],
-         ]
-      ],
+``jet_veto_map`` (array, optional)
+  The jet veto map to apply, given in correctionlib format. Must be a list of the form ``[filepath, correction_name, extra_arg_dict]``. As of writing, required extra arguments for the JME-provided maps are ``{"type": "jetvetomap"}``.
 
 ``jet_puid_sf`` (array, optional)
    First element: path to Jet PU ID SF JSON (correctionlib).  

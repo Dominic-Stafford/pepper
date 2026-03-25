@@ -114,6 +114,10 @@ class Processor(pepper.ProcessorBasicPhysics):
             # Jet PU ID SFs are only needed for Run2
             logger.warning("No jet PU ID SFs specified")
 
+        if ("jet_veto_map" not in config and
+                get_run_for_year(config["year"]) == LHCRun.Run3):
+            logger.warning("No jet veto map specified")
+
         if ("reco_algorithm" in config and "reco_info_file" not in config):
             raise pepper.config.ConfigError(
                 "Need reco_info_file for kinematic reconstruction")
@@ -185,9 +189,6 @@ class Processor(pepper.ProcessorBasicPhysics):
         if "blinding_denom" in self.config:
             selector.add_cut("Blinding", partial(self.blinding, is_mc))
         selector.add_cut("Lumi", partial(self.good_lumimask, is_mc, dsname))
-
-        if self.config.get("jet_veto_maps"):
-            selector.add_cut("JetVeto", self.apply_jet_veto_map)
 
         pos_triggers, neg_triggers = pepper.misc.get_trigger_paths_for(
             dsname, is_mc, self.config["dataset_trigger_map"],
@@ -263,6 +264,9 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.set_multiple_columns(partial(
             self.compute_jet_factors, is_mc, era, reapply_jec, variation.junc,
             variation.jer, selector.rng))
+        selector.set_multiple_columns(self.evaluate_jet_ids)
+        if self.config.get("jet_veto_map"):
+            selector.add_cut("JetVeto", self.apply_jet_veto_map)
         selector.set_column("OrigJet", selector.data["Jet"])
         selector.set_column("Jet", partial(self.build_jet_column, is_mc))
         if "jet_puid_sf" in self.config and is_mc:

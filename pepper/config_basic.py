@@ -4,6 +4,7 @@ from pepper.misc import get_run_for_year, LHCRun
 import uproot
 import hjson
 import coffea
+import coffea.jetmet_tools
 from coffea import lookup_tools
 from functools import partial
 import correctionlib
@@ -107,6 +108,7 @@ class ConfigBasicPhysics(pepper.Config):
                 "jet_ressf": partial(
                     self._get_jet_general_legacy, evaltype="jersf",
                     cls=coffea.jetmet_tools.JetResolutionScaleFactor),
+                "jet_veto_map": self._get_scalefactor,
                 "MET_xy_shifts": self._get_maybe_external,
                 "crosssection_uncertainty": self._get_maybe_external,
                 "reco_info_file": self._get_path,
