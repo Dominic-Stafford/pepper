@@ -17,7 +17,7 @@ flake8:
   rules:
     - when: always
 
-test:
+.test_template:
   stage: test
   tags:
     - cvmfs
@@ -33,6 +33,17 @@ test:
     paths:
      - example/cutflows.json
 
+test:lcg104:
+  extends: .test_template
+  variables:
+    LCG_VERSION: "LCG_104"
+    LCG_PLATFORM: "x86_64-el9-gcc11-opt"
+
+test:lcg107a:
+  extends: .test_template
+  variables:
+    LCG_VERSION: "LCG_107a"
+    LCG_PLATFORM: "x86_64-el9-gcc14-opt"
 
 build-docs:
   stage: build-docs

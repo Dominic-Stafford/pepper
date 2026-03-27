@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import os
 from pepper.misc import get_run_for_year, LHCRun
 import uproot
