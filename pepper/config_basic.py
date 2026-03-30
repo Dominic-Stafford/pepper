@@ -436,5 +436,5 @@ class ConfigBasicPhysics(pepper.Config):
         return LegacyJetAdapter(legacy_obj, method_name)
 
     def _get_jet_ids(self, value):
-        # value = [jetType, jsonfile]
-        return JetIdProducer(value[0], self._get_path(value[1]))
+        # value = [jsonfile, jetType]
+        return JetIdProducer(self._get_path(value[0]), value[1])

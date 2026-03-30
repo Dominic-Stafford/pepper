@@ -1157,7 +1157,7 @@ class CorrectionlibCompoundAdapter(JetCorrectionAdapterBase):
 
 
 class JetIdProducer:
-    def __init__(self, jettype, jsonfile):
+    def __init__(self, jsonfile, jettype):
         """Module to determine jetID variables (passTight, passTightLepVeto),
         packed in Jet_jetId as in nanoAODv12
 
