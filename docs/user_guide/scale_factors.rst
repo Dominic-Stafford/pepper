@@ -35,7 +35,9 @@ Run 2: TXT-File-Based Corrections
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For Run 2 analyses, corrections are specified as arrays of paths to AK4PFchs
-TXT files in the standard CMS JEC format (L1, L2, L3 levels).
+TXT files in the standard CMS JEC format (L1, L2, L3 levels). Commonly, 
+the compounded correcions are also provided in a single txt file called 
+``L1L2L3Res`` which is equivalent to the list of the individual corrections.
 
 **Monte Carlo corrections** are given as a flat array::
 
@@ -130,7 +132,9 @@ Pepper substitutes with each entry in ``jet_uncertainty`` to locate the
 corresponding uncertainty object inside the file. This makes it straightforward
 to add or remove uncertainty sources without changing the template string.
 Commonly, an uncertainty named ``Total`` is included in the correctionlib file
-that encompasses all sources.
+that encompasses all sources.  Commonly, the compounded correcions are also 
+provided in a single txt file called ``L1L2L3Res`` which is equivalent to the 
+list of the individual corrections.
 
 Summary of Dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
