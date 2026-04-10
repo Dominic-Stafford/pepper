@@ -161,7 +161,7 @@ def resolve_lfn(lfn, store=None, xrootddomain=None, url_blacklist=None,
                 for d in domains:
                     if url in d and d not in domains_sorted:
                         domains_sorted.append(d)
-            domains_sorted.extend(d for d in domains if not d in domains_sorted)
+            domains_sorted.extend(d for d in domains if d not in domains_sorted)
             domains = domains_sorted
         if url_blacklist is not None:
             domains = [d for d in domains if not any(
