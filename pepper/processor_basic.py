@@ -531,7 +531,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         year = self.config["year"]
         if e_id == "skip":
             has_id = True
-        if e_id == "cut:loose":
+        elif e_id == "cut:loose":
             has_id = electron["cutBased"] >= 2
         elif e_id == "cut:medium":
             has_id = electron["cutBased"] >= 3
@@ -1068,27 +1068,28 @@ class ProcessorBasicPhysics(pepper.Processor):
             jets["mass"] = jets["mass"] * data["jetfac"][is_good_jet]
             jets = jets[ak.argsort(jets["pt"], ascending=False)]
 
-        # Evaluate b-tagging
-        tagger, wp = self.config["btag"].split(":")
-        if tagger == "deepcsv":
-            jets["btag"] = jets["btagDeepB"]
-        elif tagger == "deepjet":
-            jets["btag"] = jets["btagDeepFlavB"]
-        elif tagger == "robustparticletransformer":
-            jets["btag"] = jets["btagRobustParTAK4B"]
-        elif tagger == "particlenet":
-            jets["btag"] = jets["btagPNetB"]
-        else:
-            raise pepper.config.ConfigError(
-                "Invalid tagger name: {}".format(tagger))
-        year = self.config["year"]
-        if "btag_wps" in self.config and self.config["btag_wps"]:
-            _, _, wp_val = self.config["btag_wps"](wp)
-        else:
-            raise pepper.config.ConfigError(
-                f"btag_wps not in config, or does not define wps for "
-                f"{tagger} in {year}.")
-        jets["btagged"] = jets["btag"] > wp_val
+        if not self.config["btag"] == "skip":
+            # Evaluate b-tagging
+            tagger, wp = self.config["btag"].split(":")
+            if tagger == "deepcsv":
+                jets["btag"] = jets["btagDeepB"]
+            elif tagger == "deepjet":
+                jets["btag"] = jets["btagDeepFlavB"]
+            elif tagger == "robustparticletransformer":
+                jets["btag"] = jets["btagRobustParTAK4B"]
+            elif tagger == "particlenet":
+                jets["btag"] = jets["btagPNetB"]
+            else:
+                raise pepper.config.ConfigError(
+                    "Invalid tagger name: {}".format(tagger))
+            year = self.config["year"]
+            if "btag_wps" in self.config and self.config["btag_wps"]:
+                _, _, wp_val = self.config["btag_wps"](wp)
+            else:
+                raise pepper.config.ConfigError(
+                    f"btag_wps not in config, or does not define wps for "
+                    f"{tagger} in {year}.")
+            jets["btagged"] = jets["btag"] > wp_val
         jets["pass_pu_id"] = self.has_puid(jets)
         if is_mc:
             # A jet is considered to be a pileup jet if there is no gen jet
@@ -1450,6 +1451,13 @@ class ProcessorBasicPhysics(pepper.Processor):
 
     def btag_cut(self, is_mc, data):
         """Select events with minimum number of b-tagegd jets."""
+        if self.config["btag"] == "skip":
+            if self.config["num_atleast_btagged"] == 0:
+                return np.full(len(data), True)
+            else:
+                raise RuntimeError(
+                    "Cannot apply btag cut if btag is set to 'skip'. Please remove this "
+                    "cut or choose a b-tagging algorithm.")
         num_btagged = ak.sum(data["Jet"]["btagged"], axis=1)
         accept = np.asarray(num_btagged >= self.config["num_atleast_btagged"])
         if is_mc and (
