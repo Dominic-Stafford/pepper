@@ -541,7 +541,7 @@ Muon Selection
    Minimum and maximum pseudorapidity for muons.
 
 ``good_muon_id`` (string)
-   Muon ID requirement. Can be ``cut:`` or ``mva:`` with corresponding working points.
+   Muon ID requirement. Can be ``cut:`` or ``mva:`` with corresponding working points, or ``"skip"``.
 
 ``good_muon_iso`` (string)
    Muon isolation requirement. Options:
@@ -550,6 +550,7 @@ Muon Selection
      ``very_tight``, ``very_very_tight``
    - Custom isolation: ``dR<0.3_chg:<val>``, ``dR<0.3_all:<val>``, 
      ``dR<0.4_all:<val>``
+   - ``"skip"`` – no ID required
 
 ``good_muon_pt_min`` (float)
    Minimum transverse momentum for muons.
@@ -607,7 +608,7 @@ b-Tagging
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``btag`` (string)
-   Algorithm and working point. Options: ``deepcsv:<WP>``, ``deepjet:<WP>``.
+   Algorithm and working point in the form ``"ALGO:WP"``, or ``"skip"``. Algorithm should be one of ``deepcsv``, ``deepjet``, ``robustparticletransformer``, ``particlenet`` or ``UParT``, and the working point should be one of those defined in ``btag_wp``.
 
 ``num_atleast_btagged`` (int)
    Minimum number of b-tagged jets required.
