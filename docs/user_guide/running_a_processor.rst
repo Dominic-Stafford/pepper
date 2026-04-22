@@ -41,6 +41,9 @@ A directory with logs from the jobs will be present under ``pepper_logs``. Direc
 the highest number is the one of the latest run. The log level of the logs inside is controller via the ``--loglevel`` option. 
 Set it to ``debug`` to get full logging.
 
+If you have access to a dedicated machine, it is also possible to run pepper locally on multiple CPU cores by giving the ``--processes WORKERS`` argument.
+Please do not abuse this feature on the login nodes of clusters!
+
 Further options can be seen by running ``python -m pepper.runproc -h``.
 
 When Running a Processor Fails
