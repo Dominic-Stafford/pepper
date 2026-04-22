@@ -31,6 +31,22 @@ def get_site():
         return hostname
 
 
+def get_local_cluster(num_jobs):
+    """
+    Get a Dask Local cluster for multiprocessing on one machine
+
+    Parameters
+    ---------
+    num_jobs
+        Number of jobs to run in parallel
+    """
+    return dask.distributed.LocalCluster(
+        n_workers=num_jobs,
+        threads_per_worker=1,
+        processes=True
+    )
+
+
 def get_dask_cluster(num_jobs, runtime=3*60*60, memory="2 GiB", disk="3 GiB",
                      cores=1, *, condorsubmit=None, condorenv=None,
                      logdir=None):
@@ -235,7 +251,7 @@ class Cluster:
             self, num_jobs, condorsubmit=None, condorinit=None,
             logdir="pepper_logs", retries=None, exit_on_failed_jobs="all",
             mc_dsnames=[], condorsubmitfile=None, memory="2 GiB",
-            runtime=3*60*60):
+            runtime=3*60*60, use_local=False):
         """
         Parameters
         ----------
@@ -263,28 +279,35 @@ class Cluster:
             HTCondor submit file
         memory
             Request memory. String with a unit like "GiB" or an int.
+        use_local
+            If True, do not submit to condor, but paralellize locally over
+            multiple processes.
         """
         self.logdir = self.get_enumerated_dir(logdir)
         if num_jobs is None or num_jobs == 0:
             # Run locally
             self.client = None
         else:
-            # Run on HTCondor using Dask Jobqueue
-            if condorsubmitfile is not None:
-                if condorsubmit is None:
-                    condorsubmit = ""
-                with open(condorsubmitfile) as f:
-                    condorsubmit += "\n" + f.read()
-            dask_cluster = get_dask_cluster(
-                num_jobs,
-                condorsubmit=condorsubmit,
-                condorenv=condorinit,
-                logdir=self.logdir,
-                memory=memory,
-                runtime=runtime
-            )
-            self.client = dask.distributed.Client(dask_cluster)
+            if use_local:
+                cluster = get_local_cluster(num_jobs)
+            else:
+                # Run on HTCondor using Dask Jobqueue
+                if condorsubmitfile is not None:
+                    if condorsubmit is None:
+                        condorsubmit = ""
+                    with open(condorsubmitfile) as f:
+                        condorsubmit += "\n" + f.read()
+                cluster = get_dask_cluster(
+                    num_jobs,
+                    condorsubmit=condorsubmit,
+                    condorenv=condorinit,
+                    logdir=self.logdir,
+                    memory=memory,
+                    runtime=runtime
+                )
+            self.client = dask.distributed.Client(cluster)
             self.client.register_plugin(PepperSchedulerPlugin())
+
         self.retries = retries
         if exit_on_failed_jobs not in ["all", "data", "none"]:
             raise pepper.config.ConfigError(

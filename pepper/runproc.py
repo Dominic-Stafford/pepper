@@ -71,6 +71,10 @@ def run_processor(processor_class=None, description=None, mconly=False):
         "simultaneous jobs are submitted. The number can be changed by "
         "supplying it to this option.")
     parser.add_argument(
+        "-p", "--processes", type=int, nargs="?", help="Parallelize on the local"
+        "machine on a given number of processes."
+    )
+    parser.add_argument(
         "-r", "--retries", default=10, type=int, help="Number of times to "
         "retry if there is exception in an HTCondor job. Default is ten.")
     parser.add_argument(
@@ -144,6 +148,9 @@ def run_processor(processor_class=None, description=None, mconly=False):
         "state"
     )
     args = parser.parse_args()
+
+    if args.condor and args.processes:
+        sys.exit("Cannot give --condor and --processes at the same time")
 
     logger = logging.getLogger("pepper")
     logger.addHandler(logging.StreamHandler())
@@ -261,7 +268,7 @@ def run_processor(processor_class=None, description=None, mconly=False):
     else:
         exit_on_failed_jobs = "all"
     cluster = pepper.htcondor.Cluster(
-        args.condor,
+        args.processes if args.processes is not None else args.condor,
         condorsubmitfile=args.condorsubmit,
         condorinit=args.condorinit,
         retries=args.retries,
@@ -269,7 +276,8 @@ def run_processor(processor_class=None, description=None, mconly=False):
         mc_dsnames=list(config["mc_datasets"].keys()),
         logdir=os.path.realpath(args.condorlogdir),
         memory=str(args.memory) + " GiB",
-        runtime=int(args.runtime*60*60)
+        runtime=int(args.runtime*60*60),
+        use_local=args.processes is not None
     )
     pre_executor = pepper.executor.ClusterExecutor(
         state_file_name=args.metadata,
