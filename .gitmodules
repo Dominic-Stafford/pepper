@@ -1,0 +1,3 @@
+[submodule "test"]
+	path = test
+	url = ssh://git@gitlab.cern.ch:7999/pepper/pepper-tests.git

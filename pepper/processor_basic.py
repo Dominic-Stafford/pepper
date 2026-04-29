@@ -1079,6 +1079,8 @@ class ProcessorBasicPhysics(pepper.Processor):
                 jets["btag"] = jets["btagRobustParTAK4B"]
             elif tagger == "particlenet":
                 jets["btag"] = jets["btagPNetB"]
+            elif tagger == "upart":
+                jets["btag"] = jets["btagUParTAK4B"]
             else:
                 raise pepper.config.ConfigError(
                     "Invalid tagger name: {}".format(tagger))

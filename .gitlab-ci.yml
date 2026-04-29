@@ -2,55 +2,149 @@ image: gitlab-registry.cern.ch/cms-cloud/cmssw-docker/al9-cms
 
 stages:
   - flake8
+  - setup
   - test
   - build-docs
-  - pages  # aka publish to GitLab Pages (naming matters)
-before_script:
-  - sudo yum install -y python3 python3-pip python3-devel > /dev/null
-  - sudo pip3 install pep8-naming > /dev/null
-  - echo flake8 version `flake8 --version`
+  - pages
 
 flake8:
   stage: flake8
+  before_script:
+    - sudo yum install -y python3 python3-pip python3-devel > /dev/null
+    - sudo pip3 install pep8-naming > /dev/null
+    - echo flake8 version `flake8 --version`
   script:
     - flake8 --extend-ignore N806
   rules:
     - when: always
 
-.test_template:
-  stage: test
+.setup_template:
+  stage: setup
   tags:
     - cvmfs
   script:
     - bash install.sh
+  artifacts:
+    expire_in: 2 hours
+    paths:
+      - .venv/
+      - environment.sh
+  rules:
+    - when: always
+  variables:
+    LCG_VERSION: "LCG_107a"
+    LCG_PLATFORM: "x86_64-el9-gcc14-opt"
+
+setup:default:
+  extends: .setup_template
+
+setup:lcg104:
+  extends: .setup_template
+  variables:
+    LCG_VERSION: "LCG_104"
+    LCG_PLATFORM: "x86_64-el9-gcc11-opt"
+
+.test_template:
+  stage: test
+  tags:
+    - cvmfs
+  needs:
+    - job: setup:default
+      artifacts: true
+  script:
     - source environment.sh
-    - cd example
-    - python3 -m pepper.runproc example_processor.py test_config.json
+    - bash test/run_test.sh ${TESTNAME}
   rules:
     - when: always
   artifacts:
     expire_in: 10 hours
     paths:
-     - example/cutflows.json
-
-test:lcg104:
-  extends: .test_template
-  variables:
-    LCG_VERSION: "LCG_104"
-    LCG_PLATFORM: "x86_64-el9-gcc11-opt"
-
-test:lcg107a:
-  extends: .test_template
+     - _testout/cutflows.json
+     - _testout/gen_sumws.json
+     - _testout/hists
+     - _testout/events
   variables:
     LCG_VERSION: "LCG_107a"
     LCG_PLATFORM: "x86_64-el9-gcc14-opt"
+    GIT_SUBMODULE_STRATEGY: recursive
+    GIT_SUBMODULE_FORCE_HTTPS: true
+
+test:ul18_default:
+  extends: .test_template
+  variables:
+    TESTNAME: "ul18"
+
+test:ul18_lcg104:
+  extends: .test_template
+  needs:
+    - job: setup:lcg104
+      artifacts: true
+  variables:
+    TESTNAME: "ul18"
+    LCG_VERSION: "LCG_104"
+    LCG_PLATFORM: "x86_64-el9-gcc11-opt"
+
+test:ul18_kinreco:
+  extends: .test_template
+  variables:
+    TESTNAME: "ul18_kinreco"
+
+test:ul18_systs:
+  extends: .test_template
+  variables:
+    TESTNAME: "ul18_systs"
+
+test:ul18_events_root:
+  extends: .test_template
+  variables:
+    TESTNAME: "ul18_events_root"
+    TEST_EVENTS: true
+
+test:ul18_events_hdf5:
+  extends: .test_template
+  variables:
+    TESTNAME: "ul18_events_hdf5"
+    TEST_EVENTS: true
+
+test:ul18_lumifactors:
+  extends: .test_template
+  variables:
+    TESTNAME: "ul18_lumifactors"
+
+test:ul18_xrootd:
+  extends: .test_template
+  id_tokens:
+    MY_JOB_JWT:
+        aud: "cms-cat-grid-proxy-service.app.cern.ch"
+  before_script:
+    - 'proxy=$(curl -H "Authorization: ${MY_JOB_JWT}" "https://cms-cat-grid-proxy-service.app.cern.ch/api" | tr -d \")'
+  script:
+    - source environment.sh
+    - printf $proxy | base64 -d > myproxy
+    - export X509_USER_PROXY=$(pwd)/myproxy
+    - export X509_CERT_DIR=/cvmfs/grid.cern.ch/etc/grid-security/certificates/
+    - voms-proxy-info # to test it
+    - bash test/run_test.sh ${TESTNAME}
+  variables:
+    TESTNAME: "ul18_xrootd"
+    TEST_EXTRA_ARGS: "--debug"
+  rules:
+    - when: always
+      allow_failure: true # since it doesnt work on forks that are not under cms-analysis
+
+test:2024:
+  extends: .test_template
+  variables:
+    TESTNAME: "2024"
 
 build-docs:
   stage: build-docs
   tags:
     - cvmfs
+  needs:
+    - job: setup:default
+      artifacts: true
   script:
-    - bash install.sh
     - source environment.sh
     - python3 -m pip install --upgrade --upgrade-strategy eager --editable .[docs]
     - cd docs
