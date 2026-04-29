@@ -70,6 +70,19 @@
             "xtight": "xt",
             "xxtight": "xxt"
         }
+    },
+    "upart": {
+        "name": "UParT",
+        "wps": {
+            "2024": [0.0246, 0.1272, 0.4648, 0.6298, 0.9739]
+        },
+        "wpnames": {
+            "loose": "l",
+            "medium": "m",
+            "tight": "t",
+            "xtight": "xt",
+            "xxtight": "xxt"
+        }
     }
 }
 

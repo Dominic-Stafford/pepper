@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-from pepper.misc import get_run_for_year, LHCRun
 import uproot
 import hjson
 import coffea
@@ -10,6 +9,7 @@ import coffea.jetmet_tools
 from coffea import lookup_tools
 from functools import partial
 import correctionlib
+import awkward as ak
 
 import pepper
 from pepper.scale_factors import (
@@ -196,19 +196,24 @@ class ConfigBasicPhysics(pepper.Config):
         return [self._get_scalefactor(sfpath, sysnaming) for sfpath in value]
 
     def _get_muonscalefactor(self, value):
-        year = self["year"]
         if ("split_muon_uncertainty" not in self
                 or not self["split_muon_uncertainty"]):
-            if get_run_for_year(year) == LHCRun.Run3:
-                # In Run 3, central is called "nominal"
-                return self._get_scalefactors(
-                    value, {"central": "nominal", "up": "systup",
-                            "down": "systdown"})
-            else:
-                # In Run 2,  central is called "sf"
-                return self._get_scalefactors(
-                    value, {"central": "sf", "up": "systup",
-                            "down": "systdown"})
+            # Different versions of the SF have different naming conventions for the central value. Try both.
+            for naming in ["nominal", "sf"]:
+                try:
+                    sfs = self._get_scalefactors(
+                            value, {"central": naming, "up": "systup",
+                                    "down": "systdown"})
+                    # try SFs once to catch any errors early
+                    for sf in sfs:
+                        sf(pt=ak.Array([1000.]), eta=ak.Array([0.]))  # dummy inputs just to test
+                    return sfs
+                except IndexError:
+                    pass
+
+            raise pepper.config.ConfigError(
+                "Muon scale factors should have 'sf' or 'nominal' as the key for the central "
+                "values in the correctionlib json. Tried both but could not find either.")
 
         sfs = []
         for sfpath in value:
