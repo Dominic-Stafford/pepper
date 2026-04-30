@@ -301,7 +301,7 @@ optional parameter is missing, the corresponding procedure will be skipped.
 ``split_btag_year_corr`` (bool, optional, deprecated)
    Replaced by ``btag_splitting_scheme``. Splits btag uncertainties across years.
 
-``jet_ids``(array, optional)
+``jet_ids`` (array, optional)
    Starting from NanoAOD v15, the field ``jetId`` is not available anymore and needs to be computed from a json file provided by JME.
    First element: path to Jet ID JSON (correctionlib)
    Second element: jet type used in the analysis (``AK4PUPPI``, or ``AK4CHS``)
