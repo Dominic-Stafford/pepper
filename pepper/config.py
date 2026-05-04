@@ -323,11 +323,13 @@ class Config(MutableMapping):
             if "xrootd_url_blacklist" in self:
                 xrootd_url_blacklist = self["xrootd_url_blacklist"]
         use_eos_redirector = self.get("use_eos_redirector", True)
+        xrootd_url_priority = self.get("xrootd_url_priority", None)
 
         if lfn.startswith("cmslfn://"):
             filepaths = pepper.datasets.resolve_lfn(lfn, store, xrootddomain,
                                                     xrootd_url_blacklist,
-                                                    use_eos_redirector)
+                                                    use_eos_redirector,
+                                                    xrootd_url_priority)
         else:
             filepaths = [lfn]
         if local_file_blacklist is not None:

@@ -331,10 +331,12 @@ def run_processor(processor_class=None, description=None, mconly=False):
     if "xrootd_url_blacklist" in config:
         xrootd_url_blacklist = config["xrootd_url_blacklist"]
     use_eos_redirector = config.get("use_eos_redirector", True)
+    xrootd_url_priority = config.get("xrootd_url_priority", None)
     metadata = {"store_path": store, "xrootddomain": xrootddomain,
                 "local_file_blacklist": local_file_blacklist,
                 "url_blacklist": xrootd_url_blacklist,
-                "use_eos_redirector": use_eos_redirector}
+                "use_eos_redirector": use_eos_redirector,
+                "url_priority": xrootd_url_priority}
     # Give metadata for the processing step
     processor.pepperitemmetadata = metadata
     # For the preprocessing step, add metadata also to the file meta

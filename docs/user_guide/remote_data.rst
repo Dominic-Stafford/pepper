@@ -15,6 +15,8 @@ There are four requirements to get it working (also in conjunction with HTCondor
 
 If you get the error ``sslv3 alert certificate expired``, please run the voms-proxy-init command again.
 
+If you need to run over remote data often, it is useful to specify a priority list of XRootD sites in the config. An example of this can be found in :repo:`this config <example/example_xrootd.json>`.
+
 File Transfer Request
 ----------------------
 Accessing files on a remote server using XRootD is much slower than accessing local files. If you want to speed up the 

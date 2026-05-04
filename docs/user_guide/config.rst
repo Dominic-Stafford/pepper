@@ -119,6 +119,12 @@ Data Sets
    List of XRootD URLs or URL fragments (e.g., ``"rl.ac.uk"`` or ``".fr"``)
    that should not be used when resolving files via XRootD.
 
+``xrootd_url_priority``: (array, optional)
+   List of XRootD URLs or URL fragments (e.g., ``"rl.ac.uk"`` or ``".fr"``)
+   that should be preferred over others, when available, in the given order.
+   In case none of the sites is available for a given file, it will still
+   use another site, in contrast to ``xrootd_url_blacklist``.
+
 .. _config-store:
 
 ``store`` (string)

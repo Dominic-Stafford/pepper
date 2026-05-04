@@ -324,7 +324,8 @@ class Runner(coffea.processor.Runner):
     """
     @staticmethod
     def resolve_lfn(lfn, store, xrootddomain, local_file_blacklist,
-                    url_blacklist=None, use_eos_redirector=True):
+                    url_blacklist=None, use_eos_redirector=True,
+                    url_priority=None):
         """Converts logical file names (LFNs) to physical file names that can
         be understood by ``uproot.open``
 
@@ -346,6 +347,9 @@ class Runner(coffea.processor.Runner):
         use_eos_redirector
             If True and the file is located on EOS, the EOS redirector URL will
             be used instead of the direct EOS path.
+        url_priority
+            Optional; a list of strings. If given, XRootD URLs containing any of
+            these strings will be preferred over other URLs for the same file.
 
         Returns
         -------
@@ -355,7 +359,8 @@ class Runner(coffea.processor.Runner):
         if lfn.startswith("cmslfn://"):
             filepaths = pepper.datasets.resolve_lfn(lfn, store, xrootddomain,
                                                     url_blacklist,
-                                                    use_eos_redirector)
+                                                    use_eos_redirector,
+                                                    url_priority)
         else:
             filepaths = [lfn]
         if xrootddomain is not None and local_file_blacklist is not None:
@@ -370,7 +375,8 @@ class Runner(coffea.processor.Runner):
             item.metadata["xrootddomain"],
             item.metadata["local_file_blacklist"],
             item.metadata["url_blacklist"],
-            item.metadata.get("use_eos_redirector", True))
+            item.metadata.get("use_eos_redirector", True),
+            item.metadata.get("url_priority", None))
         for filepath in filepaths:
             try:
                 with uproot.open(
@@ -429,7 +435,8 @@ class Runner(coffea.processor.Runner):
         filepaths = Runner.resolve_lfn(
             item.filename, metadata["store_path"],
             metadata["xrootddomain"], metadata["local_file_blacklist"],
-            metadata["url_blacklist"], metadata.get("use_eos_redirector", True))
+            metadata["url_blacklist"], metadata.get("use_eos_redirector", True),
+            metadata.get("url_priority", None))
 
         for filepath in filepaths:
             try:
