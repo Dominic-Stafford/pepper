@@ -409,30 +409,46 @@ class Processor(coffea.processor.ProcessorABC):
 
         Returns
         -------
-            Dict with unsmaked arrays and their masks. The masks have the same
+            Dict with unmasked arrays and their masks. The masks have the same
             key prefixed by "mask"
         """
         ret = {}
         for key, array in arrays.items():
-            if (not isinstance(array, ak.Array)
-                    or not pepper.misc.akismasked(array)):
+            if not isinstance(array, ak.Array):
                 ret[key] = array
                 continue
             if array.ndim > 2:
                 raise ValueError(
                     f"Array '{key}' as too many dimensions for ROOT output")
-            if "mask" + key in arrays:
-                raise RuntimeError(f"Output named 'mask{key}' already present "
-                                   "but need this key for storing the mask")
-            ret["mask" + key] = ~ak.is_none(array)
-            if array.ndim > 1:
-                # 2D array with masked values in the first axis
-                # will cause trouble for uproot - replace Nones by empty lists
-                array = ak.fill_none(array, [], axis=0)
-            if len(array.fields) > 0:
-                ret[key] = ak.fill_none(array, {k: 0 for k in array.fields})
+            if not pepper.misc.akismasked(array):
+                # Check for case mask is at level of individual fields
+                if any([pepper.misc.akismasked(array[k]) for k in array.fields]):
+                    for k in array.fields:
+                        if ("mask" + key not in arrays) and ("mask" + key not in ret):
+                            ret["mask" + key] = ~ak.is_none(array[k])
+                        elif (("mask" + key in arrays and
+                               ak.any(arrays["mask" + key] != ~ak.is_none(array[k]))) or
+                              ("mask" + key in arrays and
+                               ak.any(ret["mask" + key] != ~ak.is_none(array[k])))):
+                            raise RuntimeError(
+                                f"Inconsistent masks for fields of key {key}. Please "
+                                f"output these as separate columns")
+                    ret[key] = ak.Array({k: ak.fill_none(array[k], 0) for k in array.fields})
+                else:
+                    ret[key] = array
             else:
-                ret[key] = ak.fill_none(array, 0)
+                if "mask" + key in arrays:
+                    raise RuntimeError(f"Output named 'mask{key}' already present "
+                                       "but need this key for storing the mask")
+                ret["mask" + key] = ~ak.is_none(array)
+                if array.ndim > 1:
+                    # 2D array with masked values in the first axis
+                    # will cause trouble for uproot - replace Nones by empty lists
+                    array = ak.fill_none(array, [], axis=0)
+                if len(array.fields) > 0:
+                    ret[key] = ak.fill_none(array, {k: 0 for k in array.fields})
+                else:
+                    ret[key] = ak.fill_none(array, 0)
         return ret
 
     def _save_per_event_info_root(self, dsname, selector, identifier,
