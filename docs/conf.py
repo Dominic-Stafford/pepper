@@ -21,7 +21,7 @@ project = 'Pepper'
 copyright = f'{dt.datetime.now().year}, Pepper Maintainers'
 author = 'Pepper Maintainers'
 mattermost_channel_url = "https://mattermost.web.cern.ch/cms-exp/channels"
-gitlab_repository_url = "https://gitlab.cern.ch/cms-analysis/general/pepper"
+gitlab_repository_url = "https://gitlab.cern.ch/cms-analysis/general/pepper/pepper"
 
 # -- General configuration ---------------------------------------------------
 
