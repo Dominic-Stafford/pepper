@@ -42,7 +42,27 @@ The user can then implement their analysis by subclassing ``ProcessorBasicPhysic
 defining the analysis-specific selection. The figure below illustrates the class hierarchy of Pepper's processor classes and the relationship 
 to Coffea's processor class.
 
-.. image:: /img/banana.png
+.. mermaid::
+
+   classDiagram
+       direction TB
+
+       class `coffea.ProcessorABC` {
+           <<abstract>>
+       }
+       class `pepper.Processor`
+       class `pepper.ProcessorBasicPhysics`
+       class UserProcessor {
+           +process_selection()
+       }
+       class `pepper.Selector`
+       class `pepper.OutputFiller`
+
+       `coffea.ProcessorABC` <|-- `pepper.Processor`
+       `pepper.Processor` <|-- `pepper.ProcessorBasicPhysics`
+       `pepper.ProcessorBasicPhysics` <|-- UserProcessor
+       `pepper.Processor` *-- `pepper.Selector`
+       `pepper.Selector` ..> `pepper.OutputFiller` : update triggers fill
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The ``process_selection`` Method
@@ -212,49 +232,13 @@ histograms as a systematic entry on the corresponding dataset.
 Defining Histograms
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Histograms are defined in the HJSON configuration file rather than in the processor code.
-Each histogram is an entry in the ``hists`` object, and its fill values are specified using
-Pepper's ``DataPicker`` syntax, which selects columns stored in the selector. For example:
+Histograms are defined declaratively in the HJSON configuration file rather than constructed in processor code. 
+Each entry in the ``hists`` object names a histogram, lists its axes, 
+and points at the per-event data to fill it from using Pepper's ``DataPicker`` syntax. 
+By default Pepper produces one histogram per cut, so the cutflow and histogram outputs stay in sync without extra user effort.
 
-.. code-block:: json
-
-    "leading_electron_pt": {
-        "bins": [
-            {
-                "name": "pt",
-                "label": "Electron $p_{\\mathrm{T}}$",
-                "n_or_arr": 100,
-                "lo": 0,
-                "hi": 400,
-            }
-        ],
-        "fill": {
-            "pt": [
-                "Electron",
-                "pt",
-                {"leading": 1}
-            ]
-        }
-    },
-
-The DataPicker syntax supports a number of useful operations beyond simple column
-selection, such as selecting the leading object per event (as shown above with
-``{"leading": 1}``) and simple aggregation functions such as ``"sum"``, allowing
-simple derived quantities to be plotted without defining them explicitly in the processor.
-Multi-dimensional histograms can be defined using the same syntax by specifying multiple
-entries in ``bins``.
-
-By default, histograms are filled after every cut for which the fill value is defined, which
-is useful during the early stages of analysis optimisation. Users can restrict when
-histograms are produced using the ``step_requirement`` key in the histogram definition,
-reducing memory overhead for large analyses.
-
-Per-event output can also be saved - for instance for machine learning workflows - by
-specifying columns in ``columns_to_save`` using the same DataPicker syntax. Output can
-be written in either HDF5 or ROOT format, controlled by ``column_output_format``.
-
-For a full description of all available histogram and output configuration options, see
-the configuration reference.
+See :ref:`histograms` for the full lifecycle 
+-- defining histograms, common DataPicker patterns, the output file layout, and how to read histograms back into Python.
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Deferring Cut Application

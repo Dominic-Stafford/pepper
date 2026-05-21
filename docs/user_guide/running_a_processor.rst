@@ -17,29 +17,9 @@ and aggregated histograms and cutflows will be saved to the output directory. Ty
 would use the processor. In a normal HEP workflow, we would initially run the processor on a subset of the data to test it. 
 When we are happy with the results (typically when we see no errors), we would then run it on the full dataset - typically on a cluster.
 The ``pepper.runproc`` script supports both these use-cases. For processing only the first chunk of each dataset, pass the debug flag ``--debug``.
-If you want to submit to HTCondor, just add the ``--condor WORKERS`` argument and specify the number of workers.
 
-.. note::
-
-    It is also possible to submit to HTCondor when running in debug mode. This feature is typically used when testing whether the systematics calculation works as expected.
-
-To control which environment is employed on the HTCondor node, the parameter ``--condorinit`` can be used. 
-``--condorinit`` should point to a Shell script that can be sourced setting up the environment. 
-If ``--condorinit`` is not present, Pepper will instead use the script that is pointed at by the local environment 
-variable ``PEPPER_CONDOR_ENV``. If this is also not set, the jobs will be run in the default environment of your HTCondor system.
-
-
-.. note::
-
-    The terminal running the Pepper processor needs to stay alive until the processing is complete.
-    This means you should avoid closing the terminal or interrupting the process until you see a completion message.
-    If the process is interrupted, you may need to restart it from the beginning. On NAF, this can be done using the
-    ``tmux``, ``nohup`` or ``screen`` commands to run the process in the background while it has to be ``tmux`` on LXPLUS. 
-    If you haven't already, ``tmux`` must be enabled on LXPLUS using ``systemctl --user start tmux.service && tmux a``.
-
-A directory with logs from the jobs will be present under ``pepper_logs``. Directories inside ``pepper_logs`` are numbered, 
-the highest number is the one of the latest run. The log level of the logs inside is controller via the ``--loglevel`` option. 
-Set it to ``debug`` to get full logging.
+For a full run, submit to HTCondor by adding the ``--condor WORKERS`` argument; see :ref:`htcondor` for the complete
+setup, including environment scripts, resource requests, logs, and recovery from failures.
 
 If you have access to a dedicated machine, it is also possible to run pepper locally on multiple CPU cores by giving the ``--processes WORKERS`` argument.
 Please do not abuse this feature on the login nodes of clusters!

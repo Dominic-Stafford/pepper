@@ -26,11 +26,15 @@ The standard python-dict behaviour is extended by the getter which allows for ac
 In the constructor method of the ``Config`` class, the following groups are defined:
 
 - Required keys are defined. If these keys are not present, the method ``check_required_args`` will raise a ``ConfigError``.
-- The special variables are defined. The standard special-variables (usually prefixed with ``$`` are explained in more detail [here]. In short, they are substituted with another key at runtime which greatly reduces overhead when subclassing configs. You can read more about config inheritance [here].
-- Finally, special behaviour for config keys are defined. These are functions applied to the JSON-serializable string when a specific key is queried. For instance, we could define a behaviour that takes a path to a file and reads the contents into memory instead of having to manually do that every time the key is queried.
+- The special variables are defined. The standard special-variables (usually prefixed with ``$``) are explained in more detail :ref:`here <special-variables>`. 
+  In short, they are substituted with another key at runtime which greatly reduces overhead when subclassing configs. 
+  You can read more about config inheritance :ref:`here <config-inheritance-example>`.
+- Finally, special behaviour for config keys are defined. 
+  These are functions applied to the JSON-serializable string when a specific key is queried. 
+  For instance, we could define a behaviour that takes a path to a file and reads the contents 
+  into memory instead of having to manually do that every time the key is queried.
 
-The list of standard required keys, behaviours and special variables can be seen in the reference describing the ``Config`` class [here].
-
+The list of standard required keys, behaviours and special variables can be seen in the reference describing the :class:`pepper.config.Config` class.
 
 .. hint:: 
 
@@ -45,7 +49,7 @@ The ``ConfigBasicPhysics`` subclass extends the base ``Config`` class by adding 
 It introduces additional required keys, behaviours, and special variables relevant to typical HEP analyses. For example,
 it adds behaviours that automatically builds Coffea Corrector objects when querying correction-related keys. This makes
 it incrediblty easy to apply standard corrections without having to manually instantiate these objects in the analysis code.
-The list of additional required keys, behaviours and special variables can be seen in the reference describing the ``ConfigBasicPhysics`` class [here].
+The list of additional required keys, behaviours and special variables can be seen in the reference describing the :class:`pepper.config_basic.ConfigBasicPhysics` class.
 
 .. note::
 

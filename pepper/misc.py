@@ -128,7 +128,7 @@ def get_trigger_paths_for(dataset, is_mc, trigger_paths, trigger_order=None,
     trigger_order
         Datasets to define the order in which the triggers are applied.
     normalize
-        Whether to remove HLT_ from the beginning
+        Whether to remove ``HLT_`` from the beginning
     era
         If not None and if <name>_era, where name is any dataset name, is
         present in `trigger_paths`, it will be used over just <name>. This can

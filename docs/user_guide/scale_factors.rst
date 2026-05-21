@@ -175,7 +175,7 @@ Jet Veto Maps
 Jet veto maps allow specific regions of the detector to be masked out by
 vetoing jets that fall within known problematic areas
 (see more `here <https://cms-jerc.web.cern.ch/Recommendations/#jet-veto-maps>`__).
-They are configured via ``jet_veto_maps``, an optional array of arrays.
+They are configured via ``jet_veto_map``, an optional array of arrays.
 Each inner array contains two elements:
 
 1. A path to a correctionlib JSON file containing the veto map.
@@ -184,9 +184,9 @@ Each inner array contains two elements:
 
 For example::
 
-   "jet_veto_maps": [
+   "jet_veto_map": [
      [
-       "path/to/jetvetomaps.json.gz",
+       "path/to/jetvetomap.json.gz",
        ["Campaign_Name_RunEFG_V1", "jetvetomap"]
      ]
    ]
