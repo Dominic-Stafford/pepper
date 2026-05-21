@@ -27,7 +27,7 @@ Submodules
    kinreco_sonnenschein
    misc
    output_filler
-   processor
+   pepper.processor
    processor_basic
    processor_ttbarll
    runproc

@@ -12,6 +12,8 @@ User Guide
    Run Your Analysis <running_a_processor>
    Accessing Remote Data <remote_data>
    Scale Factors <scale_factors>
+   Histograms <histograms>
+   HTCondor <htcondor>
 
 Welcome to the Pepper user guides. Here, you can find various introductions to some of the features available in Pepper. 
 In case you have suggestions for what could also be included here, please reach out on :mattermost:`Mattermost <pepper-users>`!
@@ -96,3 +98,35 @@ In case you have suggestions for what could also be included here, please reach 
       Learn about scale factors and how to apply them in your analysis.
 
 
+.. grid:: 2 3 3 4
+   :gutter: 2
+
+   .. grid-item-card::
+      :link: histograms
+      :link-type: doc
+      :text-align: center
+
+      Histogramming
+      ^^^^^^^^^^^^^
+      How to configure and produce histograms with Pepper.
+
+   .. grid-item-card::
+      :link: htcondor
+      :link-type: doc
+      :text-align: center
+
+      HTCondor
+      ^^^^^^^^^^^^^
+      How to scale up your analysis using HTCondor.
+
+Planned User Guide
+---------------------
+
+The following examples are planned but not yet written. If you would like to
+contribute one, or if you have a use case you would like to see documented,
+please get in touch on :mattermost:`Mattermost <pepper-users>`.
+
+- **MC normalization.** A description of MC normalization and how to configure it in Pepper, including the
+  ``mc_lumifactors`` config key and how they interact with the dataset lists.
+- **Systematic variations.** A walkthrough of how to configure and apply systematic variations in Pepper, including the
+  ``compute_systematics`` config key and how it interacts with the processor code.

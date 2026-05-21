@@ -23,9 +23,13 @@ The following sections describe the available configuration options. Each of the
 options corresponds to a key in the JSON configuration file. Options marked as
 *optional* may be omitted.
 
+
+.. _special-variables:
+
 --------------------
 Special Variables
 --------------------
+
 
 ``import``
    Optional. Path to another configuration JSON/HJSON file for inheritance. That file is
