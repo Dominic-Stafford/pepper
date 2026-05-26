@@ -339,6 +339,11 @@ optional parameter is missing, the corresponding procedure will be skipped.
    - ``jet_resolution``: A string with the jet resolution correcion name.
    - ``jet_ressf``: A string with the jet resolution scale factor name.
 
+``fatjet_jme_correctionlib_corrections`` (dict, optional)
+   The JME correctionlib method for fat jets. Has the same dictionary entries as ``jme_correctionlib_corrections``.
+   To be used along with functions ``build_fatjet_column`` and ``compute_fatjet_factors``.
+   Needed if ``reapply_jec`` is true and fat jets are used.
+
 ``jet_correction_mc`` (array)
    Array of paths to AK4PFchs MC JEC TXT files (L1, L2, L3). Needed if
    ``jet_uncertainty`` or ``jet_resolution`` is given, or if ``reapply_jec`` is true.
@@ -592,6 +597,22 @@ Jet Selection
    Ignore objects in the HEM 2018 problematic region.
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Fat jet Selection
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``good_fatjet_id`` (string)
+   Jet ID requirement. ``cut:<WP>`` or ``"skip"``.
+
+``good_fatjet_lepton_distance`` (float)
+   Minimum ΔR distance between fat jets and any lepton.
+
+``good_fatjet_eta_min`` / ``good_jet_eta_max`` (float)
+   Minimum and maximum fat jet pseudorapidity.
+
+``good_fatjet_pt_min`` (float)
+   Minimum fat jet transverse momentum.
+
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Event-Level Cuts
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -608,10 +629,23 @@ Event-Level Cuts
    Minimum number of jets required.
 
 ``jet_pt_min`` (array of floats)
-   Minimum pT for n-th leading jets.
+   Minimum pT for n-th leading jets. The elements must be sorted from high pT to low pT.
 
 ``jet_pt_num_satisfied`` (int)
    Minimum number of jets satisfying the ``jet_pt_min`` requirements.
+   For example, if the ``jet_pt_min`` contains 3 elements while ``jet_pt_num_satisfied`` = 2,
+   then events only passing the 2nd & 3rd leading pT cuts will also pass.
+
+``num_fatjets_atleast`` (int)
+   Minimum number of fat jets required.
+
+``fatjet_pt_min`` (array of floats)
+   Minimum pT for n-th leading fat jets. The elements must be sorted from high pT to low pT.
+
+``fatjet_pt_num_satisfied`` (int)
+   Minimum number of fat jets satisfying the ``fatjet_pt_min`` requirements.
+   For example, if the ``fatjet_pt_min`` contains 3 elements while ``fatjet_pt_num_satisfied`` = 2,
+   then events only passing the 2nd & 3rd leading pT cuts will also pass.
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 b-Tagging

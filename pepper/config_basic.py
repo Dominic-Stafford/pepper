@@ -98,7 +98,12 @@ class ConfigBasicPhysics(pepper.Config):
                 "btag_wps": self._get_btag_wps,
                 "jet_ids": self._get_jet_ids,
                 "jet_puid_sf": self._get_puid_sf,
-                "jme_correctionlib_corrections": self._get_jme_corrections,
+                "jme_correctionlib_corrections": partial(
+                    self._get_jme_corrections,
+                    "jme_correctionlib_corrections"),
+                "fatjet_jme_correctionlib_corrections": partial(
+                    self._get_jme_corrections,
+                    "fatjet_jme_correctionlib_corrections"),
                 "jet_correction_mc": self._get_jet_correction_legacy,
                 "jet_correction_data": self._get_jet_correction_legacy_dict,
                 "jet_uncertainty": partial(
@@ -111,6 +116,7 @@ class ConfigBasicPhysics(pepper.Config):
                     self._get_jet_general_legacy, evaltype="jersf",
                     cls=coffea.jetmet_tools.JetResolutionScaleFactor),
                 "jet_veto_map": self._get_scalefactor,
+                "fatjet_ids": self._get_jet_ids,
                 "MET_xy_shifts": self._get_maybe_external,
                 "crosssection_uncertainty": self._get_maybe_external,
                 "reco_info_file": self._get_path,
@@ -333,11 +339,11 @@ class ConfigBasicPhysics(pepper.Config):
         )
         return rochester
 
-    def _get_jme_corrections(self, value):
+    def _get_jme_corrections(self, config_key, value):
         """Get JME corrections.
         """
         if not isinstance(value, dict):
-            msg = f"'jme_correctionlib_corrections' config should be a dict, got {type(value)}"
+            msg = f"'{config_key}' config should be a dict, got {type(value)}"
             raise pepper.config.ConfigError(msg)
         # Manually get the path to avoid recursion error
         # and already open the correctionlib file for speed
@@ -345,7 +351,7 @@ class ConfigBasicPhysics(pepper.Config):
             correctionlib_path = self._get_path(value['path'])
             corrset = correctionlib.CorrectionSet.from_file(correctionlib_path)
         except KeyError as e:
-            msg = f"Missing 'path' key in 'jme_correctionlib_corrections' config: {e}"
+            msg = f"Missing 'path' key in '{config_key}' config: {e}"
             raise pepper.config.ConfigError(msg) from e
 
         behaviours = {
@@ -354,13 +360,13 @@ class ConfigBasicPhysics(pepper.Config):
             "jet_correction_mc": partial(self._get_jet_correction, correctionlib_path=corrset),
             "jet_correction_data": partial(self._get_jet_correction_dict, correctionlib_path=corrset),
             "jet_uncertainty": partial(
-                self._get_jet_general,
+                self._get_jet_general, config_key,
                 correctionlib_path=corrset),
             "jet_resolution": partial(
-                self._get_jet_general,
+                self._get_jet_general, config_key,
                 correctionlib_path=corrset),
             "jet_ressf": partial(
-                self._get_jet_general,
+                self._get_jet_general, config_key,
                 correctionlib_path=corrset),
         }
         updated_conf = {}
@@ -403,7 +409,7 @@ class ConfigBasicPhysics(pepper.Config):
         else:
             return self._get_jet_correction_legacy(value)
 
-    def _get_jet_general(self, value, correctionlib_path: os.PathLike | correctionlib.CorrectionSet):
+    def _get_jet_general(self, key, value, correctionlib_path: os.PathLike | correctionlib.CorrectionSet):
         """
         Create general jet correction objects (uncertainty, resolution, SF).
         These are SIMPLE (non-compound) corrections.
@@ -415,7 +421,7 @@ class ConfigBasicPhysics(pepper.Config):
         """
         # All non-JEC types are simple (single correction)
         if isinstance(value, list):
-            template_string = self._config["jme_correctionlib_corrections"]["jet_uncertainty_template"]
+            template_string = self._config[key]["jet_uncertainty_template"]
             return {
                 v: CorrectionlibAdapter(correctionlib_path, template_string.replace("[UNC]", v)) for v in value
                 }
