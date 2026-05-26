@@ -206,7 +206,8 @@ class ConfigBasicPhysics(pepper.Config):
                                     "down": "systdown"})
                     # try SFs once to catch any errors early
                     for sf in sfs:
-                        sf(pt=ak.Array([1000.]), eta=ak.Array([0.]))  # dummy inputs just to test
+                        sf(**dict((key, ak.Array([1000.])) if key == "pt" else (key, ak.Array([0.]))
+                                  for key in sf.dimlabels))  # dummy inputs just to test
                     return sfs
                 except IndexError:
                     pass
