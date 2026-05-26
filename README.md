@@ -1,7 +1,7 @@
 # Pepper - ParticlE Physics ProcEssoR
 
 [![gitlab repository](https://img.shields.io/badge/gitlab-repo-orange?logo=gitlab)](https://gitlab.cern.ch/cms-analysis/general/pepper)
-[![pipeline status](https://gitlab.cern.ch/cms-analysis/general/pepper/badges/master/pipeline.svg)](https://gitlab.cern.ch/cms-analysis/general/pepper/-/pipelines)
+[![pipeline status](https://gitlab.cern.ch/cms-analysis/general/pepper/pepper/badges/master/pipeline.svg)](https://gitlab.cern.ch/cms-analysis/general/pepper/-/pipelines)
 [![documentation](https://img.shields.io/badge/docs-online-blue)](https://cms-pepper.docs.cern.ch/)
 <!-- [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE) -->
 
