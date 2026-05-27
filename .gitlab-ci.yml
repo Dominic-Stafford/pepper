@@ -32,7 +32,7 @@ flake8:
   rules:
     - when: always
   variables:
-    LCG_VERSION: "LCG_107a"
+    LCG_VERSION: "107a"
     LCG_PLATFORM: "x86_64-el9-gcc14-opt"
 
 setup:default:
@@ -41,7 +41,7 @@ setup:default:
 setup:lcg104:
   extends: .setup_template
   variables:
-    LCG_VERSION: "LCG_104"
+    LCG_VERSION: "104"
     LCG_PLATFORM: "x86_64-el9-gcc11-opt"
 
 .test_template:
@@ -64,7 +64,7 @@ setup:lcg104:
      - _testout/hists
      - _testout/events
   variables:
-    LCG_VERSION: "LCG_107a"
+    LCG_VERSION: "107a"
     LCG_PLATFORM: "x86_64-el9-gcc14-opt"
     GIT_SUBMODULE_STRATEGY: recursive
     GIT_SUBMODULE_FORCE_HTTPS: true
@@ -81,7 +81,7 @@ test:ul18_lcg104:
       artifacts: true
   variables:
     TESTNAME: "ul18"
-    LCG_VERSION: "LCG_104"
+    LCG_VERSION: "104"
     LCG_PLATFORM: "x86_64-el9-gcc11-opt"
 
 test:ul18_kinreco:
