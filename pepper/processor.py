@@ -240,6 +240,13 @@ class Processor(coffea.processor.ProcessorABC):
                 "pre-computed lumifactors. Please set 'exit_on_failed_jobs' to"
                 " 'all', or 'mc_lumifactors' to false (posterior computation)")
 
+        if ("exit_on_failed_jobs" in config
+                and config["exit_on_failed_jobs"].lower() != "none"):
+            logger.warning(
+                'Not exiting on failed jobs can lead to silent exclusion of data in '
+                'final histograms. "exit_on_failed_jobs": "none" is only recommended '
+                'for testing.')
+
         for dsname in config["mc_datasets"].keys():
             if (config["mc_lumifactors"] and
                     dsname not in config["mc_lumifactors"]):
