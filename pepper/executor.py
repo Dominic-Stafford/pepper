@@ -1,6 +1,7 @@
 import os
 import abc
 from dataclasses import dataclass, fields
+import socket
 from typing import Optional
 import threading
 import queue
@@ -8,6 +9,7 @@ from copy import deepcopy
 from functools import partial
 import time
 import logging
+import subprocess
 import uproot
 import coffea.processor
 import coffea.util
@@ -25,6 +27,7 @@ import pepper
 
 
 STATEFILE_VERSION = 3
+LOCALTIMEOUT = 60  # seconds
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +38,64 @@ class StateFileError(Exception):
 
 def _wrap_execution(function, item):
     return item, function(item)
+
+
+def _get_node_info() -> str:
+    """Get information about the node this code is running on, to be used in error messages.
+    If the code is running on a cluster with slots, include the slot number in the information.
+    Example: batch1658.desy.de:slot2_71."""
+    hostname = socket.gethostname()
+    slot = os.environ.get("_CONDOR_SLOT")
+    if slot:
+        return f"{hostname}:{slot}"
+    return hostname
+
+
+def _can_open_local_within_timeout(path, timeout=LOCALTIMEOUT):
+    """Return True if a small read from ``path`` completes within ``timeout``
+    seconds, False otherwise.
+
+    Probes both the metadata and data paths of the local filesystem by
+    reading the first few bytes of the file. This detects wedged
+    FUSE/pnfs mounts - including the case where metadata responds but
+    the pool node holding the actual bytes is unreachable.
+
+    Uses the ``timeout`` command from GNU coreutils with explicit
+    SIGKILL, because a process blocked in a FUSE syscall may not
+    respond to SIGTERM. The 5-second ``--kill-after`` window gives
+    SIGTERM a chance to clean up gracefully before SIGKILL forces the
+    issue.
+    """
+    res = subprocess.run(
+        ["timeout", "--kill-after=5", str(timeout),
+         "head", "-c", "4", path],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if res.returncode == 0:
+        return True
+    if res.returncode in (124, 137):
+        # 124 = SIGTERM timeout, 137 = SIGKILL after --kill-after
+        return False
+    # Any other non-zero: head failed for a non-timeout reason. Treat as "can't open"
+    logger.warning(
+        f"Probe of {path} failed (rc={res.returncode}): "
+        f"{res.stderr.decode(errors='replace').strip()}")
+    return False
+
+
+def _raise_if_cant_open_local(filepath, check_can_open_local: bool, timeout: int = LOCALTIMEOUT):
+    """Check if a local file can be opened by trying to read the first bytes.
+    If this fails within timeout, raise an OSError.
+    In case of remote files (starting with "root:") the function does nothing."""
+    if not filepath.startswith("root:") and check_can_open_local:
+        # If local file (doesn't start with "root:") and check_can_open_local
+        # we open the file and read the first bytes. If this fails within timeout
+        # raise an OSError.
+        if not _can_open_local_within_timeout(filepath, timeout=timeout):
+            msg = f"Failed to open {filepath} within {timeout}s on Node: {_get_node_info()}."
+            raise OSError(msg)
 
 
 @dataclass
@@ -378,6 +439,10 @@ class Runner(coffea.processor.Runner):
             item.metadata.get("use_eos_redirector", True),
             item.metadata.get("url_priority", None))
         for filepath in filepaths:
+            # We check outside of the try-except block, because if a local file cannot be opened,
+            # we directly want to raise an error. Currently, no remote files are added to filepaths list
+            # if a local file is available.
+            _raise_if_cant_open_local(filepath, item.metadata["check_can_open_local"])
             try:
                 with uproot.open(
                         {filepath: None}, timeout=xrootdtimeout) as file:
@@ -439,6 +504,10 @@ class Runner(coffea.processor.Runner):
             metadata.get("url_priority", None))
 
         for filepath in filepaths:
+            # We check outside of the try-except block, because if a local file cannot be opened,
+            # we directly want to raise an error. Currently, no remote files are added to filepaths list
+            # if a local file is available.
+            _raise_if_cant_open_local(filepath, metadata["check_can_open_local"])
             try:
                 filecontext = uproot.open(
                     {filepath: None},

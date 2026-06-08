@@ -129,6 +129,13 @@ Data Sets
    In case none of the sites is available for a given file, it will still
    use another site, in contrast to ``xrootd_url_blacklist``.
 
+``check_can_open_local_files``: (bool, optional)
+   If true, Pepper will check if local files can be opened before trying to access them. 
+   The access is done by trying to read the first few bytes of the file. In case the file cannot be opened, 
+   an ``IOError`` will be raised. Default is ``false`` for performance reasons, but can be set to ``true`` 
+   for debugging or in environments where file accessibility is uncertain and the user does not
+   want to risk hanging file reads.
+
 .. _config-store:
 
 ``store`` (string)
