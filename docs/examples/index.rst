@@ -17,6 +17,7 @@ see the :ref:`configuration-reference`. If you are new to Pepper, start with
    Extending the Config Class <extending_config>
    Using the Bundled Scripts <bundled_scripts>
    Applying Scale Factors <scale_factors>
+   CMS Analyses Built with Pepper <cms_analyses>
 
 .. grid:: 2 3 3 4
    :gutter: 2
@@ -59,14 +60,21 @@ see the :ref:`configuration-reference`. If you are new to Pepper, start with
       ^^^^^^^^^^^^^^^^^^^^^^
       Walk through the process of configuring and applying scale factors to your analysis.
 
+   .. grid-item-card::
+      :link: cms_analyses
+      :link-type: doc
+      :text-align: center
+ 
+      CMS Analyses Built with Pepper
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      A gallery of CMS analyses that use Pepper, with links to their analysis-specific repositories.
 
+.. Planned Examples
+.. ----------------
 
-Planned Examples
-----------------
+.. The following examples are planned but not yet written. If you would like to
+.. contribute one, or if you have a use case you would like to see documented,
+.. please get in touch on :mattermost:`Mattermost <pepper-users>`.
 
-The following examples are planned but not yet written. If you would like to
-contribute one, or if you have a use case you would like to see documented,
-please get in touch on :mattermost:`Mattermost <pepper-users>`.
-
-- **CMS analyses built with Pepper.** A gallery of public CMS analyses that
-  use Pepper, with links to their analysis-specific repositories.
+.. - **CMS analyses built with Pepper.** A gallery of public CMS analyses that
+..   use Pepper, with links to their analysis-specific repositories.

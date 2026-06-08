@@ -13,6 +13,9 @@
 import datetime as dt
 import os
 import sys
+from docutils import nodes
+from docutils.parsers.rst import roles
+
 sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
@@ -110,10 +113,29 @@ html_css_files = [
 ]
 
 html_js_files = [
-   "js/mattermost-icon.js",
+    ("js/mattermost-icon.js", {"defer": "defer"}),
 ]
 
 extlinks = {
     "repo": (f"{gitlab_repository_url}/-/blob/master/%s", "%s"),
     "mattermost": (f"{mattermost_channel_url}/%s", "%s")
 }
+
+def _icon_link_role(icon_class, aria_label):
+    def role(name, rawtext, text, lineno, inliner, options=None, content=None):
+        url = text.strip()
+        html = (
+            f'<a href="{url}" aria-label="{aria_label}" '
+            f'class="repo-icon-link">'
+            f'<i class="fab {icon_class}"></i></a>'
+        )
+        node = nodes.raw('', html, format='html')
+        return [node], []
+    return role
+
+
+def setup(app):
+    roles.register_local_role(
+        'repo-gitlab', _icon_link_role('fa-gitlab', 'GitLab repository'))
+    roles.register_local_role(
+        'repo-github', _icon_link_role('fa-github', 'GitHub repository'))

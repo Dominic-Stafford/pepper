@@ -42,3 +42,26 @@
 .logo__title:hover {
     text-decoration: none;
 }
+
+/* Custom role for repository links with icons */
+.repo-icon-link {
+  color: var(--pst-color-text-base);
+  font-size: 1.15em;
+  text-decoration: none;
+  display: inline-block;
+  padding: 0.2em 0.3em;
+  line-height: 1;
+}
+
+.repo-icon-link:hover {
+  color: var(--pst-color-link-hover);
+  text-decoration: none;
+}
+
+.repo-icon-link::after {
+  content: none;
+}
+
+.repo-icon-link i {
+  vertical-align: middle;
+}

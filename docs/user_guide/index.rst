@@ -14,6 +14,7 @@ User Guide
    Scale Factors <scale_factors>
    Histograms <histograms>
    HTCondor <htcondor>
+   MC Normalization <mc_normalization>
 
 Welcome to the Pepper user guides. Here, you can find various introductions to some of the features available in Pepper. 
 In case you have suggestions for what could also be included here, please reach out on :mattermost:`Mattermost <pepper-users>`!
@@ -119,6 +120,15 @@ In case you have suggestions for what could also be included here, please reach 
       ^^^^^^^^^^^^^
       How to scale up your analysis using HTCondor.
 
+   .. grid-item-card::
+      :link: mc_normalization
+      :link-type: doc
+      :text-align: center
+
+      MC Normalization
+      ^^^^^^^^^^^^^^^^
+      How to configure MC normalization in Pepper.
+
 Planned User Guide
 ---------------------
 
@@ -126,7 +136,5 @@ The following examples are planned but not yet written. If you would like to
 contribute one, or if you have a use case you would like to see documented,
 please get in touch on :mattermost:`Mattermost <pepper-users>`.
 
-- **MC normalization.** A description of MC normalization and how to configure it in Pepper, including the
-  ``mc_lumifactors`` config key and how they interact with the dataset lists.
 - **Systematic variations.** A walkthrough of how to configure and apply systematic variations in Pepper, including the
   ``compute_systematics`` config key and how it interacts with the processor code.

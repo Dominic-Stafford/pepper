@@ -9,10 +9,10 @@ Pepper is a easy-to-use multi-purpose framework for analysing CMS NanoAOD datase
 on [coffea](https://coffea-hep.readthedocs.io/) and
 [Awkward Array](https://awkward-array.org/). Originally developed for BSM searches with top quarks in dilepton final states, it is now used for both
 searches and measurements across many final states and physics cases. For reference this repository comes with 
-the necessary tools for a <img src="https://latex.codecogs.com/gif.latex?\mathrm{t\bar{t}}\rightarrow\mathrm{b\bar{b}}\mathrm{ll\nu\nu}" /> analysis.
+the necessary tools for a <img src="https://latex.codecogs.com/gif.latex?\mathrm{t\bar{t}}\rightarrow\mathrm{b\bar{b}}\mathrm{ll\nu\nu}" /> analysis. 
+See the [gallery of CMS analyses built with Pepper](https://cms-pepper.docs.cern.ch/examples/cms_analyses.html) in the docs.
 
-📖 **Full documentation, tutorials, and the configuration reference are
-available at [cms-pepper.docs.cern.ch](https://cms-pepper.docs.cern.ch/).**
+📖 **Full documentation, tutorials, and the configuration reference are available at [cms-pepper.docs.cern.ch](https://cms-pepper.docs.cern.ch/).**
 
 ## Installation
 
