@@ -58,7 +58,7 @@ Expect the transfer to take a few working days to be approved and completed.
 Step 2: Compute MC lumi factors
 -------------------------------
 
-For a detailed discussion of MC normalisation in Pepper, see :doc:`/user_guide/mc_normalisation`. There are two main 
+For a detailed discussion of MC normalisation in Pepper, see :doc:`/user_guide/mc_normalization`. There are two main 
 approaches to MC normalisation in Pepper:
 
 1. The ``"mc_lumifactors": false`` approach, where the lumifactors are computed on the fly by the processor. **This 
@@ -232,11 +232,19 @@ Analysis-specific scripts
 -------------------------
  
 The scripts directory also contains several files prefixed with ``ttbarll_`` that are specific to the 
-:math:`t\bar{t}\to\ell\ell` reference analysis shipped with Pepper - DY scale factor production, kinematic
-reconstruction histograms, trigger SF calculation. Treat these as worked templates: if your analysis needs an equivalent, 
+:math:`t\bar{t}\to\ell\ell` reference analysis shipped with Pepper -- DY scale factor production, kinematic
+reconstruction histograms. Treat these as worked templates: if your analysis needs an equivalent, 
 copy the relevant script into your own analysis repository and adapt it. They are not designed to be invoked unmodified from a different analysis.
- 
- 
+
+Other Scripts
+^^^^^^^^^^^^^
+Some scripts are not stored in the main repository but are instead found in separate repositories for specific analyses. 
+The following list, which is not necessarily exhaustive, 
+includes scripts that are not general-purpose enough to be included in the main repo but are still useful as examples for how to implement common analysis tasks:
+
+- Cross trigger scale factor production: :repo-gitlab:`https://gitlab.cern.ch/cms-analysis/general/pepper/examples/cross-trigger-sfs`
+
+
 See also
 --------
  
