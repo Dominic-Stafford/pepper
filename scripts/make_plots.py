@@ -29,6 +29,7 @@ import tqdm
 import hist
 import itertools
 import traceback
+import multiprocessing
 from warnings import filterwarnings
 
 # The pepper class "HistCollection" is used to load hists.json files
@@ -54,7 +55,7 @@ plt.style.use(mplhep.style.CMS)
 cms_color_scheme = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 
-def plot(h, config, dense_axis, outfile, log=False):
+def plot(h, config, dense_axis, outfile, exts, log=False):
     """
     Plot a already grouped 1D histogram.
 
@@ -281,6 +282,8 @@ def plot(h, config, dense_axis, outfile, log=False):
     # Axis formatting for the lower panel
     ax2.set_ylabel("Data / Pred.")
     ax2.set_xlim(edges[0], edges[-1])
+    if "ratio_ylim" in config:
+        ratio_ylim = config["ratio_ylim"]
     ax2.set_ylim(1.-ratio_ylim*1.05, 1.+ratio_ylim*1.05)
     ax2.set_xlabel(dense_axis.label)
 
@@ -292,8 +295,10 @@ def plot(h, config, dense_axis, outfile, log=False):
         year = config["year"]
         luminosity = config["luminosity"]
         com_energy = config["com_energy"] if "com_energy" in config else 13
-        mplhep.cms.label(ax=ax1, data=True, year=year,
-                         lumi=f"{luminosity:.1f}", com=com_energy)
+        cmslabel = config["cmslabel"] if "cmslabel" in config else None
+        mplhep.cms.label(ax=ax1, text=cmslabel, data=True, year=year,
+                         lumi=f"{luminosity:.1f}", com=com_energy,
+                         scilocator_adjust=False)
 
     # Generic figure adjustments
     fig.align_ylabels()
@@ -301,7 +306,8 @@ def plot(h, config, dense_axis, outfile, log=False):
     plt.subplots_adjust(hspace=0.0)
 
     # Save the plot to file
-    fig.savefig(outfile)
+    for ext in exts:
+        fig.savefig(outfile + "." + ext)
     plt.close()
 
 
@@ -504,11 +510,18 @@ parser.add_argument(
     "--log", action="store_true", help="Make logarithmic plots")
 parser.add_argument(
     "--ext", choices=["pdf", "svg", "png"], help="Output file format",
-    default="pdf")
+    default=None, action="append")
 parser.add_argument(
     "-c", "--cut", type=str, default=None, help="If specified, only "
     "plot a given cut (i.e. only 'Req MET'.)")
+parser.add_argument(
+    "-j", "--jobs", type=int, default=1, help="Parallelize over given "
+    "number of jobs. Default 1"
+)
 args = parser.parse_args()
+
+if args.ext is None:
+    args.ext = ["pdf"]
 
 # Read the config from json using the pepper Config class
 config = Config(args.plot_config)
@@ -537,8 +550,8 @@ else:
     # Create a HistCollection for only the single histogram
     hists = HistCollection.from_single_hist(args.histfile)
 
-# Iterate over all histograms in our collection
-for histkey in tqdm.tqdm(hists.keys()):
+
+def process_histogram(histkey):
 
     # Retrieve the cut and the variable for the histogram
     if is_hist_json:
@@ -571,7 +584,7 @@ for histkey in tqdm.tqdm(hists.keys()):
     # the histogram is from a different cut, skip
     if args.cut is not None:
         if cutname != args.cut:
-            continue
+            return
 
     print(f"Processing file {hists[histkey]}...")
 
@@ -608,7 +621,7 @@ for histkey in tqdm.tqdm(hists.keys()):
     if len(dense_axes) != 1:
         print(f"Skipping histogram {variable} for cut {cutname} "
               f"with {len(dense_axes)} dense axes")
-        continue
+        return
     # Get the name of our single dense axis
     dense_axis_name = dense_axes[0].name
 
@@ -636,7 +649,7 @@ for histkey in tqdm.tqdm(hists.keys()):
         except ValueError:
             print(f"Could not rebin histogram {variable} for cut {cutname}")
             traceback.print_exc()
-            continue
+            return
 
     # Get a dictionary of all categories we want for this histogram
     # using the helper method defined above
@@ -654,7 +667,7 @@ for histkey in tqdm.tqdm(hists.keys()):
         os.makedirs(cat_outfolder, exist_ok=True)
 
         # Build a output file name for the plot
-        outfile = f"{variable}_{cutname}_{category_label}.{args.ext}"
+        outfile = f"{variable}_{cutname}_{category_label}"
         outfile = os.path.join(cat_outfolder, outfile)
 
         # Slice the histogram according to the category definition
@@ -669,8 +682,19 @@ for histkey in tqdm.tqdm(hists.keys()):
         try:
             # Plot with the method defined above
             plot(h_cat, config, h_cat.axes[dense_axis_name], outfile,
-                 log=args.log)
+                 args.ext, log=args.log)
         except ValueError:
             print(f"Error for variable {variable}, cutname {cutname}, "
                   f"category {category_label}:")
             traceback.print_exc()
+
+
+if args.jobs == 1:
+    # Iterate over all histograms in our collection
+    for histkey in tqdm.tqdm(hists.keys()):
+        process_histogram(histkey)
+
+else:
+    with multiprocessing.Pool(args.jobs) as pool:
+        list(tqdm.tqdm(pool.imap_unordered(
+            process_histogram, hists.keys()), total=len(hists)))

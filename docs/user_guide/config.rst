@@ -785,3 +785,10 @@ Plotting is controlled via a separate config file. Example: ``example/example_pl
 
 ``com_energy`` (float, optional)
    Center-of-mass energy in TeV. Default: 13
+
+``cmslabel`` (string, optional)
+  Text to print after the CMS logo, e.g. 'Internal' or 'Preliminary'.
+
+``ratio_ylim`` (float, optional)
+  Range of the y axis on the ratio panel, e.g. ``0.2`` for an axis from 0.8 - 1.2.
+  If not given, it will automatically zoom to the data/MC ratio.
