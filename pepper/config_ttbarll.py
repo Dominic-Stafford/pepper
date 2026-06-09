@@ -93,6 +93,11 @@ class ConfigTTbarLL(pepper.ConfigBasicPhysics):
                 f"{len(histnames)}")
         with uproot.open(self._get_path(path)) as f:
             for chn, histname in zip(("is_ee", "is_em", "is_mm"), histnames):
+                if (chn == "is_em" and
+                        self.get("trigger_sf_emu_flavour_split", False)):
+                    dimlabels = ["ele_pt", "mu_pt"]
+                else:
+                    dimlabels = ["lep1_pt", "lep2_pt"]
                 ret[chn] = ScaleFactors.from_hist(
-                    f[histname], dimlabels=["lep1_pt", "lep2_pt"])
+                    f[histname], dimlabels=dimlabels)
         return ret
