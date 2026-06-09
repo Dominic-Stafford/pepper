@@ -57,6 +57,7 @@ class Config(MutableMapping):
         self._overwritten = {}
         self._textparser = textparser
         self._cwd = os.path.realpath(cwd)
+        self.check_integrity = True
 
         logger.debug("Configuration read")
         if "datadir" in self._config:
@@ -79,6 +80,7 @@ class Config(MutableMapping):
             "local_file_blacklist": self._get_maybe_external,
             "xrootd_url_blacklist": self._get_maybe_external,
             "mc_lumifactors": self._get_maybe_external,
+            "crosssections": self._get_maybe_external,
             "hists": self._get_hists,
             "columns_to_save": self._get_maybe_external
         }

@@ -150,10 +150,6 @@ Data Sets
 
    These datasets are used for experimental data input.
 
-``MET_trigger_datasets`` (object)
-   Same structure as ``exp_datasets``. Used as cross-trigger inputs for
-   trigger scale factor computation.
-
 ``data_eras`` (object)
    Maps era names to arrays containing two-element lists specifying the run
    number ranges corresponding to each era.
@@ -173,9 +169,6 @@ Data Sets
    Maps dataset names (keys from ``exp_datasets``) to arrays of trigger
    paths. If a trigger is absent from the NanoAOD file, it is ignored.  
    The user must ensure there are no typos.
-
-``MET_triggers`` (array of strings)
-   Trigger paths used as cross-triggers for MET trigger scale factors.
 
 ``dataset_trigger_order`` (array)
    Lists keys from ``exp_datasets`` in priority order. If an event passes
@@ -707,7 +700,11 @@ ttbarll Specific
 ``trigger_sfs`` (array, optional)
    First element: ROOT file containing trigger SF histograms.  
    Second element: array of three histogram names for ``ee``, ``eµ``, and ``µµ`` channels.  
-   Histograms binned by leading and subleading lepton pT.
+   Histograms can be binned by leading and subleading lepton pT, or electron and muon pT.
+
+``trigger_sf_emu_flavour_split`` (boolean, optional)
+    Whether ``eµ`` channel SFs are binned in electron and muon pT, or leading and subleading lepton pT.
+    Default is false (i.e. leading and subleading lepton pT)
 
 ``reco_algorithm`` (string, optional)
    Algorithm for top quark reconstruction. Options: ``"Sonnenschein"``, ``"Betchart"``.

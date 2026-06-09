@@ -164,7 +164,8 @@ class Processor(coffea.processor.ProcessorABC):
             saved. Every chunk will be saved in its own file. If `None`,
             nothing will be saved.
         """
-        self._check_config_integrity(config)
+        if config.check_integrity:
+            self._check_config_integrity(config)
         self.config = config
         if eventdir is not None:
             self.eventdir = os.path.realpath(eventdir)

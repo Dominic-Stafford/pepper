@@ -330,26 +330,30 @@ class Processor(pepper.ProcessorBasicPhysics):
         leps = data["Lepton"]
         ones = np.ones(len(data))
         central = ones
+        up = ones
+        down = ones
         channels = ["is_ee", "is_em", "is_mm"]
         trigger_sfs = self.config["trigger_sfs"]
         for channel in channels:
-            sf = trigger_sfs[channel](lep1_pt=leps[:, 0].pt,
-                                      lep2_pt=leps[:, 1].pt)
-            central = ak.where(data[channel], sf, central)
-        if self.config["compute_systematics"]:
-            up = ones
-            down = ones
-            for channel in channels:
-                sf = trigger_sfs[channel](lep1_pt=leps[:, 0].pt,
-                                          lep2_pt=leps[:, 1].pt,
-                                          variation="up")
+            dimlabels = trigger_sfs[channel].dimlabels
+            ch_leps = leps[data[channel]]
+            if "ele_pt" in dimlabels:
+                fills = {"ele_pt": ch_leps[abs(ch_leps.pdgId) == 11][:, 0].pt,
+                         "mu_pt": ch_leps[abs(ch_leps.pdgId) == 13][:, 0].pt}
+            else:
+                fills = {"lep1_pt": ch_leps[:, 0].pt,
+                         "lep2_pt": ch_leps[:, 1].pt}
+            sf = trigger_sfs[channel](**fills)
+            central[data[channel]] = sf
+            if self.config["compute_systematics"]:
+                sf = trigger_sfs[channel](variation="up", **fills)
                 up = ak.where(data[channel], sf, up)
-                sf = trigger_sfs[channel](lep1_pt=leps[:, 0].pt,
-                                          lep2_pt=leps[:, 1].pt,
-                                          variation="down")
+                sf = trigger_sfs[channel](variation="down", **fills)
                 down = ak.where(data[channel], sf, down)
+        if self.config["compute_systematics"]:
             return central, {"triggersf": (up / central, down / central)}
-        return central
+        else:
+            return central
 
     def apply_dy_sfs(self, dsname, data):
         """Apply scale factors to compensate mismodeling of Drell-Yan"""

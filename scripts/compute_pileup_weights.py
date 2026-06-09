@@ -15,6 +15,7 @@ class Processor(pepper.Processor):
         self.data_pu_hist_up = config["data_pu_hist_up"]
         self.data_pu_hist_down = config["data_pu_hist_down"]
         self.year = config["year"]
+        config.check_integrity = False
 
         datahist, datahistup, datahistdown = self.load_input_hists()
         if len(datahist.axes) != 1:
@@ -84,6 +85,9 @@ class Processor(pepper.Processor):
         # Treat all datasets as normal datasets, instead of using them as
         # systematics
         config["dataset_for_systematics"] = {}
+        # Set mc_lumifactors to true, to prevent pepper trying to calculate these for the case
+        # of mc_lumifactors: false. These are irrelevant in any case when computing pileup weights
+        config["mc_lumifactors"] = True
 
         super().__init__(config, eventdir)
 
