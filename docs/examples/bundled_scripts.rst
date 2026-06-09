@@ -243,6 +243,7 @@ The following list, which is not necessarily exhaustive,
 includes scripts that are not general-purpose enough to be included in the main repo but are still useful as examples for how to implement common analysis tasks:
 
 - Cross trigger scale factor production: :repo-gitlab:`https://gitlab.cern.ch/cms-analysis/general/pepper/examples/cross-trigger-sfs`
+- Assemble a pdf of plots outputted by Pepper: :repo-gitlab:`https://gitlab.cern.ch/mabaattr/pepper-output-plotting`
 
 
 See also
