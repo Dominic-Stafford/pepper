@@ -367,6 +367,10 @@ class ConfigBasicPhysics(pepper.Config):
             "jet_ressf": partial(
                 self._get_jet_general, config_key,
                 correctionlib_path=corrset),
+            "jet_ressf_uncertainty": partial(
+                self._get_jet_general, config_key,
+                correctionlib_path=corrset)
+
         }
         updated_conf = {}
         for key, value in value.items():

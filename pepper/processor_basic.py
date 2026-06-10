@@ -944,8 +944,24 @@ class ProcessorBasicPhysics(pepper.Processor):
             if self.config.get('jme_correctionlib_corrections'):
                 jer = self.config["jme_correctionlib_corrections"]["jet_resolution"](
                     JetPt=pt, JetEta=eta, Rho=rho)
-                jersf = self.config["jme_correctionlib_corrections"]["jet_ressf"](
-                    JetPt=pt, JetEta=eta, Rho=rho, systematic=variation)
+                # this handles the JER unc in the JEC format:
+                # https://cms-jerc.web.cern.ch/JER/#smearing-procedures
+                if "jet_ressf_uncertainty" in self.config["jme_correctionlib_corrections"]:
+                    jersf = self.config["jme_correctionlib_corrections"]["jet_ressf"](
+                        JetPt=pt, JetEta=eta)
+                    jersf_unc = self.config["jme_correctionlib_corrections"]["jet_ressf_uncertainty"](
+                        JetPt=pt, JetEta=eta)
+                    if variation == "central":
+                        jersf = jersf
+                    elif variation == "up":
+                        jersf = jersf*(1+jersf_unc)
+                    elif variation == "down":
+                        jersf = jersf*(1-jersf_unc)
+                    else:
+                        raise ValueError("variation must be one of 'central', 'up' or 'down'")
+                else:
+                    jersf = self.config["jme_correctionlib_corrections"]["jet_ressf"](
+                        JetPt=pt, JetEta=eta, Rho=rho, systematic=variation)
             else:
                 jer = self.config["jet_resolution"](
                     JetPt=pt, JetEta=eta, Rho=rho)

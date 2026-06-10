@@ -338,6 +338,9 @@ optional parameter is missing, the corresponding procedure will be skipped.
    - ``jet_uncertainty``: Array of strings. Each string is the name of a jet uncertainty to be applied. The name is substituted into ``jet_uncertainty_template``.
    - ``jet_resolution``: A string with the jet resolution correcion name.
    - ``jet_ressf``: A string with the jet resolution scale factor name.
+   - ``jet_ressf_uncertainty``: A string with the jet resolution scale factor uncertainty name. This is
+   required when using the new JEC correctionlib format (update June 5th 2026 `JERC smearing procedures <https://cms-jerc.web.cern.ch/JER/#smearing-procedures>`__).
+   If an older correction format is used, this can be omitted.
 
 ``fatjet_jme_correctionlib_corrections`` (dict, optional)
    The JME correctionlib method for fat jets. Has the same dictionary entries as ``jme_correctionlib_corrections``.
