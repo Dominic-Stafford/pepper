@@ -77,6 +77,8 @@ In case you include it, your config would look like::
 Jet Energy Resolution
 """""""""""""""""""""""""
 
+Legacy format (before the 05/06.2026 update)
+
 JER smearing requires two inputs: the :math:`p_T` resolution itself and a data/MC scale
 factor used to adjust the smearing applied in simulation::
 
@@ -85,6 +87,14 @@ factor used to adjust the smearing applied in simulation::
 
 Both must be provided together. The smearing is applied to MC jets to bring
 the simulated resolution in line with what is observed in data.
+
+New format (starting from the 05/06.2026 update)
+
+SF and SF uncertainty are provided as distinct inputs. So the new JER smearing configuration looks like::
+
+    "jet_resolution":"Summer24Prompt24_JRV1_MC_PtResolution_AK4PFPuppi",
+    "jet_ressf":"Summer24Prompt24_JRV1_MC_ScaleFactor_AK4PFPuppi",
+    "jet_ressf_uncertainty": "Summer24Prompt24_JRV1_MC_SFUncertainty_AK4PFPuppi"
 
 MET Smearing
 """""""""""""""""""""""""""
