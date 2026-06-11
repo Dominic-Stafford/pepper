@@ -242,7 +242,7 @@ class Processor(coffea.processor.ProcessorABC):
                 " 'all', or 'mc_lumifactors' to false (posterior computation)")
 
         if ("exit_on_failed_jobs" in config
-                and config["exit_on_failed_jobs"].lower() != "none"):
+                and config["exit_on_failed_jobs"].lower() == "none"):
             logger.warning(
                 'Not exiting on failed jobs can lead to silent exclusion of data in '
                 'final histograms. "exit_on_failed_jobs": "none" is only recommended '
