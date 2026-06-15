@@ -202,23 +202,24 @@ into one file:
         "reapply_jec": true,
         "smear_met": false,
         "jme_correctionlib_corrections": {
-            "path": "/cvmfs/cms-griddata.cern.ch/cat/metadata/JME/Run3-24CDEReprocessingFGHIPrompt-Summer24-NanoAODv15/2025-12-02/jet_jerc.json.gz",
+            "path": "/cvmfs/cms-griddata.cern.ch/cat/metadata/JME/Run3-24CDEReprocessingFGHIPrompt-Summer24-NanoAODv15/2026-06-05/jet_jerc.json.gz",
             "jet_correction_data": [
-                "Summer24Prompt24_V2_DATA_L1FastJet_AK4PFPuppi",
-                "Summer24Prompt24_V2_DATA_L2Relative_AK4PFPuppi",
-                "Summer24Prompt24_V2_DATA_L3Absolute_AK4PFPuppi",
-                "Summer24Prompt24_V2_DATA_L2L3Residual_AK4PFPuppi",
+                "Summer24Prompt24_V3_DATA_L1FastJet_AK4PFPuppi",
+                "Summer24Prompt24_V3_DATA_L2Relative_AK4PFPuppi",
+                "Summer24Prompt24_V3_DATA_L3Absolute_AK4PFPuppi",
+                "Summer24Prompt24_V3_DATA_L2L3Residual_AK4PFPuppi",
 
             ],
             "jet_correction_mc": [
-                "Summer24Prompt24_V2_MC_L1FastJet_AK4PFPuppi",
-                "Summer24Prompt24_V2_MC_L2Relative_AK4PFPuppi",
-                "Summer24Prompt24_V2_MC_L3Absolute_AK4PFPuppi",
+                "Summer24Prompt24_V3_MC_L1FastJet_AK4PFPuppi",
+                "Summer24Prompt24_V3_MC_L2Relative_AK4PFPuppi",
+                "Summer24Prompt24_V3_MC_L3Absolute_AK4PFPuppi",
             ],
-            "jet_uncertainty_template": "Summer24Prompt24_V2_MC_[UNC]_AK4PFPuppi"
+            "jet_uncertainty_template": "Summer24Prompt24_V3_MC_[UNC]_AK4PFPuppi"
             "jet_uncertainty": ["Total"],
             "jet_resolution": "Summer23BPixPrompt23_RunD_JRV1_MC_PtResolution_AK4PFPuppi",
             "jet_ressf": "Summer23BPixPrompt23_RunD_JRV1_MC_ScaleFactor_AK4PFPuppi",
+            "jet_ressf_uncertainty": "Summer24Prompt24_JRV1_MC_SFUncertainty_AK4PFPuppi"
         }
 
    }
@@ -229,8 +230,8 @@ Use ``"Total"`` for analyses that do not need the full source decomposition.
 
 .. note::
 
-   The JER tags above (``Summer23BPixPrompt23_RunD_JRV1_*``) are from 2023 -- at the time of writing, the JME POG had
-   not yet released 2024 JER values. Replace these once the corresponding 2024 entries appear in ``jet_jerc.json.gz``.
+   The JER tags above were updated in June 2026 and they contain the new ``SFUncertainty`` entry. If you are using an older JER version
+   without that entry, then you should omit the ``jet_ressf_uncertainty`` key.
 
 .. caution::
 
