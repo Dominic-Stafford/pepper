@@ -5,31 +5,36 @@ import socket
 from typing import Optional
 import threading
 import queue
-from copy import deepcopy
+from copy import copy, deepcopy
 from functools import partial
 import time
 import logging
-import subprocess
 import uproot
 import coffea.processor
 import coffea.util
-from coffea.processor import set_accumulator
-from coffea.processor.executor import (
-    _compression_wrapper, _decompress, UprootMissTreeError, FileMeta)
+from coffea.processor import CheckpointerABC
+from coffea.processor.executor import _compression_wrapper, _decompress
 from coffea.processor.accumulator import iadd as accum_iadd
 from coffea.processor import ProcessorABC
-from coffea.nanoevents import NanoEventsFactory
-import cloudpickle
-import uuid
-import lz4.frame as lz4f
+from coffea.nanoevents import schemas, NanoEventsFactory
+from coffea.nanoevents.trace import trace
+from coffea.nanoevents.mapping import BufferCache
+from collections.abc import Callable, MutableMapping
 from tqdm import tqdm
+import cloudpickle
+import lz4.frame as lz4f
+import uuid
+from numcodecs import Blosc
+import subprocess
 import pepper
 
 
-STATEFILE_VERSION = 3
+STATEFILE_VERSION = 4
 LOCALTIMEOUT = 60  # seconds
 
 logger = logging.getLogger(__name__)
+
+codec = Blosc("zstd", clevel=1, shuffle=Blosc.BITSHUFFLE)
 
 
 class StateFileError(Exception):
@@ -383,10 +388,29 @@ class Runner(coffea.processor.Runner):
     other than making our own Runner. Coffea's Runner is using ``uproot.open``
     inside ``metadata_fetcher`` and ``_work_function``.
     """
+
     @staticmethod
-    def resolve_lfn(lfn, store, xrootddomain, local_file_blacklist,
-                    url_blacklist=None, use_eos_redirector=True,
-                    url_priority=None):
+    def _try_open_and_process(item, metadata, callable):
+        filepaths = Runner.resolve_lfn(item.filename, metadata)
+        for filepath in filepaths:
+            # We check outside of the try-except block, because if a local file cannot be opened,
+            # we directly want to raise an error. Currently, no remote files are added to filepaths list
+            # if a local file is available.
+            _raise_if_cant_open_local(filepath, metadata["check_can_open_local"])
+            try:
+                return callable(filepath)
+
+            except OSError as e:
+                logger.warning(
+                    f"Got error for file {filepath}, continuing with alternative "
+                    f"file location: {e}")
+        else:
+            raise OSError(
+                "None of the file paths found for the following file could be "
+                f"processed: {item.filename}")
+
+    @staticmethod
+    def resolve_lfn(lfn, metadata):
         """Converts logical file names (LFNs) to physical file names that can
         be understood by ``uproot.open``
 
@@ -395,139 +419,55 @@ class Runner(coffea.processor.Runner):
         lfn
             If it starts with 'cmslfn://', it is interpreseted as logical file
             name, otherwise it is assumed it already is a physical file name
-        store
-            Path to the store directory for local access to the file
-        xrootddomain
-            Domain of the redirector server to find sites that offer the file
-            via XRootD
-        local_file_blacklist
-            Blacklist of local file paths to ignore
-        url_blacklist
-            Optional; a blacklist of XRootD URLs which should not be used for
-            resolving the file
-        use_eos_redirector
-            If True and the file is located on EOS, the EOS redirector URL will
-            be used instead of the direct EOS path.
-        url_priority
-            Optional; a list of strings. If given, XRootD URLs containing any of
-            these strings will be preferred over other URLs for the same file.
+        metadata
+            Config metadata; see implementation for content
 
         Returns
         -------
         filepaths
             Physical file paths associated to ``lfn``
         """
+        xrootddomain = metadata["xrootddomain"]
         if lfn.startswith("cmslfn://"):
-            filepaths = pepper.datasets.resolve_lfn(lfn, store, xrootddomain,
-                                                    url_blacklist,
-                                                    use_eos_redirector,
-                                                    url_priority)
+            filepaths = pepper.datasets.resolve_lfn(lfn, metadata["store_path"], xrootddomain,
+                                                    metadata["url_blacklist"],
+                                                    metadata.get("use_eos_redirector", True),
+                                                    metadata.get("url_priority", None))
         else:
             filepaths = [lfn]
+        local_file_blacklist = metadata["local_file_blacklist"]
         if xrootddomain is not None and local_file_blacklist is not None:
             filepaths = [p for p in filepaths if p not in local_file_blacklist]
 
         return filepaths
 
     @staticmethod
-    def metadata_fetcher(xrootdtimeout, align_clusters, item):
-        filepaths = Runner.resolve_lfn(
-            item.filename, item.metadata["store_path"],
-            item.metadata["xrootddomain"],
-            item.metadata["local_file_blacklist"],
-            item.metadata["url_blacklist"],
-            item.metadata.get("use_eos_redirector", True),
-            item.metadata.get("url_priority", None))
-        for filepath in filepaths:
-            # We check outside of the try-except block, because if a local file cannot be opened,
-            # we directly want to raise an error. Currently, no remote files are added to filepaths list
-            # if a local file is available.
-            _raise_if_cant_open_local(filepath, item.metadata["check_can_open_local"])
-            try:
-                with uproot.open(
-                        {filepath: None}, timeout=xrootdtimeout) as file:
-                    try:
-                        tree = file[item.treename]
-                    except uproot.exceptions.KeyInFileError as e:
-                        raise UprootMissTreeError(str(e)) from e
+    def metadata_fetcher_root(xrootdtimeout, align_clusters, uproot_options, item):
+        def _work_function_inner(filepath):
+            item_file = copy(item)
+            item_file.filename = filepath
+            out_acc = coffea.processor.Runner.metadata_fetcher_root(
+                xrootdtimeout, align_clusters, uproot_options, item_file)
+            file_meta = out_acc.pop()
+            file_meta.filename = item.filename
+            out_acc.add(file_meta)
+            return out_acc
 
-                    metadata = {}
-                    if item.metadata:
-                        metadata.update(item.metadata)
-                    metadata.update({
-                        "numentries": tree.num_entries,
-                        "uuid": file.file.fUUID})
-                    if align_clusters:
-                        metadata["clusters"] = tree.common_entry_offsets()
-                    out = set_accumulator(
-                        [FileMeta(
-                            item.dataset, item.filename, item.treename,
-                            metadata)]
-                    )
-            except OSError as e:
-                logger.warning(
-                    "Got error while opening, continuing with alternative "
-                    f"file location: {e}")
-                continue
-            break
-        else:
-            raise OSError(
-                "None of the file paths found for the following file could be "
-                f"opened: {item.filename}")
-
-        return out
+        return Runner._try_open_and_process(item, item.metadata, _work_function_inner)
 
     @staticmethod
-    def _work_function(
-        format,
-        xrootdtimeout,
-        mmap,
-        schema,
-        cache_function,
-        use_dataframes,
-        savemetrics,
+    def _open_file_context(
+        filepath,
         item,
-        processor_instance,
+        uproot_options
     ):
-        if not isinstance(processor_instance, ProcessorABC):
-            processor_instance = cloudpickle.loads(
-                lz4f.decompress(processor_instance))
-        # The ResumableExecutor might have loaded and old state, thus giving
-        # old metadata possibly before the user changed the config.
-        # Instead obtain the metadata from the processor_instance
-        metadata = processor_instance.pepperitemmetadata
 
-        filepaths = Runner.resolve_lfn(
-            item.filename, metadata["store_path"],
-            metadata["xrootddomain"], metadata["local_file_blacklist"],
-            metadata["url_blacklist"], metadata.get("use_eos_redirector", True),
-            metadata.get("url_priority", None))
+        filecontext = uproot.open(
+            {filepath: None},
+            **uproot_options
+        )
 
-        for filepath in filepaths:
-            # We check outside of the try-except block, because if a local file cannot be opened,
-            # we directly want to raise an error. Currently, no remote files are added to filepaths list
-            # if a local file is available.
-            _raise_if_cant_open_local(filepath, metadata["check_can_open_local"])
-            try:
-                filecontext = uproot.open(
-                    {filepath: None},
-                    timeout=xrootdtimeout,
-                    file_handler=uproot.MemmapSource
-                    if mmap
-                    else uproot.MultithreadedFileSource,
-                )
-            except OSError as e:
-                logger.warning(
-                    "Got error while opening, continuing with alternative "
-                    f"file location: {e}")
-                continue
-            break
-        else:
-            raise OSError(
-                "None of the file paths found for the following file could be "
-                f"opened: {item.filename}")
-
-        metadata = {
+        metadata_file = {
             "dataset": item.dataset,
             "filename": filepath,
             "treename": item.treename,
@@ -538,22 +478,93 @@ class Runner(coffea.processor.Runner):
             else "",
         }
         if item.usermeta is not None:
-            metadata.update(item.usermeta)
+            metadata_file.update(item.usermeta)
 
-        materialized = []
-        with filecontext as file:
-            factory = NanoEventsFactory.from_root(
-                file=file,
-                treepath=item.treename,
-                entry_start=item.entrystart,
-                entry_stop=item.entrystop,
-                persistent_cache=cache_function(),
-                schemaclass=schema,
-                metadata=metadata,
-                access_log=materialized,
-            )
-            events = factory.events()
+        return filecontext, metadata_file
 
-            out = processor_instance.process(events)
+    @staticmethod
+    def _construct_events(file, item, schema, metadata, iteritems_options, preload=None, use_buffer_cache=True):
+        in_memory = {}
+        if use_buffer_cache:
+            buffer_cache = BufferCache(cache=in_memory, codec=codec)
+        else:
+            buffer_cache = None
+        factory = NanoEventsFactory.from_root(
+            file=file,
+            treepath=item.treename,
+            schemaclass=schema,
+            metadata=metadata,
+            mode="virtual",
+            entry_start=item.entrystart,
+            entry_stop=item.entrystop,
+            iteritems_options=iteritems_options,
+            preload=(lambda b: b.name in preload) if preload is not None else None,
+            buffer_cache=buffer_cache
+        )
+        events = factory.events()
+        return events, in_memory
 
-        return {"out": out}
+    @staticmethod
+    def _work_function(
+        format: str,
+        xrootdtimeout: int,
+        schema: schemas.BaseSchema,
+        use_dataframes: bool,
+        savemetrics: bool,
+        item: coffea.processor.executor.WorkItem,
+        processor_instance: ProcessorABC,
+        uproot_options: dict,
+        iteritems_options: dict,
+        checkpointer: CheckpointerABC,
+        cache_function: Callable[[], MutableMapping]
+    ):
+        if "timeout" not in uproot_options:
+            uproot_options["timeout"] = xrootdtimeout
+
+        if not isinstance(processor_instance, ProcessorABC):
+            processor_instance = cloudpickle.loads(
+                lz4f.decompress(processor_instance))
+
+        use_buffer_cache = item.usermeta.get("use_buffer_cache", True)
+
+        def _work_function_inner(filepath):
+            filecontext, metadata_file = Runner._open_file_context(filepath, item, uproot_options)
+
+            with filecontext as file:
+                events, buffer = Runner._construct_events(
+                    file, item, schema, metadata_file, iteritems_options, processor_instance.columns_to_preload(),
+                    use_buffer_cache=use_buffer_cache)
+                processor_instance.column_buffer_cache = buffer
+                out = processor_instance.process(events)
+            return {"out": out}
+
+        return Runner._try_open_and_process(item, item.usermeta, _work_function_inner)
+
+    def do_type_tracing(self, fileset, processor_instance):
+        # for now: pick a random item from the fileset for tracing
+        # make sure this is MC in case there is MC (since that has more branches)
+        item_to_process = fileset[0]
+        mc_datasets = processor_instance.config["mc_datasets"]
+        files_mc = [i for i in fileset if i.dataset in mc_datasets]
+        if len(files_mc) > 0:
+            item_to_process = files_mc[0]
+        else:
+            item_to_process = fileset[0]
+
+        processor_instance = copy(processor_instance)
+        processor_instance.eventdir = None  # no event output when tracing
+        # TODO decide on whether running systs while tracing
+
+        metadata = item_to_process.usermeta
+        uproot_options = {"timeout": self.xrootdtimeout}
+
+        def _work_function_inner(filepath):
+            filecontext, metadata_file = Runner._open_file_context(filepath, item_to_process, uproot_options)
+
+            with filecontext as file:
+                events, buffer = Runner._construct_events(
+                    file, item_to_process, self.schema, metadata_file, {}, None, False)
+                necessary_columns = trace(processor_instance.process, events)
+            return necessary_columns
+
+        return Runner._try_open_and_process(item_to_process, metadata, _work_function_inner)

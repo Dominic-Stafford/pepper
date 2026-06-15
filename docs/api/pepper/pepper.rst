@@ -23,7 +23,6 @@ Submodules
    hist_defns
    hist_utils
    htcondor
-   kinreco_betchart
    kinreco_sonnenschein
    misc
    output_filler

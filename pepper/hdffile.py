@@ -90,9 +90,9 @@ class HDF5File(MutableMapping):
         else:
             container = group
         if self.packed:
-            value = ak.packed(value)
+            value = ak.to_packed(value)
         form, length, container = ak.to_buffers(value, container=container)
-        group.attrs["form"] = form.tojson()
+        group.attrs["form"] = form.to_json()
         group.attrs["length"] = json.dumps(length)
         group.attrs["parameters"] = json.dumps(ak.parameters(value))
         group.attrs["convertto"] = convertto
@@ -100,7 +100,7 @@ class HDF5File(MutableMapping):
 
     def __getitem__(self, key):
         group = self._file[key]
-        form = ak.forms.Form.fromjson(group.attrs["form"])
+        form = ak.forms.from_json(group.attrs["form"])
         length = json.loads(group.attrs["length"])
         parameters = json.loads(group.attrs["parameters"])
         convertto = group.attrs["convertto"]

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import pepper
-from pepper import sonnenschein, betchart
+from pepper import sonnenschein
 import pepper.config
 from pepper.misc import get_run_for_year, LHCRun
 
@@ -124,12 +124,22 @@ class ProcessorBasicPhysics(pepper.Processor):
         else:
             return VariationArg(None, jer=None)
 
+    def columns_to_preload(self):
+        """If running with systematics, explicitly preload generator weights
+        since the tracing misses those"""
+        columns = super().columns_to_preload()
+        if self.config["compute_systematics"]:
+            return columns | \
+                {"LHEScaleWeight", "LHEPdfWeight", "PSWeight"}
+        else:
+            return columns
+
     def gentop(self, data):
         """Return generator-level tops."""
         part = data["GenPart"]
-        part = part[~ak.is_none(part.parent, axis=1)]
-        part = part[part.hasFlags("isLastCopy")]
-        part = part[abs(part.pdgId) == 6]
+        part = part[(part.genPartIdxMother != -1)
+                    & part.hasFlags("isLastCopy")
+                    & (abs(part.pdgId) == 6)]
         part = part[ak.argsort(part.pdgId, ascending=False)]
         return part
 
@@ -169,30 +179,32 @@ class ProcessorBasicPhysics(pepper.Processor):
         """Matrix-element renormalization and factorization scale"""
         # Get describtion of individual columns of this branch with
         # Events->GetBranch("LHEScaleWeight")->GetTitle() in ROOT
-        data = selector.data
+        lheweight = data["LHEScaleWeight"]
+        if len(lheweight) == 0:
+            return
         if (self.config["mc_lumifactors"] and dsname + "_LHEScaleSumw"
                 in self.config["mc_lumifactors"]):
             norm = self.config["mc_lumifactors"][dsname + "_LHEScaleSumw"]
             idx = pepper.misc.get_lhe_scale_idxs(len(norm))
             selector.set_systematic(
                 "MEren",
-                data["LHEScaleWeight"][:, idx[0]] * abs(norm[idx[0]]),
-                data["LHEScaleWeight"][:, idx[1]] * abs(norm[idx[1]]))
+                lheweight[:, idx[0]] * abs(norm[idx[0]]),
+                lheweight[:, idx[1]] * abs(norm[idx[1]]))
             selector.set_systematic(
                 "MEfac",
-                data["LHEScaleWeight"][:, idx[2]] * abs(norm[idx[2]]),
-                data["LHEScaleWeight"][:, idx[3]] * abs(norm[idx[3]]))
+                lheweight[:, idx[2]] * abs(norm[idx[2]]),
+                lheweight[:, idx[3]] * abs(norm[idx[3]]))
         elif (not self.config["mc_lumifactors"]
               and "LHEScaleWeight" in ak.fields(data)
-              and ak.num(data["LHEScaleWeight"])[0] > 0):
+              and ak.num(lheweight)[0] > 0):
             idx = pepper.misc.get_lhe_scale_idxs(
-                len(data["LHEScaleWeight"][0]))
+                len(lheweight[0]))
             selector.set_systematic(
-                "MEren", data["LHEScaleWeight"][:, idx[0]],
-                data["LHEScaleWeight"][:, idx[1]], norm_post=True)
+                "MEren", lheweight[:, idx[0]],
+                lheweight[:, idx[1]], norm_post=True)
             selector.set_systematic(
-                "MEfac", data["LHEScaleWeight"][:, idx[2]],
-                data["LHEScaleWeight"][:, idx[3]], norm_post=True)
+                "MEfac", lheweight[:, idx[2]],
+                lheweight[:, idx[3]], norm_post=True)
         else:
             logger.warning("LHEScaleWeights missing for this sample")
 
@@ -220,13 +232,15 @@ class ProcessorBasicPhysics(pepper.Processor):
                 selector.set_systematic(
                     "PSfsr", psweight[:, 3], psweight[:, 1])
         else:
-            raise RuntimeError(
+            logger.warning(
                 "Unexpected length of the PSWeight: "
                 f"{num_weights}")
 
     def add_pdf_uncertainties(self, dsname, selector, data):
         """Add PDF uncertainties, using the methods described here:
         https://arxiv.org/pdf/1510.03865.pdf#section.6"""
+        if len(data["LHEPdfWeight"]) == 0:
+            return
         if ("LHEPdfWeight" not in data.fields
                 or ak.num(data["LHEPdfWeight"])[0] == 0):
             logger.warning("LHEPdfWeights missing for this sample")
@@ -995,6 +1009,7 @@ class ProcessorBasicPhysics(pepper.Processor):
             factor_scale = 1 + (jersf - 1) * (pt - genpt) / pt
             factor = ak.where(
                 ak.is_none(genpt, axis=1), factor_stoch, factor_scale)
+            factor = ak.drop_none(factor)
         else:
             factor = factor_stoch
         return factor
@@ -1120,7 +1135,7 @@ class ProcessorBasicPhysics(pepper.Processor):
             has_id = data[f"{collection}IdTightLeptonVeto"]
         else:
             raise pepper.config.ConfigError(
-                    "Invalid good_jet_id: {}".format(j_id))
+                "Invalid good_jet_id: {}".format(j_id))
 
         j_pt = jets.pt
         if pt_factor_name is not None and pt_factor_name in ak.fields(data):
@@ -1168,7 +1183,7 @@ class ProcessorBasicPhysics(pepper.Processor):
             has_puId = ak.values_astype(jets["puId"] & 0b1, bool)
         else:
             raise pepper.config.ConfigError(
-                    "Invalid good_jet_id: {}".format(j_puId))
+                "Invalid good_jet_id: {}".format(j_puId))
         # Only apply PUID if pT < 50 GeV
         has_puId = has_puId | (jets.pt >= 50)
         return has_puId
@@ -1323,7 +1338,7 @@ class ProcessorBasicPhysics(pepper.Processor):
 
         jets["emef"] = jets["mass"] = ak.zeros_like(jets["pt"])
         jets.behavior = data["Jet"].behavior
-        jets = ak.with_name(jets, "Jet")
+        jets = ak.with_name(jets, "PtEtaPhiMLorentzVector")
 
         return jets
 
@@ -1361,7 +1376,7 @@ class ProcessorBasicPhysics(pepper.Processor):
                 if (
                     np.any(np.isnan(met.ptUnclusteredUp))
                     or np.any(np.isnan(met.phiUnclusteredUp))
-                   ):
+                ):
                     import warnings
                     warnings.warn(
                         "NaN values found in PuppiMET unclustered energy "
@@ -1387,7 +1402,7 @@ class ProcessorBasicPhysics(pepper.Processor):
                 if (
                     np.any(np.isnan(met.ptUnclusteredDown))
                     or np.any(np.isnan(met.phiUnclusteredDown))
-                   ):
+                ):
                     import warnings
                     warnings.warn(
                         "NaN values found in PuppiMET unclustered energy "
@@ -1433,7 +1448,7 @@ class ProcessorBasicPhysics(pepper.Processor):
                 "phi": jets.phi,
                 "mass": jets.mass,
                 "emef": jets.neEmEF + jets.chEmEF
-            }, with_name="Jet", behavior=jets.behavior)
+            }, with_name="PtEtaPhiMLorentzVector", behavior=jets.behavior)
             lowptjets = self.build_lowptjet_column(
                 is_mc, era, junc, jer, rng, data)
             # Cut according to MissingETRun2Corrections Twiki
@@ -1441,7 +1456,7 @@ class ProcessorBasicPhysics(pepper.Processor):
             lowptjets = lowptjets[(lowptjets["pt_nomuon"] > 15)
                                   & (lowptjets["emef"] < 0.9)]
             # lowptjets lose their type here. Probably a bug, workaround
-            lowptjets = ak.with_name(lowptjets, "Jet")
+            lowptjets = ak.with_name(lowptjets, "PtEtaPhiMLorentzVector")
             if smear_met:
                 lowptfac = lowptjets["juncfac"] * lowptjets["jerfac"] - 1
             else:
@@ -1686,8 +1701,8 @@ class ProcessorBasicPhysics(pepper.Processor):
         # make make this function faster overall
         columns = ["pt", "eta", "phi", "mass", "btagged"]
         jets = ak.with_name(data["Jet"][columns], "PtEtaPhiMLorentzVector")
-        btags = jets[data["Jet"].btagged]
-        jetsnob = jets[~data["Jet"].btagged]
+        btags = jets[jets.btagged]
+        jetsnob = jets[~jets.btagged]
         num_btags = ak.num(btags)
         b0, b1 = ak.unzip(ak.where(
             num_btags > 1, ak.combinations(btags, 2),
@@ -1745,9 +1760,6 @@ class ProcessorBasicPhysics(pepper.Processor):
                 lep, antilep, b, antib, met, mwp=mw, mwm=mw, mt=mt, mat=mt,
                 energyfl=energyfl, energyfj=energyfj, alphal=alphal,
                 alphaj=alphaj, hist_mlb=mlb, num_smear=num_smear, rng=rng)
-            return ak.concatenate([top, antitop], axis=1)
-        elif reco_alg == "betchart":
-            top, antitop = betchart(lep, antilep, b, antib, met)
             return ak.concatenate([top, antitop], axis=1)
         else:
             raise ValueError(f"Invalid value for reco algorithm: {reco_alg}")

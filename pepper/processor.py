@@ -38,6 +38,7 @@ class EventOutputFile():
     If the file is supposed to be saved on eos, the eos command line tool
     is used to copy the file.
     """
+
     def __init__(self, eventdir, dsname, identifier, filetype, use_temp):
         self.eventdir = os.path.realpath(eventdir)
         self.dsname = dsname
@@ -178,6 +179,8 @@ class Processor(coffea.processor.ProcessorABC):
 
         self.rng_seed = self._load_rng_seed()
         self.loglevel = logging.getLogger("pepper").level
+        self.column_tracing_result = None
+        self.column_buffer_cache = None
 
     @staticmethod
     def _check_config_integrity(config):
@@ -388,8 +391,8 @@ class Processor(coffea.processor.ProcessorABC):
         cutnames, cutflags = selector.get_cuts()
         out_dict["cutnames"] = cutnames
         out_dict["cutflags"] = cutflags
-        if ("save_categories_per_event" not in self.config or
-                self.config["save_categories_per_event"]):
+        if (len(selector.cats) > 0
+                and self.config.get("save_categories_per_event", True)):
             out_dict["categories"] = \
                 self._prepare_saved_categories(selector)
         if (self.config["compute_systematics"] and save_full_sys
@@ -430,18 +433,26 @@ class Processor(coffea.processor.ProcessorABC):
                     f"Array '{key}' as too many dimensions for ROOT output")
 
             if pepper.misc.akismasked(array):
-                if "mask" + key in arrays:
-                    raise RuntimeError(f"Output named 'mask{key}' already present "
-                                       "but need this key for storing the mask")
-                ret["mask" + key] = ~ak.is_none(array)
-                if array.ndim > 1:
-                    # 2D array with masked values in the first axis
-                    # will cause trouble for uproot - replace Nones by empty lists
-                    array = ak.fill_none(array, [], axis=0)
-                elif len(array.fields) > 0:
-                    array = ak.fill_none(array, {k: 0 for k in array.fields})
+                is_none = ak.is_none(array)
+                # sometimes there are no actual Nones even though the type says that
+                # there should be, because of an issue in ak.to_packed:
+                # https://github.com/scikit-hep/awkward/issues/3939
+                # workaround by checking explicitly and dropping nones
+                if not ak.any(is_none):
+                    array = ak.drop_none(array)
                 else:
-                    array = ak.fill_none(array, 0)
+                    if "mask" + key in arrays:
+                        raise RuntimeError(f"Output named 'mask{key}' already present "
+                                           "but need this key for storing the mask")
+                    ret["mask" + key] = ~is_none
+                    if array.ndim > 1:
+                        # 2D array with masked values in the first axis
+                        # will cause trouble for uproot - replace Nones by empty lists
+                        array = ak.fill_none(array, [], axis=0)
+                    elif len(array.fields) > 0:
+                        array = ak.fill_none(array, {k: 0 for k in array.fields})
+                    else:
+                        array = ak.fill_none(array, 0)
 
             # Check for case mask is at level of individual fields
             if any([pepper.misc.akismasked(array[k]) for k in array.fields]):
@@ -465,6 +476,7 @@ class Processor(coffea.processor.ProcessorABC):
                     array = ak.zip({k: ak.fill_none(array[k], 0) for k in array.fields})
                 else:
                     array = ak.Array({k: ak.fill_none(array[k], 0) for k in array.fields})
+
             ret[key] = array
         return ret
 
@@ -478,9 +490,10 @@ class Processor(coffea.processor.ProcessorABC):
             events = self._prepare_saved_columns(selector)
             # Workaround: Use ak.packed to make sure offset arrays of virtual
             # arrays are not given to uproot. Uproot has a bug for these.
-            events = {f: ak.packed(events[f]) for f in ak.fields(events)}
+            events = {f: ak.to_packed(events[f]) for f in ak.fields(events)}
             additional = {}
-            additional["cutflags"] = cutflags
+            if cutflags is not None:
+                additional["cutflags"] = cutflags
             if selector.systematics is not None:
                 additional["weight"] = selector.systematics["weight"]
                 if self.config["compute_systematics"] and save_full_sys:
@@ -495,19 +508,22 @@ class Processor(coffea.processor.ProcessorABC):
             events.update(additional)
             events = self._separate_masks_for_root(events)
             out_dict["Events"] = events
-            if ("save_categories_per_event" not in self.config or
-                    self.config["save_categories_per_event"]):
+            if (len(selector.cats) > 0
+                    and self.config.get("save_categories_per_event", True)):
                 cats = self._prepare_saved_categories(selector)
                 for cat in ak.fields(cats):
                     out_dict[f"Categories/{cat}"] = \
                         self._separate_masks_for_root(
-                            {f: ak.packed(cats[cat][f])
+                            {f: ak.to_packed(cats[cat][f])
                              for f in ak.fields(cats[cat])})
         with EventOutputFile(
                 self.eventdir, dsname, identifier, "root",
                 self.use_temp_eventdir) as outf:
             for key in out_dict.keys():
-                outf[key] = out_dict[key]
+                if isinstance(out_dict[key], dict):
+                    outf.mktree(key, out_dict[key])
+                else:
+                    outf[key] = out_dict[key]
 
     def save_per_event_info(self, dsname, selector, save_full_sys=True):
         """Save the per-event info
@@ -945,3 +961,26 @@ class Processor(coffea.processor.ProcessorABC):
         hist_dest = os.path.join(dest, "hists")
         os.makedirs(hist_dest, exist_ok=True)
         self.save_histograms(hform, output, hist_dest)
+
+    def columns_to_preload(self):
+        """nanoAOD columns that should pre preloaded by coffea for speed.
+        By default corresponds to those determined with --trace, and none
+        otherwise. Can be overwritten to specifiy columns that --trace might
+        miss.
+        """
+
+        if self.column_tracing_result is not None:
+            return self.column_tracing_result
+        else:
+            return set()
+
+    def unload_column(self, column):
+        """Unload a column from memory. This can be used to save memory if some
+        columns are only needed for a part of the selection.
+        Matching of the column names is greedy."""
+        if self.column_buffer_cache is not None:
+            keys_to_pop = [key for key in self.column_buffer_cache.keys()
+                           if "/" + column in key or "/n" + column in key]
+            for key in keys_to_pop:
+                logger.debug(f"Unloading column {key} from memory")
+                self.column_buffer_cache.pop(key, None)

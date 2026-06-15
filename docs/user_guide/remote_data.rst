@@ -1,6 +1,6 @@
 Accessing Remote Data
 =====================
-The data and MC NanoAODs are stored on various CERN Tier 2 computing clusters worldwide and Pepper is able to access data sets from remote servers using XRootD. You should specify ``"file_mode": "local+xrootd"`` and ``"xrootddomain": "xrootd-cms.infn.it"`` in your config to enable it. 
+The data and MC NanoAODs are stored on various CERN Tier 2 computing clusters worldwide and Pepper is able to access data sets from remote servers using XRootD. You should specify ``"file_mode": "local+xrootd"`` and ``"xrootddomain": "xrootd-cms.infn.it"`` in your config to enable it.
 There are four requirements to get it working (also in conjunction with HTCondor):
 
 - xrootd must be installed. You can check with ``python3 -m pip show xrootd``
@@ -48,4 +48,48 @@ of maximally six months. After this time, the files will be deleted from the loc
 .. note::
 
     The user needs to re-request file transfers after six months if they are still needed.
+
+.. _column-tracing:
+
+Column Tracing and Preloading
+------------------------------
+
+When reading NanoAOD files over XRootD, every column access triggers a separate remote read.
+Because coffea's NanoEvents schema reads columns lazily (only when a field is first accessed),
+the reads are scattered across the processing loop, leading to many small round trips that dominate
+runtime for remote files.
+
+Pepper can eliminate this overhead by *preloading* the columns that the processor will actually
+use before the event loop starts, batching all remote reads into a single pass.
+To determine which columns are needed, run with the ``--trace`` flag:
+
+.. code-block:: bash
+
+    python -m pepper.runproc my_processor.py config.json --trace
+
+When ``--trace`` is given, Pepper runs a lightweight type-tracing pass over a single file chunk
+before the main processing loop. This pass executes the processor logic with stub arrays to record
+which NanoAOD branches are accessed, then stores the result in ``processor.column_tracing_result``.
+The ``Runner`` then instructs coffea to preload exactly those branches for every subsequent chunk,
+replacing many small remote reads with one bulk fetch per chunk.
+
+The speedup is most pronounced for XRootD input; for local files the difference is smaller because
+sequential reads are already fast.
+
+.. note::
+
+    Column tracing increases memory usage, since all traced columns for a chunk are loaded before
+    the processor runs.
+
+If the processor accesses columns dynamically in a way that the type-tracing pass cannot observe
+(for example via string interpolation into field names), the automatic list will be incomplete.
+In that case you can override ``columns_to_preload`` in your processor class to supplement or
+replace the traced set:
+
+.. code-block:: python
+
+    def columns_to_preload(self):
+        base = super().columns_to_preload()
+        # always preload these even if tracing missed them
+        return base | {"Jet_pt", "Jet_eta", "Jet_phi", "Jet_mass"}
 

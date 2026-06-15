@@ -5,6 +5,7 @@ import sys
 import importlib
 import argparse
 import logging
+import dataclasses
 from datetime import datetime
 
 import pepper
@@ -146,6 +147,12 @@ def run_processor(processor_class=None, description=None, mconly=False):
         "-R", "--resume", action="store_true", help="If present and the file "
         "pointed to by --statedata exists, load the file and resume from that "
         "state"
+    )
+    parser.add_argument(
+        "-t", "--trace", action="store_true",
+        help="Trace column usage in the processor to determine which "
+        "columns to preload. This can speed up processing especially for xrootd "
+        "input, but increases memory usage."
     )
     args = parser.parse_args()
 
@@ -333,19 +340,39 @@ def run_processor(processor_class=None, description=None, mconly=False):
     check_can_open_local = config.get("check_can_open_local_files", False)
     use_eos_redirector = config.get("use_eos_redirector", True)
     xrootd_url_priority = config.get("xrootd_url_priority", None)
+    use_buffer_cache = config.get("use_buffer_cache", True)
     metadata = {"store_path": store, "xrootddomain": xrootddomain,
                 "local_file_blacklist": local_file_blacklist,
                 "url_blacklist": xrootd_url_blacklist,
                 "use_eos_redirector": use_eos_redirector,
                 "url_priority": xrootd_url_priority,
-                "check_can_open_local": check_can_open_local,
+                "use_buffer_cache": use_buffer_cache,
+                "check_can_open_local": check_can_open_local
                 }
-    # Give metadata for the processing step
-    processor.pepperitemmetadata = metadata
+
     # For the preprocessing step, add metadata also to the file meta
     datasets = {k: {"files": v, "metadata": metadata}
                 for k, v in datasets.items()}
-    output = runner(datasets, "Events", processor)
+    preprocess_output = runner.preprocess(datasets, treename="Events")
+    # Add up-to-date metadata to WorkItems, needed in case it was
+    # loaded from pepper_metadata.coffea
+    preprocess_output = [
+        dataclasses.replace(item, usermeta=metadata) for item in preprocess_output
+    ]
+
+    if args.trace:
+        logger.info("Tracing columns to preload...")
+        column_tracing_result = runner.do_type_tracing(preprocess_output, processor)
+        if len(column_tracing_result) > 0:
+            processor.column_tracing_result = column_tracing_result
+            columns_to_preload = processor.columns_to_preload()
+            logger.warning(f"Will preload {len(columns_to_preload)} columns.")
+            logger.debug("Columns that will be preloaded:")
+            logger.debug("\n".join(sorted(columns_to_preload)))
+        else:
+            logger.warning("Column tracing failed. Will continue without preloading")
+
+    output = runner(preprocess_output, processor, treename="Events")
     processor.save_output(output, args.output)
     if args.eventdir is not None:
         print("If there were errors, please make sure to run "

@@ -5,4 +5,3 @@ Kinematic Reconstruction
    :maxdepth: 1
 
    pepper/kinreco_sonnenschein
-   pepper/kinreco_betchart
