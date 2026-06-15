@@ -90,6 +90,10 @@ General Options
    - ``"none"`` – Never exit automatically; the user is responsible for
      handling failures.
 
+``use_buffer_cache`` (boolean, optional)
+  Whether to use coffea buffer caches. These help with memory usage but slow
+  down the code slightly. If you want to prioritize speed over memory usage,
+  disable those. Devault is ``true``.
 
 -------------
 Data Sets
@@ -128,6 +132,11 @@ Data Sets
    that should be preferred over others, when available, in the given order.
    In case none of the sites is available for a given file, it will still
    use another site, in contrast to ``xrootd_url_blacklist``.
+
+``use_eos_redirector``: (boolean, optional)
+  Only relevant on LXPLUS. Whether to open files on CERN EOS with XRootD
+  over the redirector instead of the file mount, which allegedly is more
+  stable. Default is ``true``.
 
 ``check_can_open_local_files``: (bool, optional)
    If true, Pepper will check if local files can be opened before trying to access them. 
@@ -708,7 +717,7 @@ ttbarll Specific
     Default is false (i.e. leading and subleading lepton pT)
 
 ``reco_algorithm`` (string, optional)
-   Algorithm for top quark reconstruction. Options: ``"Sonnenschein"``, ``"Betchart"``.
+   Algorithm for top quark reconstruction. Currently the only centrally supported option is ``"sonnenschein"``.
 
 ``z_boson_window_start`` / ``z_boson_window_end`` (float)
    Lower and upper bounds of invariant mass used for Z window cut.

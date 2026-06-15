@@ -3,7 +3,6 @@ import awkward as ak
 from collections import defaultdict
 import logging
 from copy import copy
-import pepper.misc
 
 
 logger = logging.getLogger(__name__)
@@ -21,7 +20,7 @@ class Selection:
     """
     def __init__(self):
         self.names = []
-        self.cuts = ak.Array({})
+        self.cuts = None
 
     def all(self, names=None):
         """Get the product of all cuts' weights
@@ -57,13 +56,16 @@ class Selection:
             Array whether an event passes a cut. Unweighted cuts can be
             specified as bools and weighted cuts as floats
         """
-        self.cuts[name] = accept
+        if self.cuts is None:
+            self.cuts = ak.Array({name: accept})
+        else:
+            self.cuts[name] = accept
         self.names.append(name)
 
     def clear(self):
         """Remove all cuts from the selection"""
         self.names = []
-        self.cuts = ak.Array({})
+        self.cuts = None
 
     def __len__(self):
         """Number of cuts"""
@@ -479,7 +481,7 @@ class Selector:
             return ak.pad_none(column, len(mask), axis=0)
 
     def set_column(self, column_name, column, all_cuts=False,
-                   no_callback=False, lazy=False, categories=None):
+                   no_callback=False, categories=None):
         """Sets a column of ``self.data``
 
         Parameters
@@ -495,10 +497,6 @@ class Selector:
         no_callback
             Whether not to call the callbacks. These callbacks usually fill
             histograms etc.
-        lazy
-            If True, column must be a callable and the column will be
-            inserted as a virtual array, making the callable only called
-            when the data array determines it has to.
         categories
             If not ``None``, ignore events that are not part of any of
             the specified categorizations. This is done by specifying
@@ -509,8 +507,7 @@ class Selector:
             categorization if any of the fields are ``True``.
         """
 
-        logger.info(
-            f"Setting column {column_name}" + (" lazily" if lazy else ""))
+        logger.info(f"Setting column {column_name}")
         if all_cuts and not self.applying_cuts:
             data = self.final
             mask = ~ak.is_none(data)
@@ -524,24 +521,14 @@ class Selector:
             data = data[cats_mask]
 
         if callable(column):
-            if lazy:
-                column = pepper.misc.VirtualArrayCopier(data).wrap_with_copy(
-                    column)
-                column = ak.virtual(column, cache={}, length=len(data))
-            else:
-                column = column(data)
+            column = column(data)
         if column is None:
             raise ValueError("column content must be an array, not None")
         if categories is not None:
             column = self._mask(column, cats_mask)
         if mask is not None:
             column = self._mask(column, mask)
-        if lazy:
-            data_copier = pepper.misc.VirtualArrayCopier(self.data)
-            data_copier[column_name] = column
-            self.data = data_copier.get()
-        else:
-            self.data[column_name] = column
+        self.data[column_name] = column
         self.done_steps.add("column:" + column_name)
         if not no_callback:
             self._invoke_callbacks()
@@ -599,8 +586,8 @@ class Selector:
         work with the copy without modifying the original"""
         s = self.__class__.__new__(self.__class__)
         s.__dict__.update(self.__dict__)
-        # copy(self.data) loads all fields. Workaround
-        s.data = pepper.misc.VirtualArrayCopier(self.data).get()
+        # for ak2, copy(self.data) seems to work without overhead, unlike ak1
+        s.data = copy(self.data)
         if self.systematics is not None:
             s.systematics = copy(self.systematics)
         s.cutnames = copy(self.cutnames)

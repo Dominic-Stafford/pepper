@@ -10,11 +10,10 @@ stages:
 flake8:
   stage: flake8
   before_script:
-    - sudo yum install -y python3 python3-pip python3-devel > /dev/null
-    - sudo pip3 install pep8-naming > /dev/null
-    - echo flake8 version `flake8 --version`
+    - python3 -m pip install --upgrade pep8-naming > /dev/null
+    - echo flake8 version `python3 -m flake8 --version`
   script:
-    - flake8 --extend-ignore N806
+    - python3 -m flake8 --extend-ignore N806
   rules:
     - when: always
 
@@ -32,17 +31,11 @@ flake8:
   rules:
     - when: always
   variables:
-    LCG_VERSION: "107a"
-    LCG_PLATFORM: "x86_64-el9-gcc14-opt"
+    LCG_VERSION: "109a"
+    LCG_PLATFORM: "x86_64-el9-gcc15-opt"
 
 setup:default:
   extends: .setup_template
-
-setup:lcg104:
-  extends: .setup_template
-  variables:
-    LCG_VERSION: "104"
-    LCG_PLATFORM: "x86_64-el9-gcc11-opt"
 
 .test_template:
   stage: test
@@ -64,8 +57,8 @@ setup:lcg104:
      - _testout/hists
      - _testout/events
   variables:
-    LCG_VERSION: "107a"
-    LCG_PLATFORM: "x86_64-el9-gcc14-opt"
+    LCG_VERSION: "109a"
+    LCG_PLATFORM: "x86_64-el9-gcc15-opt"
     GIT_SUBMODULE_STRATEGY: recursive
     GIT_SUBMODULE_FORCE_HTTPS: true
 
@@ -73,16 +66,6 @@ test:ul18_default:
   extends: .test_template
   variables:
     TESTNAME: "ul18"
-
-test:ul18_lcg104:
-  extends: .test_template
-  needs:
-    - job: setup:lcg104
-      artifacts: true
-  variables:
-    TESTNAME: "ul18"
-    LCG_VERSION: "104"
-    LCG_PLATFORM: "x86_64-el9-gcc11-opt"
 
 test:ul18_kinreco:
   extends: .test_template

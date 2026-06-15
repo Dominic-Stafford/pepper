@@ -550,9 +550,9 @@ class DataPicker:
                 if data is None:
                     break
             elif isinstance(sel, list):
-                try:
+                if all(f in data.fields for f in sel):
                     data = data[sel]
-                except (ValueError, KeyError):
+                else:
                     try:
                         data_proc = {}
                         counts = None

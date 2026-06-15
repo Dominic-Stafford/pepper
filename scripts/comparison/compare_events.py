@@ -17,7 +17,10 @@ def get_event_files(folder):
     ]
 
 
-def compare_ak(a, b, path, rtol, atol):
+def compare_ak(a, b, path, rtol, atol, ignore):
+    if path in ignore:
+        return []
+
     errors = []
 
     if len(a) != len(b):
@@ -26,15 +29,21 @@ def compare_ak(a, b, path, rtol, atol):
 
     fields_a = ak.fields(a)
     fields_b = ak.fields(b)
-    if set(fields_a) != set(fields_b):
-        errors.append(
-            f"{path}: fields {sorted(fields_a)} vs {sorted(fields_b)}"
-        )
-        return errors
 
-    if fields_a:
-        for field in sorted(fields_a):
-            errors.extend(compare_ak(a[field], b[field], f"{path}/{field}", rtol, atol))
+    if fields_a or fields_b:
+        def field_path(f):
+            return f"{path}/{f}" if path else f
+
+        non_ignored_a = {f for f in fields_a if field_path(f) not in ignore}
+        non_ignored_b = {f for f in fields_b if field_path(f) not in ignore}
+        if non_ignored_a != non_ignored_b:
+            errors.append(
+                f"{path}: fields {sorted(non_ignored_a)} vs {sorted(non_ignored_b)}"
+            )
+            return errors
+
+        for field in sorted(non_ignored_a):
+            errors.extend(compare_ak(a[field], b[field], field_path(field), rtol, atol, ignore))
         return errors
 
     # Jagged array: check inner structure before flattening
@@ -46,7 +55,7 @@ def compare_ak(a, b, path, rtol, atol):
             return errors
         errors.extend(compare_ak(
             ak.flatten(a, axis=1), ak.flatten(b, axis=1),
-            f"{path}[*]", rtol, atol,
+            f"{path}[*]", rtol, atol, ignore,
         ))
         return errors
 
@@ -78,27 +87,27 @@ def compare_ak(a, b, path, rtol, atol):
     return errors
 
 
-def compare_hdf5(path1, path2, rtol, atol):
+def compare_hdf5(path1, path2, rtol, atol, ignore):
     from pepper import HDF5File
     errors = []
     with HDF5File(path1, "r") as f1, HDF5File(path2, "r") as f2:
-        keys1 = set(f1.keys())
-        keys2 = set(f2.keys())
+        keys1 = {k for k in f1.keys() if k not in ignore}
+        keys2 = {k for k in f2.keys() if k not in ignore}
         if keys1 != keys2:
             errors.append(f"key mismatch: {sorted(keys1)} vs {sorted(keys2)}")
             return errors
         for key in sorted(keys1):
             if isinstance(f1[key], ak.Array):
-                errors.extend(compare_ak(f1[key], f2[key], key, rtol, atol))
+                errors.extend(compare_ak(f1[key], f2[key], key, rtol, atol, ignore))
     return errors
 
 
-def compare_root(path1, path2, rtol, atol):
+def compare_root(path1, path2, rtol, atol, ignore):
     import uproot
     errors = []
     with uproot.open(path1) as f1, uproot.open(path2) as f2:
-        keys1 = set(f1.keys(cycle=False, recursive=True))
-        keys2 = set(f2.keys(cycle=False, recursive=True))
+        keys1 = {k for k in f1.keys(cycle=False, recursive=True) if k not in ignore}
+        keys2 = {k for k in f2.keys(cycle=False, recursive=True) if k not in ignore}
         if keys1 != keys2:
             errors.append(f"tree mismatch: {sorted(keys1)} vs {sorted(keys2)}")
             return errors
@@ -106,7 +115,7 @@ def compare_root(path1, path2, rtol, atol):
             if isinstance(f1[key], uproot.TTree):
                 a = f1[key].arrays(library="ak")
                 b = f2[key].arrays(library="ak")
-                errors.extend(compare_ak(a, b, key, rtol, atol))
+                errors.extend(compare_ak(a, b, key, rtol, atol, ignore))
     return errors
 
 
@@ -117,14 +126,20 @@ def main():
     parser.add_argument("folder1", help="First output directory")
     parser.add_argument("folder2", help="Second output directory")
     parser.add_argument(
-        "--rtol", type=float, default=0.0,
-        help="Relative tolerance for float comparison (default: 0, exact)",
+        "--rtol", type=float, default=1e-5,
+        help="Relative tolerance for float comparison (default: 1e-5)",
     )
     parser.add_argument(
         "--atol", type=float, default=0.0,
         help="Absolute tolerance for float comparison (default: 0, exact)",
     )
+    parser.add_argument(
+        "--ignore", metavar="FIELD", action="append", default=[],
+        help="Field path to ignore, e.g. events/nJet (can be given multiple times)",
+    )
     args = parser.parse_args()
+
+    ignore = set(args.ignore)
 
     subs1 = get_subfolders(args.folder1)
     subs2 = get_subfolders(args.folder2)
@@ -174,9 +189,9 @@ def main():
             continue
 
         if ext1 in (".h5", ".hdf5"):
-            diffs = compare_hdf5(f1, f2, args.rtol, args.atol)
+            diffs = compare_hdf5(f1, f2, args.rtol, args.atol, ignore)
         elif ext1 == ".root":
-            diffs = compare_root(f1, f2, args.rtol, args.atol)
+            diffs = compare_root(f1, f2, args.rtol, args.atol, ignore)
         else:
             all_errors.append(f"Sample '{sample}': unknown file type '{ext1}'")
             continue

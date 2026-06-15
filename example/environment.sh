@@ -9,9 +9,9 @@ fi
 export X509_USER_PROXY=~/.globus/x509up
 
 # Define default LCG view - manually set this variable (LCG_VIEW) to the view you want to use, 
-# e.g. LCG_107a x86_64-el9-gcc14-opt.
-: "${LCG_VERSION:=107a}"
-: "${LCG_PLATFORM:=x86_64-el9-gcc14-opt}"
+# e.g. LCG_109a x86_64-el9-gcc15-opt.
+: "${LCG_VERSION:=109a}"
+: "${LCG_PLATFORM:=x86_64-el9-gcc15-opt}"
 # Load LCG
 source /cvmfs/sft.cern.ch/lcg/views/setupViews.sh "LCG_$LCG_VERSION" "$LCG_PLATFORM"
 

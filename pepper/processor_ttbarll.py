@@ -174,11 +174,12 @@ class Processor(pepper.ProcessorBasicPhysics):
         if self.config["compute_systematics"] and is_mc:
             self.add_generator_uncertainies(dsname, selector)
         if dsname.startswith("TTTo"):
-            selector.set_column("gent_lc", self.gentop, lazy=True)
+            selector.set_column("gent_lc", self.gentop)
             if "top_pt_reweighting" in self.config:
                 selector.add_cut(
                     "TopPtReweighting", self.do_top_pt_reweighting,
                     no_callback=True)
+            self.unload_column("GenPart")
         if is_mc and "pileup_reweighting" in self.config:
             selector.add_cut("PileupReweighting", partial(
                 self.do_pileup_reweighting, dsname))
@@ -213,10 +214,14 @@ class Processor(pepper.ProcessorBasicPhysics):
         # Wait with hists filling after channel masks are available
         selector.add_cut("AtLeast2Leps", partial(self.lepton_pair, is_mc),
                          no_callback=True)
+        # We only need Lepton from here on. Unload separate
+        # electron and muon columns to save memory
+        self.unload_column("Electron")
+        self.unload_column("Muon")
         selector.set_multiple_columns(self.channel_masks)
         selector.set_cat("channel", {"is_ee", "is_em", "is_mm"})
         selector.set_column("mll", self.mass_lepton_pair)
-        selector.set_column("dilep_pt", self.dilep_pt, lazy=True)
+        selector.set_column("dilep_pt", self.dilep_pt)
 
         selector.applying_cuts = False
 
@@ -277,6 +282,13 @@ class Processor(pepper.ProcessorBasicPhysics):
             "MET", partial(self.build_met_column, is_mc, variation.junc,
                            variation.jer if smear_met else None, selector.rng,
                            era, variation=variation.met))
+        if variation.name is None:
+            # unload columns only after nominal selection, when they are
+            # no longer needed
+            self.unload_column("Jet")
+            self.unload_column("GenJet")
+            self.unload_column("MET")
+            self.unload_column("CorrT1METJet")
         selector.set_multiple_columns(
             partial(self.drellyan_sf_columns, selector))
         if "drellyan_sf" in self.config and is_mc:
@@ -303,11 +315,10 @@ class Processor(pepper.ProcessorBasicPhysics):
                 all_cuts=True, no_callback=True)
             selector.add_cut("Reco", self.has_ttbar_system)
             selector.set_column("reconu", self.build_nu_column_ttbar_system,
-                                all_cuts=True, lazy=True)
+                                all_cuts=True)
             selector.set_column("dark_pt", self.calculate_dark_pt,
-                                all_cuts=True, lazy=True)
-            selector.set_column("chel", self.calculate_chel, all_cuts=True,
-                                lazy=True)
+                                all_cuts=True)
+            selector.set_column("chel", self.calculate_chel, all_cuts=True)
 
     def channel_masks(self, data):
         """Get the channel masks (bool arrays) for ee, eµ and µµ decays"""
@@ -436,7 +447,7 @@ class Processor(pepper.ProcessorBasicPhysics):
         nu = data["reconu"][:, 0]
         antinu = data["reconu"][:, 1]
         met = data["MET"]
-        return met - nu - antinu
+        return met.like(nu) - nu - antinu
 
     def calculate_chel(self, data):
         """Calculate the angle between the leptons in their helicity frame"""
@@ -450,5 +461,5 @@ class Processor(pepper.ProcessorBasicPhysics):
         lep_ZMFtbar = lep[:, 0].boost(top_boost[:, 1])
         lbar_ZMFtop = lep[:, 1].boost(top_boost[:, 0])
 
-        chel = lep_ZMFtbar.dot(lbar_ZMFtop) / lep_ZMFtbar.rho / lbar_ZMFtop.rho
+        chel = lep_ZMFtbar.pvec.dot(lbar_ZMFtop.pvec) / lep_ZMFtbar.p / lbar_ZMFtop.p
         return chel

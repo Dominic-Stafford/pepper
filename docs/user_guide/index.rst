@@ -14,6 +14,8 @@ User Guide
    Scale Factors <scale_factors>
    Histograms <histograms>
    HTCondor <htcondor>
+   Memory Optimization <optimization>
+   Migrating from Awkward 1 <migrating>
    MC Normalization <mc_normalization>
 
 Welcome to the Pepper user guides. Here, you can find various introductions to some of the features available in Pepper. 
@@ -97,6 +99,24 @@ In case you have suggestions for what could also be included here, please reach 
       Scale Factors
       ^^^^^^^^^^^^^
       Learn about scale factors and how to apply them in your analysis.
+
+   .. grid-item-card::
+      :link: optimization
+      :link-type: doc
+      :text-align: center
+
+      Optimization
+      ^^^^^^^^^^^^
+      Optimize memory consumption of the analysis.
+
+   .. grid-item-card::
+      :link: migrating
+      :link-type: doc
+      :text-align: center
+
+      Migration Guide
+      ^^^^^^^^^^^^^^^
+      Migrate existing processor code from Awkward 1 / Coffea 0.7.
 
 
 .. grid:: 2 3 3 4

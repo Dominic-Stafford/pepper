@@ -25,7 +25,7 @@ XROOTDTIMEOUT
 """
 
 
-XROOTDTIMEOUT = 10  # 10 s, no need to bother with slow sites
+XROOTDTIMEOUT = 20  # seconds
 
 
 class LHCRun(enum.Enum):
@@ -389,10 +389,7 @@ def onedimeval(func, *arrays, tonumpy=True, output_like=0):
             flattened = array
             counts = []
             for i in range(flattened.ndim - 1):
-                if isinstance(flattened.type.type, ak.types.RegularType):
-                    counts.append(flattened.type.type.size)
-                else:
-                    counts.append(ak.num(flattened))
+                counts.append(ak.num(flattened))
                 flattened = ak.flatten(flattened)
             if tonumpy:
                 flattened = np.asarray(flattened)
@@ -463,68 +460,13 @@ def eos_path_to_url(path):
         raise ValueError(f"Unknown eos path: {path}")
 
 
-class VirtualArrayCopier:
-    """Create a shallow copy of the an awkward Record Array such as NanoEvents
-    while trying to not make virtual subarrays load their contents.
-
-    Setting fields in record arrays containing virtual arrays often leads to
-    the virtual arrays to be loaded, which should be avoided. The class makes
-    it possible to achieve this.
-
-    Notes
-    -----
-        With the removal of Virtual Arrays in Awkward version 2, this class
-        will also lose its function.
-    """
-    def __init__(self, array, attrs=[]):
-        """
-        Parameters
-        ----------
-        array
-            Record array containing virtual arrays that should not be touched
-        attrs
-            Attributes of the array to keep
-        """
-        self.data = {f: array[f] for f in ak.fields(array)}
-        self.behavior = array.behavior
-        self.attrs = {attr: getattr(array, attr) for attr in attrs}
-
-    def __setitem__(self, key, value):
-        """Add a field to the array"""
-        self.data[key] = value
-
-    def __getitem__(self, key):
-        """Get a field from the array"""
-        return self.data[key]
-
-    def __delitem__(self, key):
-        """Remove a field from the array"""
-        del self.data[key]
-
-    def get(self):
-        """Get an awkward Array version of the copy"""
-        array = ak.Array(self.data)
-        array.behavior = self.behavior
-        for attr, value in self.attrs.items():
-            setattr(array, attr, value)
-        return array
-
-    def wrap_with_copy(self, func):
-        """A decorator that will bind the result from ``get()`` to the first
-        parameter of the function"""
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            return func(self.get(), *args, **kwargs)
-        return wrapper
-
-
 def akismasked(arr):
     """Return ``True`` if arr is masked on any axis"""
-    t = arr
-    while hasattr(t, "type"):
-        if isinstance(t.type, ak.types.OptionType):
+    t = arr.type
+    while hasattr(t, "content"):
+        if isinstance(t.content, ak.types.OptionType):
             return True
-        t = t.type
+        t = t.content
     return False
 
 

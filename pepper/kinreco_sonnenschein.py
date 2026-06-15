@@ -106,12 +106,12 @@ def _lorvecfromnumpy(x, y, z, t, behavior, name="LorentzVector"):
         behavior=behavior)
 
 
-def _from_regular(array, axis=1, highlevel=True):
+def _from_regular(array, axis=1, **kwargs):
     """from_regular with multiple axis at once"""
     if isinstance(axis, int):
-        return ak.from_regular(array, axis, highlevel)
+        return ak.from_regular(array, axis, **kwargs)
     for i in axis:
-        array = ak.from_regular(array, i, highlevel)
+        array = ak.from_regular(array, i, **kwargs)
     return array
 
 
@@ -374,19 +374,19 @@ def sonnenschein(lep, antilep, b, antib, met, mwp=80.3, mwm=80.3, mt=172.5,
     sum_weights = ak.where(ak.num(weights) > 0, ak.sum(weights, axis=1), 1.)
     has_solution = ak.any(has_solution, axis=1, keepdims=True)
 
-    t = ak.zip(
+    t = ak.drop_none(ak.mask(ak.zip(
         {f: ak.sum(t[f] * weights, axis=1, keepdims=True) for f in t.fields},
-        with_name="LorentzVector")[has_solution] / sum_weights
-    at = ak.zip(
+        with_name="LorentzVector"), has_solution)) / sum_weights
+    at = ak.drop_none(ak.mask(ak.zip(
         {f: ak.sum(at[f] * weights, axis=1, keepdims=True) for f in at.fields},
-        with_name="LorentzVector")[has_solution] / sum_weights
+        with_name="LorentzVector"), has_solution)) / sum_weights
 
     # Top mass got changed by the averaging. Set to input mass again
     # ... but only if the top mass is fixed and not smeared
     if isinstance(mt_input, (int, float)):
-        t["t"] = np.sqrt(mt_input ** 2 + t.rho2)
+        t["t"] = np.sqrt(mt_input ** 2 + t.p2)
     if isinstance(mat_input, (int, float)):
-        at["t"] = np.sqrt(mat_input ** 2 + at.rho2)
+        at["t"] = np.sqrt(mat_input ** 2 + at.p2)
 
     return t, at
 
