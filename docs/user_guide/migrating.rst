@@ -57,6 +57,22 @@ Extract the 3-vector first with ``.pvec`` before calling ``.dot()``:
     # New
     cos_angle = a.pvec.dot(b.pvec) / a.p / b.p
 
+
+**Getting the unit vector**
+
+In Awkward 1, calling ``vec.unit`` as a property would return the unit vector. 
+In Awkward 2 the behaviour is different. Extract the unit vector as a method ``vec.unit()``:
+
+
+.. code-block:: python
+
+    # Old
+    u = vec.unit
+
+    # New
+    u = vec.unit()
+
+
 Boolean Indexing of Ragged Arrays
 ----------------------------------
 
