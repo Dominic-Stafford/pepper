@@ -24,10 +24,7 @@ python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 
 # Install package in editable mode
-python3 -m pip install --upgrade --upgrade-strategy eager --editable .
-
-# Recompile correctionlib against our LCG
-python3 -m pip install --force-reinstall --no-cache-dir --no-binary correctionlib --no-deps correctionlib
+python3 -m pip install --upgrade --editable .
 
 # Patch the placeholder path in environment.sh
 VENV_PATH="$(realpath .venv)"

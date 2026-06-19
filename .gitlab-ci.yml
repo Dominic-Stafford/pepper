@@ -21,8 +21,6 @@ flake8:
   stage: setup
   tags:
     - cvmfs
-  before_script:
-    - dnf install -y gmp-devel
   script:
     - bash install.sh
   artifacts:
