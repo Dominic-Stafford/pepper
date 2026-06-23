@@ -120,6 +120,12 @@ test:2024:
   variables:
     TESTNAME: "2024"
 
+test:2024_chunksize_0:
+  extends: .test_template
+  variables:
+    TESTNAME: "2024"
+    TEST_EXTRA_ARGS: "--chunksize 0"
+
 build-docs:
   stage: build-docs
   tags:
