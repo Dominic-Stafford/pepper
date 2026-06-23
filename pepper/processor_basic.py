@@ -179,6 +179,9 @@ class ProcessorBasicPhysics(pepper.Processor):
         """Matrix-element renormalization and factorization scale"""
         # Get describtion of individual columns of this branch with
         # Events->GetBranch("LHEScaleWeight")->GetTitle() in ROOT
+        if "LHEScaleWeight" not in data.fields:
+            logger.warning("LHEScaleWeights missing for this sample")
+            return
         lheweight = data["LHEScaleWeight"]
         if len(lheweight) == 0:
             return
@@ -1503,7 +1506,7 @@ class ProcessorBasicPhysics(pepper.Processor):
             # https://github.com/scikit-hep/awkward-1.0/issues/1305
             mask = ak.flatten(ak.num(data["Lepton"]) > i, axis=None)
             n[mask] += np.asarray(
-                pt_min < data["Lepton"].pt[mask, i]).astype(int)
+                pt_min < data["Lepton"].pt[mask][:, i]).astype(int)
         return n >= self.config["lep_pt_num_satisfied"]
 
     def good_mass_lepton_pair(self, data):
@@ -1563,7 +1566,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         # This assumes jets are ordered by pt highest first
         for i, pt_min in enumerate(self.config["jet_pt_min"]):
             mask = ak.num(data["Jet"]) > i
-            n[mask] += np.asarray(pt_min < data["Jet"].pt[mask, i]).astype(int)
+            n[mask] += np.asarray(pt_min < data["Jet"].pt[mask][:, i]).astype(int)
         return n >= self.config["jet_pt_num_satisfied"]
 
     def fatjet_pt_requirement(self, data):
@@ -1572,7 +1575,7 @@ class ProcessorBasicPhysics(pepper.Processor):
         # This assumes jets are ordered by pt highest first
         for i, pt_min in enumerate(self.config["fatjet_pt_min"]):
             mask = ak.num(data["FatJet"]) > i
-            n[mask] += np.asarray(pt_min < data["FatJet"].pt[mask, i]).astype(int)
+            n[mask] += np.asarray(pt_min < data["FatJet"].pt[mask][:, i]).astype(int)
         return n >= self.config["fatjet_pt_num_satisfied"]
 
     def compute_btag_sys(self, central, up_name, down_name, weighter, wp, flav,
