@@ -242,11 +242,11 @@ class ProcessorBasicPhysics(pepper.Processor):
     def add_pdf_uncertainties(self, dsname, selector, data):
         """Add PDF uncertainties, using the methods described here:
         https://arxiv.org/pdf/1510.03865.pdf#section.6"""
-        if len(data["LHEPdfWeight"]) == 0:
-            return
         if ("LHEPdfWeight" not in data.fields
                 or ak.num(data["LHEPdfWeight"])[0] == 0):
             logger.warning("LHEPdfWeights missing for this sample")
+            return
+        if len(data["LHEPdfWeight"]) == 0:
             return
         if "pdf_types" not in self.config:
             logger.warning("Not processing pdfs due to missing 'pdf_types' "
