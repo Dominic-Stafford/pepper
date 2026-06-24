@@ -339,15 +339,15 @@ class Processor(pepper.ProcessorBasicPhysics):
         """Apply the weights due to differences of the triggers between
         data and simulation"""
         leps = data["Lepton"]
-        ones = np.ones(len(data))
-        central = ones
-        up = ones
-        down = ones
+        central = np.ones(len(data))
+        up = np.ones(len(data))
+        down = np.ones(len(data))
         channels = ["is_ee", "is_em", "is_mm"]
         trigger_sfs = self.config["trigger_sfs"]
         for channel in channels:
             dimlabels = trigger_sfs[channel].dimlabels
-            ch_leps = leps[data[channel]]
+            mask = data[channel]
+            ch_leps = leps[mask]
             if "ele_pt" in dimlabels:
                 fills = {"ele_pt": ch_leps[abs(ch_leps.pdgId) == 11][:, 0].pt,
                          "mu_pt": ch_leps[abs(ch_leps.pdgId) == 13][:, 0].pt}
@@ -355,12 +355,10 @@ class Processor(pepper.ProcessorBasicPhysics):
                 fills = {"lep1_pt": ch_leps[:, 0].pt,
                          "lep2_pt": ch_leps[:, 1].pt}
             sf = trigger_sfs[channel](**fills)
-            central[data[channel]] = sf
+            central[mask] = sf
             if self.config["compute_systematics"]:
-                sf = trigger_sfs[channel](variation="up", **fills)
-                up = ak.where(data[channel], sf, up)
-                sf = trigger_sfs[channel](variation="down", **fills)
-                down = ak.where(data[channel], sf, down)
+                up[mask] = trigger_sfs[channel](variation="up", **fills)
+                down[mask] = trigger_sfs[channel](variation="down", **fills)
         if self.config["compute_systematics"]:
             return central, {"triggersf": (up / central, down / central)}
         else:
