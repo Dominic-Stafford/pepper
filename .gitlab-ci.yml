@@ -135,7 +135,7 @@ build-docs:
       artifacts: true
   script:
     - source environment.sh
-    - python3 -m pip install --upgrade --upgrade-strategy eager --editable .[docs]
+    - python3 -m pip install --upgrade --editable .[docs]
     - cd docs
     - make html
   rules:

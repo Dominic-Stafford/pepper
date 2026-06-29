@@ -1,7 +1,7 @@
 .. _mc_normalization:
 
 Monte Carlo Normalization
-================
+=========================
 
 Monte Carlo (MC) samples are produced with arbitrary numbers of events. 
 To compare them to data, simulated yields must be scaled so that the predicted 
