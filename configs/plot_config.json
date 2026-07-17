@@ -1,0 +1,21 @@
+{
+    "backgrounds": {
+        "TT": {
+            "label": "$t \\bar{t}$",
+            "color": "tab:red",
+            "datasets": [
+                "TTto4Q_TuneCP5_13p6TeV_powheg-pythia8"
+            ]
+        }
+    },
+    "data": [],
+    "signals": {},
+    "stack_signals": false,
+    "categories": {},
+    "sum_categories": false,
+    "rebin": {},
+    "year": 2024,
+    "luminosity": 109.8,
+    "com_energy": 13.6,
+    "cmslabel": "Simulation"
+}

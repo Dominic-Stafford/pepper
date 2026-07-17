@@ -1,0 +1,40 @@
+{
+
+    "year": "2024",
+    "datadir": ".",
+    "store": "/pnfs/desy.de/cms/tier2/store",
+    "file_mode": "local+xrootd",
+    "xrootddomain": "xrootd-cms.infn.it",
+    "xrootd_url_priority": [
+        // Sort of optimized for CERN lxplus based on vibes.
+        // In general one should put the institute one is running at to the top.
+        "cern.ch",
+        "gridka.de",
+        "ucl.ac.be",
+        "ciemat.es",
+        "rwth-aachen.de",
+        "psi.ch",
+        "desy.de",
+        "pic.es",
+        "ijclab.in2p3.fr",
+        "iihe.ac.be",
+        "cnaf.infn.it",
+        "pi.infn.it"
+    ],
+    "rng_seed_file": "$CONFDIR/seed.txt",
+    "compute_systematics": false,
+    "luminosity": 109.8165,
+    "crosssections": {"TTto4Q_TuneCP5_13p6TeV_powheg-pythia8": 419694},
+    "mc_lumifactors": false,
+    "exp_datasets": {
+    },
+    "mc_datasets": {
+        "TTto4Q_TuneCP5_13p6TeV_powheg-pythia8": [
+            "/TTto4Q_TuneCP5_13p6TeV_powheg-pythia8/RunIII2024Summer24NanoAODv15-BTVNanoV15_150X_mcRun3_2024_realistic_v2-v1/NANOAODSIM"
+        ],
+    },
+    "dataset_for_systematics": {
+    },
+
+    "hists": "$CONFDIR/hist_config.json",
+}

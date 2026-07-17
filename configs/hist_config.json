@@ -1,0 +1,50 @@
+{
+    "forward_pull_angle_Wplus": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Pull angle ($W^{+}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "forward_pull_angle_Wplus"
+            ]
+        }
+    },
+    "forward_pull_angle_Wminus": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Pull angle ($W^{-}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "forward_pull_angle_Wminus"
+            ]
+        }
+    },
+    "forward_pull_angle_bs": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Pull angle (between b quarks)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "forward_pull_angle_bs"
+            ]
+        }
+    },
+}

@@ -296,9 +296,8 @@ def plot(h, config, dense_axis, outfile, exts, log=False):
         luminosity = config["luminosity"]
         com_energy = config["com_energy"] if "com_energy" in config else 13
         cmslabel = config["cmslabel"] if "cmslabel" in config else None
-        mplhep.cms.label(ax=ax1, text=cmslabel, data=True, year=year,
-                         lumi=f"{luminosity:.1f}", com=com_energy,
-                         scilocator_adjust=False)
+        mplhep.cms.label(ax=ax1, label=cmslabel, data=True, year=year,
+                         lumi=f"{luminosity:.1f}", com=com_energy)
 
     # Generic figure adjustments
     fig.align_ylabels()
