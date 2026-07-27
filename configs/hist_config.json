@@ -47,4 +47,53 @@
             ]
         }
     },
+    "reco_forward_pull_angle_Wplus": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Reco pull angle ($W^{+}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "reco_forward_pull_angle_Wplus"
+            ]
+        }
+    },
+    "reco_forward_pull_angle_Wminus": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Reco pull angle ($W^{-}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "reco_forward_pull_angle_Wminus"
+            ]
+        }
+    },
+    "reco_forward_pull_angle_bs": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Reco pull angle (between b quarks)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "reco_forward_pull_angle_bs"
+            ]
+        }
+    }
 }
+
