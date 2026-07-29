@@ -94,6 +94,149 @@
                 "reco_forward_pull_angle_bs"
             ]
         }
+    },
+    "puppi_forward_pull_angle_Wplus": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Reco PUPPI pull angle ($W^{+}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "puppi_forward_pull_angle_Wplus"
+            ]
+        }
+    },
+    "puppi_forward_pull_angle_Wminus": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Reco PUPPI pull angle ($W^{-}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "puppi_forward_pull_angle_Wminus"
+            ]
+        }
+    },
+    "puppi_forward_pull_angle_bs": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Reco PUPPI pull angle (between b quarks)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "puppi_forward_pull_angle_bs"
+            ]
+        }
+    },
+    "wta_forward_pull_angle_Wplus": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Reco WTA pull angle ($W^{+}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "wta_forward_pull_angle_Wplus"
+            ]
+        }
+    },
+    "wta_forward_pull_angle_Wminus": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Reco WTA pull angle ($W^{-}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "wta_forward_pull_angle_Wminus"
+            ]
+        }
+    },
+    "wta_forward_pull_angle_bs": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Reco WTA pull angle (between b quarks)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "wta_forward_pull_angle_bs"
+            ]
+        }
+    },
+    "genwta_forward_pull_angle_Wplus": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Gen WTA pull angle ($W^{+}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "genwta_forward_pull_angle_Wplus"
+            ]
+        }
+    },
+    "genwta_forward_pull_angle_Wminus": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Gen WTA pull angle ($W^{-}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "genwta_forward_pull_angle_Wminus"
+            ]
+        }
+    },
+    "genwta_forward_pull_angle_bs": {
+        "bins": [
+            {
+                "name": "phi",
+                "label": "Gen WTA pull angle (between b quarks)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "phi": [
+                "genwta_forward_pull_angle_bs"
+            ]
+        }
     }
 }
-

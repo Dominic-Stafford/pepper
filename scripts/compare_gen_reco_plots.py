@@ -5,6 +5,15 @@ Overlay gen-level and reco-level pull angle distributions on the same axes.
 For every histogram pair (`X`, `reco_X`) found in the pepper histogram
 output, this draws both as step lines, each normalised to unit area, with a
 reco/gen ratio panel underneath.
+
+Usage
+-----
+    python scripts/compare_gen_reco_plots.py configs/plot_config.json \\
+        output/hists/hists.json -o output/comparison
+
+The plot config is only used for cosmetics (year, luminosity, com_energy,
+cmslabel) and for the list of datasets to include; the stacking/background
+machinery of make_plots.py is not used here.
 """
 import os
 import json
@@ -29,11 +38,24 @@ plt.set_loglevel("error")
 plt.style.use(mplhep.style.CMS)
 
 
-# Prefix that marks the reco-level counterpart of a gen-level variable
-RECO_PREFIX = "reco_"
+# Curves to draw for each gen-level variable `X`. The prefix is prepended to
+# the variable name to find the corresponding histogram; a curve is simply
+# skipped if its histogram is not in the collection.
+# (prefix, legend label, colour, line style, prefix of the curve to divide by
+#  in the ratio panel - None means this curve is itself a reference)
+CURVES = [
+    ("",        "Gen level",          "tab:blue",   "-",  None),
+    ("reco_",   "Reco level",         "tab:red",    "-",  ""),
+    ("puppi_",  "Reco level (PUPPI)", "tab:green",  "-",  ""),
+    ("genwta_", "Gen level (WTA)",    "tab:cyan",   "--", None),
+    ("wta_",    "Reco level (WTA)",   "tab:purple", "-",  "genwta_"),
+]
 
-GEN_COLOR = "tab:blue"
-RECO_COLOR = "tab:red"
+# Any variable starting with one of these is a counterpart, not a gen variable
+COUNTERPART_PREFIXES = tuple(c[0] for c in CURVES if c[0])
+
+# Curve that must always be present for a plot to be made
+BASE_PREFIX = ""
 
 
 def integrate_categories(h):
@@ -70,41 +92,48 @@ def normalise(values, variances, widths):
     return values / area, np.sqrt(variances) / area
 
 
-def plot_comparison(h_gen, h_reco, dense_axis, outfile, exts, config,
-                    log=False):
-    """Draw the gen/reco overlay plus a reco/gen ratio panel."""
+def plot_comparison(curves, dense_axis, outfile, exts, config, log=False):
+    """Draw an overlay of all `curves` plus a ratio panel against the
+    reference curve.
+
+    `curves` is a list of (prefix, label, color, hist) tuples.
+    """
     fig, (ax1, ax2) = plt.subplots(
         nrows=2, sharex=True, gridspec_kw={"height_ratios": [2, 1]})
 
     edges = dense_axis.edges
     widths = np.diff(edges)
 
-    gen_vals, gen_errs = normalise(
-        h_gen.values(), h_gen.variances(), widths)
-    reco_vals, reco_errs = normalise(
-        h_reco.values(), h_reco.variances(), widths)
+    normalised = {}
+    for prefix, label, color, style, ref_prefix, h in curves:
+        vals, errs = normalise(h.values(), h.variances(), widths)
+        normalised[prefix] = (vals, errs)
+        # --- upper panel: step lines ---
+        mplhep.histplot(
+            vals, edges, yerr=errs,
+            histtype="step", edges=False, linewidth=1.5, linestyle=style,
+            color=color, label=label, ax=ax1)
 
-    # --- upper panel: both distributions as step lines ---
-    mplhep.histplot(
-        gen_vals, edges, yerr=gen_errs,
-        histtype="step", edges=False, linewidth=1.5,
-        color=GEN_COLOR, label="Gen level", ax=ax1)
-    mplhep.histplot(
-        reco_vals, edges, yerr=reco_errs,
-        histtype="step", edges=False, linewidth=1.5,
-        color=RECO_COLOR, label="Reco level", ax=ax1)
+    # --- lower panel: each curve divided by its own reference ---
+    all_ratios = []
+    for prefix, label, color, style, ref_prefix, h in curves:
+        if ref_prefix is None or ref_prefix not in normalised:
+            continue
+        ref_vals, ref_errs = normalised[ref_prefix]
+        vals, errs = normalised[prefix]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = np.where(ref_vals > 0, vals / ref_vals, np.nan)
+            # Error propagation treating the two as independent
+            rel_ref = np.where(ref_vals > 0, ref_errs / ref_vals, 0.)
+            rel_this = np.where(vals > 0, errs / vals, 0.)
+            ratio_errs = np.abs(ratio) * np.sqrt(rel_ref**2 + rel_this**2)
+        all_ratios.append(ratio)
+        mplhep.histplot(
+            np.nan_to_num(ratio, nan=0.), edges,
+            yerr=np.nan_to_num(ratio_errs),
+            histtype="errorbar", color=color, markersize=8, ax=ax2)
 
-    # --- lower panel: reco / gen ---
-    with np.errstate(divide="ignore", invalid="ignore"):
-        ratio = np.where(gen_vals > 0, reco_vals / gen_vals, np.nan)
-        # Error propagation treating the two as independent
-        rel_gen = np.where(gen_vals > 0, gen_errs / gen_vals, 0.)
-        rel_reco = np.where(reco_vals > 0, reco_errs / reco_vals, 0.)
-        ratio_errs = np.abs(ratio) * np.sqrt(rel_gen**2 + rel_reco**2)
-
-    mplhep.histplot(
-        np.nan_to_num(ratio, nan=0.), edges, yerr=np.nan_to_num(ratio_errs),
-        histtype="errorbar", color="black", markersize=8, ax=ax2)
+    ratio = np.concatenate(all_ratios) if all_ratios else np.array([1.])
 
     ax2.hlines(1, edges[0], edges[-1], color="black", linestyle="dashed",
                linewidth=1., zorder=-90)
@@ -118,7 +147,7 @@ def plot_comparison(h_gen, h_reco, dense_axis, outfile, exts, config,
         ax1.autoscale("y")
     ax1.legend()
 
-    ax2.set_ylabel("Reco / Gen")
+    ax2.set_ylabel("Reco / gen")
     ax2.set_xlabel(dense_axis.label)
     ax2.set_xlim(edges[0], edges[-1])
     finite = ratio[np.isfinite(ratio)]
@@ -130,6 +159,9 @@ def plot_comparison(h_gen, h_reco, dense_axis, outfile, exts, config,
     ax2.set_ylim(1. - spread * 1.2, 1. + spread * 1.2)
 
     if "year" in config:
+        # With data=False mplhep writes "Simulation" itself, so passing a
+        # cmslabel of "Simulation" from the config would print it twice.
+        # Only forward the config label if it says something else.
         label_kwargs = {}
         cmslabel = config["cmslabel"] if "cmslabel" in config else None
         if cmslabel is not None and cmslabel.strip().lower() != "simulation":
@@ -188,45 +220,58 @@ def main():
     if outdir is None:
         outdir = os.path.dirname(os.path.realpath(args.histfile))
 
-    # Build the list of (cut, gen_variable) pairs that have a reco counterpart
+    # Collect the gen-level variables that have at least one counterpart
     available = set(hists.keys())
-    pairs = []
+    todo = []
     for key in sorted(available):
         cutname, variable = key[0], key[1]
-        if variable.startswith(RECO_PREFIX):
+        if variable.startswith(COUNTERPART_PREFIXES):
             continue
-        reco_key = (cutname, RECO_PREFIX + variable) + tuple(key[2:])
-        if reco_key in available:
-            pairs.append((key, reco_key))
+        keys = {}
+        for curve in CURVES:
+            cand = (cutname, curve[0] + variable) + tuple(key[2:])
+            if cand in available:
+                keys[curve[0]] = cand
+        # Need the gen curve plus at least one thing to compare it against
+        if BASE_PREFIX in keys and len(keys) > 1:
+            todo.append((cutname, variable, keys))
 
-    if len(pairs) == 0:
+    if len(todo) == 0:
         raise SystemExit(
-            f"Found no variable with a matching '{RECO_PREFIX}' counterpart "
-            f"in {args.histfile}")
+            f"Found no variable with a matching "
+            f"{list(COUNTERPART_PREFIXES)} counterpart in {args.histfile}")
 
-    for gen_key, reco_key in tqdm.tqdm(pairs):
-        cutname, variable = gen_key[0], gen_key[1]
+    for cutname, variable, keys in tqdm.tqdm(todo):
         if args.cut is not None and cutname != args.cut:
             continue
 
-        h_gen = integrate_categories(hists.load(gen_key))
-        h_reco = integrate_categories(hists.load(reco_key))
+        curves = []
+        dense_axis = None
+        for prefix, label, color, style, ref_prefix in CURVES:
+            if prefix not in keys:
+                continue
+            h = integrate_categories(hists.load(keys[prefix]))
+            axis = get_dense_axis(h)
+            if axis is None:
+                print(f"Skipping {prefix}{variable} ({cutname}): not exactly "
+                      f"one dense axis")
+                continue
+            if dense_axis is None:
+                dense_axis = axis
+            elif axis.edges.shape != dense_axis.edges.shape:
+                print(f"Skipping {prefix}{variable} ({cutname}): binning "
+                      f"differs from the gen-level histogram")
+                continue
+            curves.append((prefix, label, color, style, ref_prefix, h))
 
-        dense_axis = get_dense_axis(h_gen)
-        if dense_axis is None:
-            print(f"Skipping {variable} ({cutname}): not exactly one dense "
-                  f"axis")
-            continue
-        if get_dense_axis(h_reco).edges.shape != dense_axis.edges.shape:
-            print(f"Skipping {variable} ({cutname}): gen and reco binning "
-                  f"differ")
+        if len(curves) < 2:
             continue
 
         cut_outdir = os.path.join(outdir, cutname)
         os.makedirs(cut_outdir, exist_ok=True)
         outfile = os.path.join(cut_outdir, f"genreco_{variable}_{cutname}")
 
-        plot_comparison(h_gen, h_reco, dense_axis, outfile, args.ext,
+        plot_comparison(curves, dense_axis, outfile, args.ext,
                         config, log=args.log)
 
     print(f"Wrote plots to {outdir}")
