@@ -21,6 +21,8 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.set_multiple_columns(self.find_genjets_matching_HP)
         self.unload_column("GenJet")
         selector.add_cut("Require_matched_genjets", self.require_distinct_genjets)
+        selector.set_column("genjet_connected_idx", self.assign_connected_genjets)
+        selector.set_multiple_columns(self.count_correct_connections)
         selector.set_column("Jet", self.calculate_jet_pull)
         selector.set_multiple_columns(self.find_jets_matching_HP)
         self.unload_column("Jet")
@@ -98,6 +100,35 @@ class Processor(pepper.ProcessorBasicPhysics):
         new_cols["jet_from_HP_qfromWplus"] = ak.drop_none(data["gen_HP_qfromWplus"].nearest(jets, threshold=0.3))
         new_cols["jet_from_HP_qfromWminus"] = ak.drop_none(data["gen_HP_qfromWminus"].nearest(jets, threshold=0.3))
         return new_cols
+
+    @staticmethod
+    def get_W_genjets(data):
+        """The four W decay jets, ordered [W+, W+, W-, W-], so the true
+        colour connected partner of a jet is the other one of its pair."""
+        return ak.concatenate([data["genjet_from_HP_qfromWplus"],
+                               data["genjet_from_HP_qfromWminus"]], axis=1)
+
+    def assign_connected_genjets(self, data):
+        """For each of the four W decay jets, find the one its pull vector
+        points at most closely. Returns the position (0 to 3) of that jet."""
+        jets = self.get_W_genjets(data)
+        jets = ak.with_field(jets, ak.local_index(jets, axis=1), "pos")
+        pairs = ak.cartesian({"i": jets, "j": jets}, nested=True)
+        jcv_y = pairs.j.rapidity - pairs.i.rapidity
+        jcv_phi = self.rectify_angle(pairs.j.phi - pairs.i.phi)
+        angle = self.calculate_angle(jcv_phi, jcv_y, pairs.i["pull_phi"], pairs.i["pull_rapidity"])
+        # Mask out pairing a jet with itself, then take the smallest angle
+        angle = ak.mask(abs(angle), pairs.i.pos != pairs.j.pos)
+        closest = ak.argmin(angle, axis=2, keepdims=True)
+        return ak.firsts(pairs.j.pos[closest], axis=2)
+
+    def count_correct_connections(self, data):
+        """Count how many of the four W decay jets got assigned their true
+        colour connected partner, i.e. the other jet from the same W."""
+        connected = data["genjet_connected_idx"]
+        pos = ak.local_index(connected, axis=1)
+        true_partner = ak.where(pos % 2 == 0, pos + 1, pos - 1)
+        return {"n_correct_connections": ak.sum(connected == true_partner, axis=1)}
 
     def require_distinct_genjets(self, data):
         idx_all = ak.concatenate(
