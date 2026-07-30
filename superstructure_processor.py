@@ -1,8 +1,12 @@
 import pepper
 import awkward as ak
 import numpy as np
+import fastjet
+import vector
 from functools import partial
 from coffea.nanoevents import PFNanoAODSchema
+
+vector.register_awkward()
 
 
 class Processor(pepper.ProcessorBasicPhysics):
@@ -62,22 +66,65 @@ class Processor(pepper.ProcessorBasicPhysics):
         dy = cands.rapidity - jets.rapidity
         jets["pull_phi"] = weighted_sum(dphis, cands.pt, jets.pt, mag)
         jets["pull_rapidity"] = weighted_sum(dy, cands.pt, jets.pt, mag)
+        # Same pull again, but measured from the winner-take-all axis
+        wta_y, wta_phi = self.calculate_wta_axis(cands)
+        dphis_wta = self.rectify_angle(cands.phi - wta_phi)
+        dy_wta = cands.rapidity - wta_y
+        mag_wta = np.sqrt(dphis_wta**2 + dy_wta**2)
+        jets["wta_rapidity"] = wta_y
+        jets["wta_phi"] = wta_phi
+        jets["pull_phi_wta"] = weighted_sum(dphis_wta, cands.pt, jets.pt, mag_wta)
+        jets["pull_rapidity_wta"] = weighted_sum(dy_wta, cands.pt, jets.pt, mag_wta)
         # Some jets don't have matched Gen candidates, like due to the choices made when making this nano - drop these for now
         jets = jets[ak.num(cands, axis=2) > 0]
         return jets
+
+    # Reclustering definition for the winner-take-all axis. R is larger than
+    # the AK4 jets so that all constituents end up in a single jet.
+    wta_jetdef = fastjet.JetDefinition(
+        fastjet.antikt_algorithm, 0.8, fastjet.WTA_pt_scheme)
+
+    def calculate_wta_axis(self, cands):
+        """Recluster the constituents of each jet with the winner-take-all
+        recombination scheme and return the (rapidity, phi) of the resulting axis"""
+        njets = ak.num(cands, axis=1)
+        flat = ak.flatten(cands, axis=1)
+        inp = ak.zip({"pt": flat.pt, "eta": flat.eta, "phi": flat.phi,
+                      "mass": flat.mass}, with_name="Momentum4D")
+        subjets = fastjet.ClusterSequence(inp, self.wta_jetdef).inclusive_jets()
+        subjets = ak.with_name(subjets, "Momentum4D")
+        # Normally everything ends up in one subjet - take the hardest if not
+        hardest = ak.firsts(
+            subjets[ak.argsort(subjets.pt, axis=1, ascending=False)], axis=1)
+        return (ak.unflatten(hardest.rapidity, njets, axis=0),
+                ak.unflatten(hardest.phi, njets, axis=0))
 
     def calculate_jet_pull(self, data):
         def weighted_sum(deltas, pt_cands, pt_jet, mag):
             return ak.sum(deltas * pt_cands * mag / pt_jet, axis=2)
 
         jets = data["Jet"]
-        #cands = jets.candidates
         cands = jets.constituents.pf
         mag = cands.deltaRapidityPhi(jets)
         dphis = cands.deltaphi(jets)
         dy = cands.rapidity - jets.rapidity
         jets["pull_phi"] = weighted_sum(dphis, cands.pt, jets.pt, mag)
         jets["pull_rapidity"] = weighted_sum(dy, cands.pt, jets.pt, mag)
+        # Same pull, but each candidate scaled by its PUPPI weight.
+        # The denominator is the PUPPI-weighted pt sum so the weights still add up to 1.
+        pt_puppi = cands.pt * cands.puppiWeight
+        pt_jet_puppi = ak.sum(pt_puppi, axis=2)
+        jets["pull_phi_puppi"] = weighted_sum(dphis, pt_puppi, pt_jet_puppi, mag)
+        jets["pull_rapidity_puppi"] = weighted_sum(dy, pt_puppi, pt_jet_puppi, mag)
+        # Same pull again, but measured from the winner-take-all axis instead of the jet axis.
+        wta_y, wta_phi = self.calculate_wta_axis(cands)
+        dphis_wta = self.rectify_angle(cands.phi - wta_phi)
+        dy_wta = cands.rapidity - wta_y
+        mag_wta = np.sqrt(dphis_wta**2 + dy_wta**2)
+        jets["wta_rapidity"] = wta_y
+        jets["wta_phi"] = wta_phi
+        jets["pull_phi_wta"] = weighted_sum(dphis_wta, cands.pt, jets.pt, mag_wta)
+        jets["pull_rapidity_wta"] = weighted_sum(dy_wta, cands.pt, jets.pt, mag_wta)
         jets = jets[ak.num(cands, axis=2) > 0]
         return jets
 
@@ -103,7 +150,7 @@ class Processor(pepper.ProcessorBasicPhysics):
 
     @staticmethod
     def get_W_genjets(data):
-        """The four W decay jets, ordered [W+, W+, W-, W-], so the true
+        """The four W decay jets, ordered [W+, W+, W-, W-], so that the true
         colour connected partner of a jet is the other one of its pair."""
         return ak.concatenate([data["genjet_from_HP_qfromWplus"],
                                data["genjet_from_HP_qfromWminus"]], axis=1)
@@ -159,11 +206,18 @@ class Processor(pepper.ProcessorBasicPhysics):
     def calculate_angle(self, phi1, y1, phi2, y2):
         return self.rectify_angle(np.arctan2(phi1*y2 - phi2*y1, phi1*phi2 + y1*y2))
 
-    def calculate_pull_angle(self, jets):
-        jcv_y = jets[:, 1].rapidity -  jets[:, 0].rapidity # JCV = "jet connection vector"
-        jcv_phi = jets[:, 1].delta_phi(jets[:, 0])
-        forward_pull_angle = self.calculate_angle(jcv_phi, jcv_y, jets["pull_phi"][:, 0], jets["pull_rapidity"][:, 0])
-        backward_pull_angle = self.calculate_angle(-jcv_phi, -jcv_y, jets["pull_phi"][:, 1], jets["pull_rapidity"][:, 1])
+    def calculate_pull_angle(self, jets, phi_field="pull_phi", y_field="pull_rapidity",
+                             axis_y_field=None, axis_phi_field=None):
+        if axis_y_field is None:
+            jcv_y = jets[:, 1].rapidity -  jets[:, 0].rapidity # JCV = "jet connection vector"
+            jcv_phi = jets[:, 1].delta_phi(jets[:, 0])
+        else:
+            # Build the jet connection vector from a different axis, e.g. WTA
+            jcv_y = jets[axis_y_field][:, 1] - jets[axis_y_field][:, 0]
+            jcv_phi = self.rectify_angle(
+                jets[axis_phi_field][:, 1] - jets[axis_phi_field][:, 0])
+        forward_pull_angle = self.calculate_angle(jcv_phi, jcv_y, jets[phi_field][:, 0], jets[y_field][:, 0])
+        backward_pull_angle = self.calculate_angle(-jcv_phi, -jcv_y, jets[phi_field][:, 1], jets[y_field][:, 1])
         return forward_pull_angle, backward_pull_angle
 
     def set_pull_angles(self, data):
@@ -180,6 +234,25 @@ class Processor(pepper.ProcessorBasicPhysics):
             self.calculate_pull_angle(data["jet_from_HP_qfromWminus"])
         new_cols["reco_forward_pull_angle_bs"], new_cols["reco_backward_pull_angle_bs"] = \
             self.calculate_pull_angle(ak.concatenate([data["jet_from_HP_b"], data["jet_from_HP_bbar"]], axis=1))
+        puppi = {"phi_field": "pull_phi_puppi", "y_field": "pull_rapidity_puppi"}
+        new_cols["puppi_forward_pull_angle_Wplus"], new_cols["puppi_backward_pull_angle_Wplus"] = \
+            self.calculate_pull_angle(data["jet_from_HP_qfromWplus"], **puppi)
+        new_cols["puppi_forward_pull_angle_Wminus"], new_cols["puppi_backward_pull_angle_Wminus"] = \
+            self.calculate_pull_angle(data["jet_from_HP_qfromWminus"], **puppi)
+        new_cols["puppi_forward_pull_angle_bs"], new_cols["puppi_backward_pull_angle_bs"] = \
+            self.calculate_pull_angle(ak.concatenate([data["jet_from_HP_b"], data["jet_from_HP_bbar"]], axis=1), **puppi)
+        wta = {"phi_field": "pull_phi_wta", "y_field": "pull_rapidity_wta",
+               "axis_y_field": "wta_rapidity", "axis_phi_field": "wta_phi"}
+        new_cols["genwta_forward_pull_angle_Wplus"], new_cols["genwta_backward_pull_angle_Wplus"] = \
+            self.calculate_pull_angle(data["genjet_from_HP_qfromWplus"], **wta)
+        new_cols["genwta_forward_pull_angle_Wminus"], new_cols["genwta_backward_pull_angle_Wminus"] = \
+            self.calculate_pull_angle(data["genjet_from_HP_qfromWminus"], **wta)
+        new_cols["genwta_forward_pull_angle_bs"], new_cols["genwta_backward_pull_angle_bs"] = \
+            self.calculate_pull_angle(ak.concatenate([data["genjet_from_HP_b"], data["genjet_from_HP_bbar"]], axis=1), **wta)
+        new_cols["wta_forward_pull_angle_Wplus"], new_cols["wta_backward_pull_angle_Wplus"] = \
+            self.calculate_pull_angle(data["jet_from_HP_qfromWplus"], **wta)
+        new_cols["wta_forward_pull_angle_Wminus"], new_cols["wta_backward_pull_angle_Wminus"] = \
+            self.calculate_pull_angle(data["jet_from_HP_qfromWminus"], **wta)
+        new_cols["wta_forward_pull_angle_bs"], new_cols["wta_backward_pull_angle_bs"] = \
+            self.calculate_pull_angle(ak.concatenate([data["jet_from_HP_b"], data["jet_from_HP_bbar"]], axis=1), **wta)
         return new_cols
-
-
