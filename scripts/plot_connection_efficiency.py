@@ -30,9 +30,12 @@ matplotlib.use("Agg")
 plt.set_loglevel("error")
 plt.style.use(mplhep.style.CMS)
 
-# (variable name, legend label, colour)
+# (variable name, legend label, colour). The first one is the method the
+# binomial expectation is drawn for.
 LEVELS = [
-    ("n_correct_connections", "Gen jets", "tab:blue"),
+    ("n_correct_connections", "Pull angle", "tab:blue"),
+    ("n_correct_connections_mass_sum", "W mass, sum", "tab:orange"),
+    ("n_correct_connections_mass_max", "W mass, max", "tab:green"),
 ]
 N_JETS = 4
 
@@ -212,9 +215,10 @@ def main():
         curves = [(1 / (N_JETS - 1),
                    f"Binomial, p = {1/(N_JETS-1):.1%} (random)",
                    "tab:gray", "--")]
-        for label, color, fractions, eff, eff_err in entries:
-            curves.append((eff, f"Binomial, p = {eff:.1%} (measured)",
-                           "black", ":"))
+        # Only for the first method - for the mass pairing the result is 0 or
+        # 4 by construction, so a binomial comparison says nothing
+        label, color, fractions, eff, eff_err = entries[0]
+        curves.append((eff, f"Binomial, p = {eff:.1%} ({label})", "black", ":"))
         for p in (args.binomial or []):
             curves.append((p, f"Binomial, p = {p:.1%}", "tab:green", "-."))
 

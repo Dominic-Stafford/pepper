@@ -255,4 +255,36 @@
             ]
         }
     },
+    "n_correct_connections_mass_sum": {
+        "bins": [
+            {
+                "name": "n",
+                "label": "Correctly assigned colour connections per event (W mass, sum)",
+                "n_or_arr": 5,
+                "lo": -0.5,
+                "hi": 4.5
+            }
+        ],
+        "fill": {
+            "n": [
+                "n_correct_connections_mass_sum"
+            ]
+        }
+    },
+    "n_correct_connections_mass_max": {
+        "bins": [
+            {
+                "name": "n",
+                "label": "Correctly assigned colour connections per event (W mass, max)",
+                "n_or_arr": 5,
+                "lo": -0.5,
+                "hi": 4.5
+            }
+        ],
+        "fill": {
+            "n": [
+                "n_correct_connections_mass_max"
+            ]
+        }
+    },
 }

@@ -27,6 +27,7 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.add_cut("Require_matched_genjets", self.require_distinct_genjets)
         selector.set_column("genjet_connected_idx", self.assign_connected_genjets)
         selector.set_multiple_columns(self.count_correct_connections)
+        selector.set_multiple_columns(self.pair_genjets_by_mass)
         selector.set_column("Jet", self.calculate_jet_pull)
         selector.set_multiple_columns(self.find_jets_matching_HP)
         self.unload_column("Jet")
@@ -176,6 +177,31 @@ class Processor(pepper.ProcessorBasicPhysics):
         pos = ak.local_index(connected, axis=1)
         true_partner = ak.where(pos % 2 == 0, pos + 1, pos - 1)
         return {"n_correct_connections": ak.sum(connected == true_partner, axis=1)}
+
+    # The only three ways to split four jets into two pairs. The first one is
+    # the true pairing, as get_W_genjets orders the jets [W+, W+, W-, W-].
+    pairings = [((0, 1), (2, 3)), ((0, 2), (1, 3)), ((0, 3), (1, 2))]
+    w_mass = 80.4
+
+    def pair_genjets_by_mass(self, data):
+        """Pick the pairing of the four W decay jets whose two invariant masses
+        come closest to the W mass, using two different scores. Returns 4 if
+        the chosen pairing is the true one and 0 if not, so that the result can
+        be compared directly with n_correct_connections."""
+        jets = self.get_W_genjets(data)
+        deviations = []
+        for (i, j), (k, l) in self.pairings:
+            deviations.append((abs((jets[:, i] + jets[:, j]).mass - self.w_mass),
+                               abs((jets[:, k] + jets[:, l]).mass - self.w_mass)))
+        new_cols = {}
+        for name, score in [("sum", lambda m1, m2: m1 + m2),
+                            ("max", lambda m1, m2: np.maximum(m1, m2))]:
+            scores = ak.concatenate(
+                [ak.singletons(score(m1, m2)) for m1, m2 in deviations], axis=1)
+            best = ak.argmin(scores, axis=1)
+            new_cols["n_correct_connections_mass_" + name] = \
+                ak.values_astype(best == 0, np.int64) * 4
+        return new_cols
 
     def require_distinct_genjets(self, data):
         idx_all = ak.concatenate(
