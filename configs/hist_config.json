@@ -287,4 +287,148 @@
             ]
         }
     },
+    "corridor_ptdens_connected": {
+        "bins": [
+            {
+                "name": "dens",
+                "label": "Corridor $p_{T}$ density (colour connected)",
+                "n_or_arr": 40,
+                "lo": 0,
+                "hi": 40
+            }
+        ],
+        "fill": {
+            "dens": [
+                "corridor_ptdens_connected"
+            ]
+        }
+    },
+    "corridor_ptdens_crossW": {
+        "bins": [
+            {
+                "name": "dens",
+                "label": "Corridor $p_{T}$ density (not connected)",
+                "n_or_arr": 40,
+                "lo": 0,
+                "hi": 40
+            }
+        ],
+        "fill": {
+            "dens": [
+                "corridor_ptdens_crossW"
+            ]
+        }
+    },
+    "corridor_ptdens_bb": {
+        "bins": [
+            {
+                "name": "dens",
+                "label": "Corridor $p_{T}$ density ($b\\bar{b}$)",
+                "n_or_arr": 40,
+                "lo": 0,
+                "hi": 40
+            }
+        ],
+        "fill": {
+            "dens": [
+                "corridor_ptdens_bb"
+            ]
+        }
+    },
+    "corridor_mass_connected": {
+        "bins": [
+            {
+                "name": "mass",
+                "label": "Corridor mass (colour connected) [GeV]",
+                "n_or_arr": 40,
+                "lo": 0,
+                "hi": 120
+            }
+        ],
+        "fill": {
+            "mass": [
+                "corridor_mass_connected"
+            ]
+        }
+    },
+    "corridor_mass_crossW": {
+        "bins": [
+            {
+                "name": "mass",
+                "label": "Corridor mass (not connected) [GeV]",
+                "n_or_arr": 40,
+                "lo": 0,
+                "hi": 120
+            }
+        ],
+        "fill": {
+            "mass": [
+                "corridor_mass_crossW"
+            ]
+        }
+    },
+    "corridor_mass_bb": {
+        "bins": [
+            {
+                "name": "mass",
+                "label": "Corridor mass ($b\\bar{b}$) [GeV]",
+                "n_or_arr": 40,
+                "lo": 0,
+                "hi": 120
+            }
+        ],
+        "fill": {
+            "mass": [
+                "corridor_mass_bb"
+            ]
+        }
+    },
+    "corridor_combined_connected": {
+        "bins": [
+            {
+                "name": "comb",
+                "label": "Corridor $(\\Sigma p_{T} + m)$ per unit area (colour connected) [GeV]",
+                "n_or_arr": 40,
+                "lo": 0,
+                "hi": 150
+            }
+        ],
+        "fill": {
+            "comb": [
+                "corridor_combined_connected"
+            ]
+        }
+    },
+    "corridor_combined_crossW": {
+        "bins": [
+            {
+                "name": "comb",
+                "label": "Corridor $(\\Sigma p_{T} + m)$ per unit area (not connected) [GeV]",
+                "n_or_arr": 40,
+                "lo": 0,
+                "hi": 150
+            }
+        ],
+        "fill": {
+            "comb": [
+                "corridor_combined_crossW"
+            ]
+        }
+    },
+    "corridor_combined_bb": {
+        "bins": [
+            {
+                "name": "comb",
+                "label": "Corridor $(\\Sigma p_{T} + m)$ per unit area ($b\\bar{b}$) [GeV]",
+                "n_or_arr": 40,
+                "lo": 0,
+                "hi": 150
+            }
+        ],
+        "fill": {
+            "comb": [
+                "corridor_combined_bb"
+            ]
+        }
+    },
 }

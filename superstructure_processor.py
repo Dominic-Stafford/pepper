@@ -28,6 +28,7 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.set_column("genjet_connected_idx", self.assign_connected_genjets)
         selector.set_multiple_columns(self.count_correct_connections)
         selector.set_multiple_columns(self.pair_genjets_by_mass)
+        selector.set_multiple_columns(self.set_corridor_activity)
         selector.set_column("Jet", self.calculate_jet_pull)
         selector.set_multiple_columns(self.find_jets_matching_HP)
         self.unload_column("Jet")
@@ -177,6 +178,76 @@ class Processor(pepper.ProcessorBasicPhysics):
         pos = ak.local_index(connected, axis=1)
         true_partner = ak.where(pos % 2 == 0, pos + 1, pos - 1)
         return {"n_correct_connections": ak.sum(connected == true_partner, axis=1)}
+
+    # Corridor between two jets: a rectangle in the (rapidity, phi) plane
+    # running from the edge of one jet cone to the edge of the other. Since a
+    # particle's distance from a jet is at least its projection onto the line
+    # joining them, requiring the projection to exceed the jet radius already
+    # excludes both cones, and the corridor is an exact rectangle.
+    jet_radius = 0.4
+    corridor_half_width = 0.4
+    corridor_use_rapidity = True
+
+    def corridor_coord(self, obj):
+        return obj.rapidity if self.corridor_use_rapidity else obj.eta
+
+    # The three observables built from the corridor contents, in the order
+    # corridor_activity returns them
+    corridor_observables = ["ptdens", "mass", "combined"]
+
+    def corridor_activity(self, jet_a, jet_b, cands):
+        """Radiation in the corridor between two jets. Returns the pt per unit
+        area, the invariant mass, and the two added together per unit area.
+        All three are masked away for jets too close to have a corridor."""
+        ya = self.corridor_coord(jet_a)
+        dy = self.corridor_coord(jet_b) - ya
+        dphi = self.rectify_angle(jet_b.phi - jet_a.phi)
+        length = np.sqrt(dy**2 + dphi**2)
+        vy = self.corridor_coord(cands) - ya
+        vphi = self.rectify_angle(cands.phi - jet_a.phi)
+        # Distance along the line joining the jets, and perpendicular to it
+        along = (vy * dy + vphi * dphi) / length
+        across = abs(vy * dphi - vphi * dy) / length
+        inside = ((along > self.jet_radius)
+                  & (along < length - self.jet_radius)
+                  & (across < self.corridor_half_width))
+        sel = cands[inside]
+        area = 2 * self.corridor_half_width * (length - 2 * self.jet_radius)
+        px, py = ak.sum(sel.px, axis=1), ak.sum(sel.py, axis=1)
+        pz, energy = ak.sum(sel.pz, axis=1), ak.sum(sel.energy, axis=1)
+        mass = np.sqrt(np.maximum(energy**2 - px**2 - py**2 - pz**2, 0))
+        pt_sum = ak.sum(sel.pt, axis=1)
+        has_corridor = length > 2 * self.jet_radius
+        return (ak.mask(pt_sum / area, has_corridor),
+                ak.mask(mass, has_corridor),
+                ak.mask((pt_sum + mass) / area, has_corridor))
+
+    # Which pairs of the four W jets are colour connected and which are not.
+    # get_W_genjets orders them [W+, W+, W-, W-], so a pair from the same W is
+    # connected and a pair taking one jet from each W is not.
+    corridor_groups = {"connected": [(0, 1), (2, 3)],
+                       "crossW": [(0, 2), (0, 3), (1, 2), (1, 3)]}
+
+    def set_corridor_activity(self, data):
+        """Corridor pt density and mass for colour connected pairs, for
+        unconnected pairs, and for the b bbar pair as a second control."""
+        cands = data["GenCands"]
+        w_jets = self.get_W_genjets(data)
+        new_cols = {}
+
+        def add(name, results):
+            # ak.singletons drops the pairs that had no corridor
+            for k, obs in enumerate(self.corridor_observables):
+                new_cols[f"corridor_{obs}_{name}"] = ak.concatenate(
+                    [ak.singletons(r[k]) for r in results], axis=1)
+
+        for name, pairs in self.corridor_groups.items():
+            add(name, [self.corridor_activity(w_jets[:, i], w_jets[:, j], cands)
+                       for i, j in pairs])
+        add("bb", [self.corridor_activity(data["genjet_from_HP_b"][:, 0],
+                                          data["genjet_from_HP_bbar"][:, 0],
+                                          cands)])
+        return new_cols
 
     # The only three ways to split four jets into two pairs. The first one is
     # the true pairing, as get_W_genjets orders the jets [W+, W+, W-, W-].
