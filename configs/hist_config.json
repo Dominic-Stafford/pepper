@@ -287,147 +287,99 @@
             ]
         }
     },
-    "corridor_ptdens_connected": {
-        "bins": [
-            {
-                "name": "dens",
-                "label": "Corridor $p_{T}$ density (colour connected)",
-                "n_or_arr": 40,
-                "lo": 0,
-                "hi": 40
-            }
-        ],
-        "fill": {
-            "dens": [
-                "corridor_ptdens_connected"
-            ]
-        }
-    },
-    "corridor_ptdens_crossW": {
-        "bins": [
-            {
-                "name": "dens",
-                "label": "Corridor $p_{T}$ density (not connected)",
-                "n_or_arr": 40,
-                "lo": 0,
-                "hi": 40
-            }
-        ],
-        "fill": {
-            "dens": [
-                "corridor_ptdens_crossW"
-            ]
-        }
-    },
-    "corridor_ptdens_bb": {
-        "bins": [
-            {
-                "name": "dens",
-                "label": "Corridor $p_{T}$ density ($b\\bar{b}$)",
-                "n_or_arr": 40,
-                "lo": 0,
-                "hi": 40
-            }
-        ],
-        "fill": {
-            "dens": [
-                "corridor_ptdens_bb"
-            ]
-        }
-    },
     "corridor_mass_connected": {
         "bins": [
             {
-                "name": "mass",
-                "label": "Corridor mass (colour connected) [GeV]",
-                "n_or_arr": 40,
+                "name": "m",
+                "label": "$m$(corridor particles), colour connected [GeV]",
+                "n_or_arr": 60,
                 "lo": 0,
                 "hi": 120
             }
         ],
         "fill": {
-            "mass": [
+            "m": [
                 "corridor_mass_connected"
             ]
         }
     },
-    "corridor_mass_crossW": {
+    "corridor_mass_unconnected": {
         "bins": [
             {
-                "name": "mass",
-                "label": "Corridor mass (not connected) [GeV]",
-                "n_or_arr": 40,
+                "name": "m",
+                "label": "$m$(corridor particles), not connected [GeV]",
+                "n_or_arr": 60,
                 "lo": 0,
                 "hi": 120
             }
         ],
         "fill": {
-            "mass": [
-                "corridor_mass_crossW"
+            "m": [
+                "corridor_mass_unconnected"
             ]
         }
     },
-    "corridor_mass_bb": {
+    "corridor_dijet_connected": {
         "bins": [
             {
-                "name": "mass",
-                "label": "Corridor mass ($b\\bar{b}$) [GeV]",
-                "n_or_arr": 40,
+                "name": "m",
+                "label": "$m$(two jets) [GeV]",
+                "n_or_arr": 60,
                 "lo": 0,
-                "hi": 120
+                "hi": 180
             }
         ],
         "fill": {
-            "mass": [
-                "corridor_mass_bb"
+            "m": [
+                "corridor_dijet_connected"
             ]
         }
     },
-    "corridor_combined_connected": {
+    "corridor_capsule_connected": {
         "bins": [
             {
-                "name": "comb",
-                "label": "Corridor $(\\Sigma p_{T} + m)$ per unit area (colour connected) [GeV]",
-                "n_or_arr": 40,
+                "name": "m",
+                "label": "$m$(two jets + corridor) [GeV]",
+                "n_or_arr": 60,
                 "lo": 0,
-                "hi": 150
+                "hi": 180
             }
         ],
         "fill": {
-            "comb": [
-                "corridor_combined_connected"
+            "m": [
+                "corridor_capsule_connected"
             ]
         }
     },
-    "corridor_combined_crossW": {
+    "corridor_vetoed_connected": {
         "bins": [
             {
-                "name": "comb",
-                "label": "Corridor $(\\Sigma p_{T} + m)$ per unit area (not connected) [GeV]",
-                "n_or_arr": 40,
-                "lo": 0,
-                "hi": 150
+                "name": "v",
+                "label": "Pair vetoed by a third jet (connected)",
+                "n_or_arr": 2,
+                "lo": -0.5,
+                "hi": 1.5
             }
         ],
         "fill": {
-            "comb": [
-                "corridor_combined_crossW"
+            "v": [
+                "corridor_vetoed_connected"
             ]
         }
     },
-    "corridor_combined_bb": {
+    "corridor_vetoed_unconnected": {
         "bins": [
             {
-                "name": "comb",
-                "label": "Corridor $(\\Sigma p_{T} + m)$ per unit area ($b\\bar{b}$) [GeV]",
-                "n_or_arr": 40,
-                "lo": 0,
-                "hi": 150
+                "name": "v",
+                "label": "Pair vetoed by a third jet (not connected)",
+                "n_or_arr": 2,
+                "lo": -0.5,
+                "hi": 1.5
             }
         ],
         "fill": {
-            "comb": [
-                "corridor_combined_bb"
+            "v": [
+                "corridor_vetoed_unconnected"
             ]
         }
     },

@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """
-Compare the radiation in the corridor between two jets for colour connected
-and for unconnected jet pairs.
+Everything about the corridor between two jets.
 
-Makes one plot per cut and per observable:
-  corridor_<obs>_<cut>   the three distributions, each normalised to unit area
+Makes two plots per cut:
+  corridor_mass_<cut>    invariant mass of the particles in the corridor, for
+                         colour connected and for unconnected jet pairs
+  capsule_mass_<cut>     m(two jets) against m(two jets + corridor) for
+                         connected pairs, to see whether sweeping in the soft
+                         particles sharpens the W peak
 
-The separation between connected and unconnected pairs is also printed as an
-area-under-ROC number for each observable, so they can be ranked.
+Also prints, for each cut:
+  - how large a fraction of pairs was vetoed for having a third jet in the
+    corridor
+  - the separation between connected and unconnected, as an area under ROC
+  - the peak, width and W window fraction of the two mass distributions
 
 Usage
 -----
@@ -32,18 +38,22 @@ matplotlib.use("Agg")
 plt.set_loglevel("error")
 plt.style.use(mplhep.style.CMS)
 
-# (observable suffix, x axis label)
-OBSERVABLES = [
-    ("ptdens", "Corridor $\\Sigma p_{T}$ per unit area [GeV]"),
-    ("mass", "Corridor invariant mass [GeV]"),
-    ("combined", "Corridor $(\\Sigma p_{T} + m)$ per unit area [GeV]"),
+W_MASS = 80.4
+WINDOW = 10.0   # half width of the window around the W mass, in GeV
+
+# Corridor mass, connected against unconnected
+CORRIDOR_CURVES = [
+    ("corridor_mass_connected", "Colour connected", "tab:blue"),
+    ("corridor_mass_unconnected", "Not colour connected", "tab:red"),
 ]
-# (group suffix, legend label, colour). The first is the signal for the ROC,
-# every later one is compared against it.
-GROUPS = [
-    ("connected", "Colour connected (same W)", "tab:blue"),
-    ("crossW", "Not connected ($W^{+}$ with $W^{-}$)", "tab:red"),
-    ("bb", "$b\\bar{b}$ pair", "tab:green"),
+# The two jets alone against the two jets plus the corridor
+CAPSULE_CURVES = [
+    ("corridor_dijet_connected", "Two jets", "tab:blue"),
+    ("corridor_capsule_connected", "Two jets + corridor", "tab:orange"),
+]
+VETO_VARIABLES = [
+    ("corridor_vetoed_connected", "connected"),
+    ("corridor_vetoed_unconnected", "not connected"),
 ]
 
 
@@ -57,17 +67,45 @@ def integrate_categories(h):
     return h
 
 
+def load(hists, cutname, variable):
+    """Return (dense axis, counts, variances), or None if not present."""
+    key = (cutname, variable)
+    if key not in hists.keys():
+        return None
+    h = integrate_categories(hists.load(key))
+    dense = [a for a in h.axes
+             if not isinstance(a, (hist.axis.StrCategory, hist.axis.IntCategory))]
+    if len(dense) != 1:
+        return None
+    return dense[0], h.values(), h.variances()
+
+
 def roc_auc(signal, background):
-    """How well a cut on this observable separates the two, as a single
-    number. 0.5 means no separation, 1 means perfect. Printed only, so that
-    the three observables can be ranked without needing another plot."""
+    """How well a cut on this observable separates the two, as one number.
+    0.5 means no separation, 1 means perfect."""
     sig = signal / signal.sum()
     bkg = background / background.sum()
-    # Fraction of each kept by a cut placed at every bin edge, from the top
     kept_sig = np.concatenate([[0.], np.cumsum(sig[::-1])])
     kept_bkg = np.concatenate([[0.], np.cumsum(bkg[::-1])])
     return np.trapezoid(kept_sig, kept_bkg) if hasattr(np, "trapezoid") \
         else np.trapz(kept_sig, kept_bkg)
+
+
+def summarise(centers, counts):
+    """Peak, median, interquartile range and fraction near the W mass.
+
+    Median and IQR rather than mean and RMS, because these distributions have
+    a long high mass tail that would dominate an RMS.
+    """
+    cdf = np.cumsum(counts) / counts.sum()
+
+    def quantile(q):
+        return np.interp(q, cdf, centers)
+
+    return {"peak": centers[np.argmax(counts)], "median": quantile(0.5),
+            "iqr": quantile(0.75) - quantile(0.25),
+            "in_window": counts[np.abs(centers - W_MASS) < WINDOW].sum()
+            / counts.sum()}
 
 
 def cms_label(ax, config):
@@ -84,8 +122,8 @@ def cms_label(ax, config):
         **label_kwargs)
 
 
-def plot_distributions(entries, axis, xlabel, outfile, exts, config, log):
-    """Overlay the normalised distributions as step lines."""
+def overlay(entries, axis, xlabel, outfile, exts, config, wline=False):
+    """Overlay normalised distributions as step lines."""
     fig, ax = plt.subplots()
     edges = axis.edges
     widths = np.diff(edges)
@@ -96,14 +134,15 @@ def plot_distributions(entries, axis, xlabel, outfile, exts, config, log):
         mplhep.histplot(counts / area, edges, yerr=np.sqrt(variances) / area,
                         histtype="step", edges=False, linewidth=1.5,
                         color=color, label=label, ax=ax)
+    if wline:
+        ax.axvline(W_MASS, color="black", linestyle="--", linewidth=1.5)
+        ax.text(W_MASS + 2, 0.97, f"$m_W$ = {W_MASS} GeV", fontsize=15,
+                va="top", ha="left", transform=ax.get_xaxis_transform())
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Normalised pairs")
     ax.set_xlim(edges[0], edges[-1])
-    if log:
-        ax.set_yscale("log")
-    else:
-        ax.set_ylim(bottom=0)
-    ax.legend(fontsize=16)
+    ax.set_ylim(bottom=0)
+    ax.legend(fontsize=17)
     cms_label(ax, config)
     plt.tight_layout()
     for ext in exts:
@@ -112,9 +151,7 @@ def plot_distributions(entries, axis, xlabel, outfile, exts, config, log):
 
 
 def main():
-    parser = ArgumentParser(
-        description="Compare corridor radiation for connected and "
-                    "unconnected jet pairs")
+    parser = ArgumentParser(description="Corridor mass and capsule mass plots")
     parser.add_argument("plot_config", help="Plotting config, used for the "
                         "CMS label only")
     parser.add_argument("histfile", help="hists.json written by runproc")
@@ -122,8 +159,6 @@ def main():
                         "the directory containing histfile")
     parser.add_argument("--ext", choices=["pdf", "svg", "png"], default=None,
                         action="append", help="Output file format")
-    parser.add_argument("--log", action="store_true",
-                        help="Logarithmic y axis on the distribution plots")
     args = parser.parse_args()
 
     if args.ext is None:
@@ -137,61 +172,75 @@ def main():
     if outdir is None:
         outdir = os.path.dirname(os.path.realpath(args.histfile))
 
-    wanted = {f"corridor_{obs}_{grp}"
-              for obs, _ in OBSERVABLES for grp, _, _ in GROUPS}
+    wanted = ({v for v, _, _ in CORRIDOR_CURVES}
+              | {v for v, _, _ in CAPSULE_CURVES}
+              | {v for v, _ in VETO_VARIABLES})
     cuts = sorted({k[0] for k in hists.keys() if k[1] in wanted})
     if len(cuts) == 0:
         raise SystemExit(f"No corridor histograms found in {args.histfile}")
 
-    ranking = {}
     for cutname in cuts:
-        for obs, xlabel in OBSERVABLES:
-            entries, axis = [], None
-            for group, label, color in GROUPS:
-                key = (cutname, f"corridor_{obs}_{group}")
-                if key not in hists.keys():
-                    continue
-                h = integrate_categories(hists.load(key))
-                dense = [a for a in h.axes
-                         if not isinstance(a, (hist.axis.StrCategory,
-                                               hist.axis.IntCategory))]
-                if len(dense) != 1:
-                    continue
-                if axis is None:
-                    axis = dense[0]
-                elif dense[0].edges.shape != axis.edges.shape:
-                    print(f"Skipping {key}: binning differs")
-                    continue
-                entries.append((label, color, h.values(), h.variances()))
+        print(f"[{cutname}]")
+        cut_outdir = os.path.join(outdir, cutname)
+        os.makedirs(cut_outdir, exist_ok=True)
 
-            if len(entries) < 2:
+        # --- how many pairs lost a third jet in their corridor ---
+        for variable, name in VETO_VARIABLES:
+            got = load(hists, cutname, variable)
+            if got is None:
                 continue
+            _, counts, variances = got
+            total = counts.sum()
+            if total > 0:
+                # Entries are weighted, so use the effective number of pairs
+                n_eff = total**2 / variances.sum()
+                print(f"  vetoed, {name:<20}: {counts[1]/total:6.1%} of "
+                      f"{n_eff:.0f} pairs that had a corridor")
 
-            cut_outdir = os.path.join(outdir, cutname)
-            os.makedirs(cut_outdir, exist_ok=True)
+        # --- corridor mass, connected against unconnected ---
+        entries, axis = [], None
+        for variable, label, color in CORRIDOR_CURVES:
+            got = load(hists, cutname, variable)
+            if got is None:
+                continue
+            axis, counts, variances = got
+            entries.append((label, color, counts, variances))
+        if len(entries) == 2:
+            overlay(entries, axis, "$m$(corridor particles) [GeV]",
+                    os.path.join(cut_outdir, f"corridor_mass_{cutname}"),
+                    args.ext, config)
+            auc = roc_auc(entries[0][2], entries[1][2])
+            for label, _, counts, _ in entries:
+                print(f"  mean corridor mass, {label:<22}: "
+                      f"{np.average(axis.centers, weights=counts):7.2f} GeV")
+            print(f"  separation, area under ROC     : {auc:.4f}"
+                  f"   (0.5 = none)")
 
-            plot_distributions(
-                entries, axis, xlabel,
-                os.path.join(cut_outdir, f"corridor_{obs}_{cutname}"),
-                args.ext, config, args.log)
-
-            # Separation of the first group from each of the others, as
-            # numbers only - no plot
-            sig_label, _, sig_counts, _ = entries[0]
-            print(f"[{cutname}] corridor {obs}")
-            print(f"  mean, {sig_label:<34}: "
-                  f"{np.average(axis.centers, weights=sig_counts):.3f}")
-            for label, color, counts, variances in entries[1:]:
-                auc = roc_auc(sig_counts, counts)
-                print(f"  mean, {label:<34}: "
-                      f"{np.average(axis.centers, weights=counts):.3f}")
-                print(f"  AUC  vs {label:<34}: {auc:.4f}")
-                ranking.setdefault((cutname, label), []).append((auc, obs))
-
-    for (cutname, label), aucs in ranking.items():
-        print(f"\nMost effective observable, {cutname}, against {label}:")
-        for auc, obs in sorted(aucs, reverse=True):
-            print(f"    {obs:<10} AUC = {auc:.4f}")
+        # --- two jets against two jets plus corridor ---
+        entries, axis = [], None
+        for variable, label, color in CAPSULE_CURVES:
+            got = load(hists, cutname, variable)
+            if got is None:
+                continue
+            axis, counts, variances = got
+            entries.append((label, color, counts, variances))
+        if len(entries) == 2:
+            overlay(entries, axis, "Invariant mass [GeV]",
+                    os.path.join(cut_outdir, f"capsule_mass_{cutname}"),
+                    args.ext, config, wline=True)
+            stats = {}
+            for label, _, counts, _ in entries:
+                s = summarise(axis.centers, counts)
+                stats[label] = s
+                print(f"  {label:<22} peak {s['peak']:6.1f}   "
+                      f"median {s['median']:6.1f}   IQR {s['iqr']:6.1f}   "
+                      f"within {WINDOW:.0f} GeV of W: {s['in_window']:.1%}")
+            first, second = entries[0][0], entries[1][0]
+            d_median = stats[second]["median"] - stats[first]["median"]
+            d_iqr = stats[second]["iqr"] - stats[first]["iqr"]
+            print(f"  -> median moves {d_median:+.1f} GeV, IQR changes "
+                  f"{d_iqr:+.1f} GeV "
+                  f"({'sharper' if d_iqr < 0 else 'broader'})")
 
     print(f"\nWrote plots to {outdir}")
 

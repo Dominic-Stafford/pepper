@@ -187,66 +187,96 @@ class Processor(pepper.ProcessorBasicPhysics):
     jet_radius = 0.4
     corridor_half_width = 0.4
     corridor_use_rapidity = True
+    # Gen jets are clustered without neutrinos, so leave them out of the
+    # corridor too, otherwise the capsule mass gains momentum the jets never had
+    corridor_exclude_neutrinos = True
 
     def corridor_coord(self, obj):
         return obj.rapidity if self.corridor_use_rapidity else obj.eta
 
-    # The three observables built from the corridor contents, in the order
-    # corridor_activity returns them
-    corridor_observables = ["ptdens", "mass", "combined"]
-
-    def corridor_activity(self, jet_a, jet_b, cands):
-        """Radiation in the corridor between two jets. Returns the pt per unit
-        area, the invariant mass, and the two added together per unit area.
-        All three are masked away for jets too close to have a corridor."""
-        ya = self.corridor_coord(jet_a)
-        dy = self.corridor_coord(jet_b) - ya
-        dphi = self.rectify_angle(jet_b.phi - jet_a.phi)
-        length = np.sqrt(dy**2 + dphi**2)
-        vy = self.corridor_coord(cands) - ya
-        vphi = self.rectify_angle(cands.phi - jet_a.phi)
+    def corridor_mask(self, jet_a, dy, dphi, length, obj_y, obj_phi):
+        """Which of the objects at (obj_y, obj_phi) lie inside the corridor"""
+        vy = obj_y - self.corridor_coord(jet_a)
+        vphi = self.rectify_angle(obj_phi - jet_a.phi)
         # Distance along the line joining the jets, and perpendicular to it
         along = (vy * dy + vphi * dphi) / length
         across = abs(vy * dphi - vphi * dy) / length
-        inside = ((along > self.jet_radius)
-                  & (along < length - self.jet_radius)
-                  & (across < self.corridor_half_width))
-        sel = cands[inside]
-        area = 2 * self.corridor_half_width * (length - 2 * self.jet_radius)
+        return ((along > self.jet_radius)
+                & (along < length - self.jet_radius)
+                & (across < self.corridor_half_width))
+
+    def corridor_activity(self, jet_a, jet_b, cands, cand_y, jets, jet_y):
+        """Invariant mass of the particles in the corridor between two jets,
+        the mass of the two jets alone, and the mass of both together.
+
+        Pairs whose corridor contains another jet are vetoed, as are pairs too
+        close together to have a corridor at all. The veto flag is returned as
+        well so that the rejected fraction can be reported.
+        """
+        dy = self.corridor_coord(jet_b) - self.corridor_coord(jet_a)
+        dphi = self.rectify_angle(jet_b.phi - jet_a.phi)
+        length = np.sqrt(dy**2 + dphi**2)
+
+        sel = cands[self.corridor_mask(jet_a, dy, dphi, length,
+                                       cand_y, cands.phi)]
         px, py = ak.sum(sel.px, axis=1), ak.sum(sel.py, axis=1)
         pz, energy = ak.sum(sel.pz, axis=1), ak.sum(sel.energy, axis=1)
         mass = np.sqrt(np.maximum(energy**2 - px**2 - py**2 - pz**2, 0))
-        pt_sum = ak.sum(sel.pt, axis=1)
-        has_corridor = length > 2 * self.jet_radius
-        return (ak.mask(pt_sum / area, has_corridor),
-                ak.mask(mass, has_corridor),
-                ak.mask((pt_sum + mass) / area, has_corridor))
+        # The two jets on their own, and the whole capsule. Invariant mass is
+        # not additive, so the capsule has to be built by adding up all the
+        # four-momenta rather than by combining the masses.
+        dijet = jet_a + jet_b
+        capsule = np.sqrt(np.maximum(
+            (dijet.energy + energy)**2 - (dijet.px + px)**2
+            - (dijet.py + py)**2 - (dijet.pz + pz)**2, 0))
 
-    # Which pairs of the four W jets are colour connected and which are not.
-    # get_W_genjets orders them [W+, W+, W-, W-], so a pair from the same W is
-    # connected and a pair taking one jet from each W is not.
-    corridor_groups = {"connected": [(0, 1), (2, 3)],
-                       "crossW": [(0, 2), (0, 3), (1, 2), (1, 3)]}
+        # A third jet inside the corridor spoils the measurement. The two jets
+        # of the pair sit at the ends of the line, outside the corridor, so
+        # they never veto themselves.
+        n_other = ak.sum(self.corridor_mask(jet_a, dy, dphi, length,
+                                            jet_y, jets.phi), axis=1)
+        has_corridor = length > 2 * self.jet_radius
+        vetoed = n_other > 0
+        keep = has_corridor & ~vetoed
+        return (ak.mask(mass, keep), ak.mask(dijet.mass, keep),
+                ak.mask(capsule, keep),
+                ak.mask(ak.values_astype(vetoed, np.int64), has_corridor))
+
+    # In the order corridor_activity returns them
+    corridor_observables = ["mass", "dijet", "capsule", "vetoed"]
 
     def set_corridor_activity(self, data):
-        """Corridor pt density and mass for colour connected pairs, for
-        unconnected pairs, and for the b bbar pair as a second control."""
+        """Corridor mass for colour connected pairs and for every kind of
+        unconnected pair, plus the two masses needed to see whether the
+        corridor particles belong to the W."""
         cands = data["GenCands"]
-        w_jets = self.get_W_genjets(data)
-        new_cols = {}
+        if self.corridor_exclude_neutrinos and "pdgId" in cands.fields:
+            cands = cands[~np.isin(abs(cands.pdgId), [12, 14, 16])]
+        # Computed once rather than per pair, rapidity is not a cheap property
+        cand_y = self.corridor_coord(cands)
+        jets = data["GenJet"]
+        jet_y = self.corridor_coord(jets)
 
-        def add(name, results):
-            # ak.singletons drops the pairs that had no corridor
+        w = self.get_W_genjets(data)
+        b, bbar = data["genjet_from_HP_b"][:, 0], data["genjet_from_HP_bbar"][:, 0]
+        # get_W_genjets orders the jets [W+, W+, W-, W-], so only pairs within
+        # the same W are colour connected. Everything else is a control: the
+        # cross W pairs, every b with every W jet, and b with bbar.
+        groups = {
+            "connected": [(w[:, 0], w[:, 1]), (w[:, 2], w[:, 3])],
+            "unconnected": (
+                [(w[:, i], w[:, j]) for i, j in [(0, 2), (0, 3), (1, 2), (1, 3)]]
+                + [(q, w[:, i]) for q in (b, bbar) for i in range(4)]
+                + [(b, bbar)]),
+        }
+        new_cols = {}
+        for name, pairs in groups.items():
+            results = [self.corridor_activity(a, b_, cands, cand_y, jets, jet_y)
+                       for a, b_ in pairs]
+            # ak.singletons drops the pairs that were vetoed or had no corridor
             for k, obs in enumerate(self.corridor_observables):
                 new_cols[f"corridor_{obs}_{name}"] = ak.concatenate(
                     [ak.singletons(r[k]) for r in results], axis=1)
-
-        for name, pairs in self.corridor_groups.items():
-            add(name, [self.corridor_activity(w_jets[:, i], w_jets[:, j], cands)
-                       for i, j in pairs])
-        add("bb", [self.corridor_activity(data["genjet_from_HP_b"][:, 0],
-                                          data["genjet_from_HP_bbar"][:, 0],
-                                          cands)])
         return new_cols
 
     # The only three ways to split four jets into two pairs. The first one is
