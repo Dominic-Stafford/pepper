@@ -251,7 +251,8 @@ class Processor(pepper.ProcessorBasicPhysics):
         corridor particles belong to the W."""
         cands = data["GenCands"]
         if self.corridor_exclude_neutrinos and "pdgId" in cands.fields:
-            cands = cands[~np.isin(abs(cands.pdgId), [12, 14, 16])]
+            pdg = abs(cands.pdgId)
+            cands = cands[(pdg != 12) & (pdg != 14) & (pdg != 16)]
         # Computed once rather than per pair, rapidity is not a cheap property
         cand_y = self.corridor_coord(cands)
         jets = data["GenJet"]

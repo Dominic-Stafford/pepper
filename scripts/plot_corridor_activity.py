@@ -202,6 +202,7 @@ def main():
         for variable, label, color in CORRIDOR_CURVES:
             got = load(hists, cutname, variable)
             if got is None:
+                print(f"  MISSING {variable}, skipping the corridor mass plot")
                 continue
             axis, counts, variances = got
             entries.append((label, color, counts, variances))
@@ -221,6 +222,7 @@ def main():
         for variable, label, color in CAPSULE_CURVES:
             got = load(hists, cutname, variable)
             if got is None:
+                print(f"  MISSING {variable}, skipping the capsule mass plot")
                 continue
             axis, counts, variances = got
             entries.append((label, color, counts, variances))

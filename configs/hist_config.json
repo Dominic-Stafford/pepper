@@ -294,7 +294,7 @@
                 "label": "$m$(corridor particles), colour connected [GeV]",
                 "n_or_arr": 60,
                 "lo": 0,
-                "hi": 120
+                "hi": 10
             }
         ],
         "fill": {
@@ -310,7 +310,7 @@
                 "label": "$m$(corridor particles), not connected [GeV]",
                 "n_or_arr": 60,
                 "lo": 0,
-                "hi": 120
+                "hi": 10
             }
         ],
         "fill": {
@@ -324,9 +324,9 @@
             {
                 "name": "m",
                 "label": "$m$(two jets) [GeV]",
-                "n_or_arr": 60,
-                "lo": 0,
-                "hi": 180
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
             }
         ],
         "fill": {
@@ -340,9 +340,9 @@
             {
                 "name": "m",
                 "label": "$m$(two jets + corridor) [GeV]",
-                "n_or_arr": 60,
-                "lo": 0,
-                "hi": 180
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
             }
         ],
         "fill": {
