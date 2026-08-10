@@ -24,7 +24,8 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.set_column("GenJet", self.calculate_genjet_pull)
         selector.set_multiple_columns(self.find_genjets_matching_HP)
         self.unload_column("GenJet")
-        selector.add_cut("Require_matched_genjets", self.require_distinct_genjets)
+        selector.add_cut("Require_all_genjets", self.require_all_genjets)
+        selector.add_cut("Require_distinct_genjets", self.require_unmerged_genjets)
         selector.set_column("genjet_connected_idx", self.assign_connected_genjets)
         selector.set_multiple_columns(self.count_correct_connections)
         selector.set_multiple_columns(self.pair_genjets_by_mass)
@@ -32,7 +33,8 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.set_column("Jet", self.calculate_jet_pull)
         selector.set_multiple_columns(self.find_jets_matching_HP)
         self.unload_column("Jet")
-        selector.add_cut("Require_matched_jets", self.require_distinct_jets)
+        selector.add_cut("Require_all_jets", self.require_all_jets)
+        selector.add_cut("Require_distinct_jets", self.require_unmerged_jets)
         selector.set_multiple_columns(self.set_pull_angles)
 
     def find_progenitor_quarks(self, data):
@@ -305,27 +307,69 @@ class Processor(pepper.ProcessorBasicPhysics):
                 ak.values_astype(best == 0, np.int64) * 4
         return new_cols
 
-    def require_distinct_genjets(self, data):
-        idx_all = ak.concatenate(
-            [j.idx for j in [data["genjet_from_HP_b"], data["genjet_from_HP_bbar"], data["genjet_from_HP_qfromWplus"], data["genjet_from_HP_qfromWminus"]]], axis=1)
-        idx_sorted = ak.sort(idx_all, axis=1)
-        all_distinct = ak.all(idx_sorted[:, 1:] != idx_sorted[:, :-1], axis=1)
+    # The two requirements below used to be combined into a single cut each
+    # (require_distinct_genjets / require_distinct_jets). They are now split
+    # into a presence cut (all 6 needed jets matched) and a distinctness cut
+    # (none of them merged into the same jet) so the fraction rejected by each
+    # requirement can be measured separately.
+    #
+    # def require_distinct_genjets(self, data):
+    #     idx_all = ak.concatenate(
+    #         [j.idx for j in [data["genjet_from_HP_b"], data["genjet_from_HP_bbar"], data["genjet_from_HP_qfromWplus"], data["genjet_from_HP_qfromWminus"]]], axis=1)
+    #     idx_sorted = ak.sort(idx_all, axis=1)
+    #     all_distinct = ak.all(idx_sorted[:, 1:] != idx_sorted[:, :-1], axis=1)
+    #     return ((ak.num(data["genjet_from_HP_b"]) == 1) &
+    #             (ak.num(data["genjet_from_HP_bbar"]) == 1) &
+    #             (ak.num(data["genjet_from_HP_qfromWplus"]) == 2) &
+    #             (ak.num(data["genjet_from_HP_qfromWminus"]) == 2) &
+    #             all_distinct)
+    #
+    # def require_distinct_jets(self, data):
+    #     idx_all = ak.concatenate(
+    #         [j.idx for j in [data["jet_from_HP_b"], data["jet_from_HP_bbar"], data["jet_from_HP_qfromWplus"], data["jet_from_HP_qfromWminus"]]], axis=1)
+    #     idx_sorted = ak.sort(idx_all, axis=1)
+    #     all_distinct = ak.all(idx_sorted[:, 1:] != idx_sorted[:, :-1], axis=1)
+    #     return ((ak.num(data["jet_from_HP_b"]) == 1) &
+    #             (ak.num(data["jet_from_HP_bbar"]) == 1) &
+    #             (ak.num(data["jet_from_HP_qfromWplus"]) == 2) &
+    #             (ak.num(data["jet_from_HP_qfromWminus"]) == 2) &
+    #             all_distinct)
+
+    def require_all_genjets(self, data):
+        """Presence requirement: all six needed gen jets were matched, i.e.
+        exactly one for the b, one for the bbar, two for the W+ decay quarks
+        and two for the W- decay quarks."""
         return ((ak.num(data["genjet_from_HP_b"]) == 1) &
                 (ak.num(data["genjet_from_HP_bbar"]) == 1) &
                 (ak.num(data["genjet_from_HP_qfromWplus"]) == 2) &
-                (ak.num(data["genjet_from_HP_qfromWminus"]) == 2) &
-                all_distinct)
+                (ak.num(data["genjet_from_HP_qfromWminus"]) == 2))
 
-    def require_distinct_jets(self, data):
+    def require_unmerged_genjets(self, data):
+        """Distinctness requirement: the matched gen jets are all distinct, so
+        no two HP partons were matched to the same jet (none merged together).
+        Applied after require_all_genjets, so every event here has six jets."""
         idx_all = ak.concatenate(
-            [j.idx for j in [data["jet_from_HP_b"], data["jet_from_HP_bbar"], data["jet_from_HP_qfromWplus"], data["jet_from_HP_qfromWminus"]]], axis=1)
+            [j.idx for j in [data["genjet_from_HP_b"], data["genjet_from_HP_bbar"], data["genjet_from_HP_qfromWplus"], data["genjet_from_HP_qfromWminus"]]], axis=1)
         idx_sorted = ak.sort(idx_all, axis=1)
-        all_distinct = ak.all(idx_sorted[:, 1:] != idx_sorted[:, :-1], axis=1)
+        return ak.all(idx_sorted[:, 1:] != idx_sorted[:, :-1], axis=1)
+
+    def require_all_jets(self, data):
+        """Presence requirement: all six needed reco jets were matched, i.e.
+        exactly one for the b, one for the bbar, two for the W+ decay quarks
+        and two for the W- decay quarks."""
         return ((ak.num(data["jet_from_HP_b"]) == 1) &
                 (ak.num(data["jet_from_HP_bbar"]) == 1) &
                 (ak.num(data["jet_from_HP_qfromWplus"]) == 2) &
-                (ak.num(data["jet_from_HP_qfromWminus"]) == 2) &
-                all_distinct)
+                (ak.num(data["jet_from_HP_qfromWminus"]) == 2))
+
+    def require_unmerged_jets(self, data):
+        """Distinctness requirement: the matched reco jets are all distinct, so
+        no two HP partons were matched to the same jet (none merged together).
+        Applied after require_all_jets, so every event here has six jets."""
+        idx_all = ak.concatenate(
+            [j.idx for j in [data["jet_from_HP_b"], data["jet_from_HP_bbar"], data["jet_from_HP_qfromWplus"], data["jet_from_HP_qfromWminus"]]], axis=1)
+        idx_sorted = ak.sort(idx_all, axis=1)
+        return ak.all(idx_sorted[:, 1:] != idx_sorted[:, :-1], axis=1)
 
     @staticmethod
     def rectify_angle(phi):
