@@ -15,6 +15,9 @@
         "TTto4Q_TuneCP5_13p6TeV_powheg-pythia8": [
             "/data/dust/user/stafford/BTVNano_datasets/TT4Q/*.root"
         ],
+	"TTH-Hto2B-TTto4Q_Par-M-125_TuneCP5_13p6TeV_powheg-pythia8": [
+            "/pnfs/desy.de/cms/tier2/store/user/dstaffor/BTVNano/ttH/TTH-Hto2B-TTto4Q_Par-M-125_TuneCP5_13p6TeV_powheg-pythia8/RunIII2024Summer24MiniAODv6-150X_mcRun3_2024_realistic_v2-v2_BTV_Run3_2024_Comm_MINIAODv6/260807_094223/0000/*.root"
+        ],
     },
     "dataset_for_systematics": {
     },
