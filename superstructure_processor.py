@@ -21,6 +21,8 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.set_multiple_columns(self.find_progenitor_quarks)
         self.unload_column("GenPart")
         selector.add_cut("Require_genparts", self.require_HP_genparts)
+        selector.add_cut("Require_quarks_in_eta", self.require_HP_eta_threshold)
+        selector.add_cut("Require_quarks_min_pt", self.require_HP_pt_threshold)
         selector.set_column("GenJet", self.calculate_genjet_pull)
         selector.set_multiple_columns(self.find_genjets_matching_HP)
         self.unload_column("GenJet")
@@ -55,6 +57,24 @@ class Processor(pepper.ProcessorBasicPhysics):
                 (ak.num(data["gen_HP_bbar"]) == 1) &
                 (ak.num(data["gen_HP_qfromWplus"]) == 2) &
                 (ak.num(data["gen_HP_qfromWminus"]) == 2))
+
+    quark_eta_max = 2.4
+    quark_pt_min = 15.
+
+    @staticmethod
+    def get_HP_quarks(data):
+        """All six hard process quarks in one array"""
+        return ak.concatenate(
+            [data["gen_HP_b"], data["gen_HP_bbar"],
+             data["gen_HP_qfromWplus"], data["gen_HP_qfromWminus"]], axis=1)
+
+    def require_HP_eta_threshold(self, data):
+        """Every hard process quark inside the tracker acceptance"""
+        return ak.all(abs(self.get_HP_quarks(data).eta) < self.quark_eta_max, axis=1)
+
+    def require_HP_pt_threshold(self, data):
+        """Every hard process quark hard enough to make a jet"""
+        return ak.all(self.get_HP_quarks(data).pt > self.quark_pt_min, axis=1)
 
     def calculate_genjet_pull(self, data):
         def weighted_sum(deltas, pt_cands, pt_jet, mag):

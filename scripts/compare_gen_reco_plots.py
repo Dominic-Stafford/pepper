@@ -58,12 +58,15 @@ COUNTERPART_PREFIXES = tuple(c[0] for c in CURVES if c[0])
 BASE_PREFIX = ""
 
 
-def integrate_categories(h):
+def integrate_categories(h, dataset=None):
     """Sum a histogram over every category axis (dataset, sys, ...) so that
     only the dense axis is left.
 
-    For the `sys` axis only the nominal is kept, if it is present.
+    For the `sys` axis only the nominal is kept, if it is present. If
+    `dataset` is given, only that dataset is kept instead of summing them.
     """
+    if dataset is not None and "dataset" in h.axes.name:
+        h = h[{"dataset": dataset}]
     if "sys" in h.axes.name:
         h = h[{"sys": "nominal"}]
     for ax in list(h.axes):
@@ -203,6 +206,10 @@ def main():
         help="Output file format, can be given multiple times")
     parser.add_argument(
         "-c", "--cut", default=None, help="Only plot this cut")
+    parser.add_argument(
+        "--split-datasets", action="store_true",
+        help="Make a separate set of plots for every dataset instead of "
+        "summing them, written into a subdirectory per dataset")
     args = parser.parse_args()
 
     if args.ext is None:
@@ -241,38 +248,50 @@ def main():
             f"Found no variable with a matching "
             f"{list(COUNTERPART_PREFIXES)} counterpart in {args.histfile}")
 
+    # Which datasets to make plots for. None means sum over all of them.
+    datasets = [None]
+    if args.split_datasets:
+        first = hists.load(todo[0][2][BASE_PREFIX])
+        if "dataset" in first.axes.name:
+            datasets = list(first.axes["dataset"])
+            print(f"Making a set of plots for each of: {datasets}")
+
     for cutname, variable, keys in tqdm.tqdm(todo):
         if args.cut is not None and cutname != args.cut:
             continue
 
-        curves = []
-        dense_axis = None
-        for prefix, label, color, style, ref_prefix in CURVES:
-            if prefix not in keys:
-                continue
-            h = integrate_categories(hists.load(keys[prefix]))
-            axis = get_dense_axis(h)
-            if axis is None:
-                print(f"Skipping {prefix}{variable} ({cutname}): not exactly "
-                      f"one dense axis")
-                continue
-            if dense_axis is None:
-                dense_axis = axis
-            elif axis.edges.shape != dense_axis.edges.shape:
-                print(f"Skipping {prefix}{variable} ({cutname}): binning "
-                      f"differs from the gen-level histogram")
-                continue
-            curves.append((prefix, label, color, style, ref_prefix, h))
+        for dataset in datasets:
+            curves = []
+            dense_axis = None
+            for prefix, label, color, style, ref_prefix in CURVES:
+                if prefix not in keys:
+                    continue
+                h = integrate_categories(hists.load(keys[prefix]), dataset)
+                axis = get_dense_axis(h)
+                if axis is None:
+                    print(f"Skipping {prefix}{variable} ({cutname}): not "
+                          f"exactly one dense axis")
+                    continue
+                if dense_axis is None:
+                    dense_axis = axis
+                elif axis.edges.shape != dense_axis.edges.shape:
+                    print(f"Skipping {prefix}{variable} ({cutname}): binning "
+                          f"differs from the gen-level histogram")
+                    continue
+                curves.append((prefix, label, color, style, ref_prefix, h))
 
-        if len(curves) < 2:
-            continue
+            if len(curves) < 2:
+                continue
 
-        cut_outdir = os.path.join(outdir, cutname)
-        os.makedirs(cut_outdir, exist_ok=True)
-        outfile = os.path.join(cut_outdir, f"genreco_{variable}_{cutname}")
+            cut_outdir = os.path.join(outdir, cutname)
+            if dataset is not None:
+                cut_outdir = os.path.join(cut_outdir, dataset)
+            os.makedirs(cut_outdir, exist_ok=True)
+            outfile = os.path.join(cut_outdir,
+                                   f"genreco_{variable}_{cutname}")
 
-        plot_comparison(curves, dense_axis, outfile, args.ext,
-                        config, log=args.log)
+            plot_comparison(curves, dense_axis, outfile, args.ext,
+                            config, log=args.log)
 
     print(f"Wrote plots to {outdir}")
 
