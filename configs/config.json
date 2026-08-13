@@ -7,7 +7,12 @@
     "rng_seed_file": "$CONFDIR/seed.txt",
     "compute_systematics": false,
     "luminosity": 109.8165,
-    "crosssections": {"TTto4Q_TuneCP5_13p6TeV_powheg-pythia8": 419694},
+    
+    "crosssections": {
+        "TTto4Q_TuneCP5_13p6TeV_powheg-pythia8": 419694,
+        "TTH-Hto2B-TTto4Q_Par-M-125_TuneCP5_13p6TeV_powheg-pythia8": 151,
+        "TTTT_TuneCP5_13p6TeV_amcatnlo-pythia8": 15.82
+    },
     "mc_lumifactors": false,
     "exp_datasets": {
     },

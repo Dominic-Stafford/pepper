@@ -42,14 +42,14 @@ class Processor(pepper.ProcessorBasicPhysics):
     def find_progenitor_quarks(self, data):
         new_cols = {}
         gen_parts = data["GenPart"]
-        new_cols["gen_HP_b"] = ak.drop_none(
-            gen_parts[(gen_parts.pdgId==5) & (gen_parts.parent.pdgId==6)]) # b quark from top quark
-        new_cols["gen_HP_bbar"] = ak.drop_none(
-            gen_parts[(gen_parts.pdgId==-5) & (gen_parts.parent.pdgId==-6)]) # Anti-b from antitop
-        new_cols["gen_HP_qfromWplus"] = ak.drop_none(
-            gen_parts[(abs(gen_parts.pdgId)<6) & (gen_parts.parent.pdgId==24) & (gen_parts.parent.distinctParent.pdgId==6)]) # q and qbar from W+ (originally from top)
-        new_cols["gen_HP_qfromWminus"] = ak.drop_none(
-            gen_parts[(abs(gen_parts.pdgId)<6) & (gen_parts.parent.pdgId==-24) & (gen_parts.parent.distinctParent.pdgId==-6)]) # q and qbar from W- (originally from antitop)
+        new_cols["gen_HP_b"] = ak.to_packed(ak.drop_none(
+            gen_parts[(gen_parts.pdgId==5) & (gen_parts.parent.pdgId==6)])) # b quark from top quark
+        new_cols["gen_HP_bbar"] = ak.to_packed(ak.drop_none(
+            gen_parts[(gen_parts.pdgId==-5) & (gen_parts.parent.pdgId==-6)])) # Anti-b from antitop
+        new_cols["gen_HP_qfromWplus"] = ak.to_packed(ak.drop_none(
+            gen_parts[(abs(gen_parts.pdgId)<6) & (gen_parts.parent.pdgId==24) & (gen_parts.parent.distinctParent.pdgId==6)])) # q and qbar from W+ (originally from top)
+        new_cols["gen_HP_qfromWminus"] = ak.to_packed(ak.drop_none(
+            gen_parts[(abs(gen_parts.pdgId)<6) & (gen_parts.parent.pdgId==-24) & (gen_parts.parent.distinctParent.pdgId==-6)])) # q and qbar from W- (originally from antitop)
         return new_cols
 
     def require_HP_genparts(self, data):
