@@ -57,8 +57,11 @@ VETO_VARIABLES = [
 ]
 
 
-def integrate_categories(h):
-    """Sum over every category axis, keeping only the nominal systematic."""
+def integrate_categories(h, dataset=None):
+    """Sum over every category axis, keeping only the nominal systematic.
+    If `dataset` is given, keep only that dataset instead of summing them."""
+    if dataset is not None and "dataset" in h.axes.name:
+        h = h[{"dataset": dataset}]
     if "sys" in h.axes.name:
         h = h[{"sys": "nominal"}]
     for ax in list(h.axes):
@@ -67,12 +70,12 @@ def integrate_categories(h):
     return h
 
 
-def load(hists, cutname, variable):
+def load(hists, cutname, variable, dataset=None):
     """Return (dense axis, counts, variances), or None if not present."""
     key = (cutname, variable)
     if key not in hists.keys():
         return None
-    h = integrate_categories(hists.load(key))
+    h = integrate_categories(hists.load(key), dataset)
     dense = [a for a in h.axes
              if not isinstance(a, (hist.axis.StrCategory, hist.axis.IntCategory))]
     if len(dense) != 1:
@@ -159,6 +162,10 @@ def main():
                         "the directory containing histfile")
     parser.add_argument("--ext", choices=["pdf", "svg", "png"], default=None,
                         action="append", help="Output file format")
+    parser.add_argument("--split-datasets", action="store_true",
+                        help="Make a separate set of plots for every dataset "
+                        "instead of summing them, in a subdirectory per "
+                        "dataset")
     args = parser.parse_args()
 
     if args.ext is None:
@@ -179,14 +186,25 @@ def main():
     if len(cuts) == 0:
         raise SystemExit(f"No corridor histograms found in {args.histfile}")
 
-    for cutname in cuts:
-        print(f"[{cutname}]")
+    # None means sum over all datasets
+    datasets = [None]
+    if args.split_datasets:
+        first = next(k for k in hists.keys() if k[1] in wanted)
+        axes = hists.load(first).axes
+        if "dataset" in axes.name:
+            datasets = list(axes["dataset"])
+            print(f"Making a set of plots for each of: {datasets}")
+
+    for cutname, dataset in ((c, d) for c in cuts for d in datasets):
+        print(f"[{cutname}]" if dataset is None else f"[{cutname}, {dataset}]")
         cut_outdir = os.path.join(outdir, cutname)
+        if dataset is not None:
+            cut_outdir = os.path.join(cut_outdir, dataset)
         os.makedirs(cut_outdir, exist_ok=True)
 
         # --- how many pairs lost a third jet in their corridor ---
         for variable, name in VETO_VARIABLES:
-            got = load(hists, cutname, variable)
+            got = load(hists, cutname, variable, dataset)
             if got is None:
                 continue
             _, counts, variances = got
@@ -200,7 +218,7 @@ def main():
         # --- corridor mass, connected against unconnected ---
         entries, axis = [], None
         for variable, label, color in CORRIDOR_CURVES:
-            got = load(hists, cutname, variable)
+            got = load(hists, cutname, variable, dataset)
             if got is None:
                 print(f"  MISSING {variable}, skipping the corridor mass plot")
                 continue
@@ -220,7 +238,7 @@ def main():
         # --- two jets against two jets plus corridor ---
         entries, axis = [], None
         for variable, label, color in CAPSULE_CURVES:
-            got = load(hists, cutname, variable)
+            got = load(hists, cutname, variable, dataset)
             if got is None:
                 print(f"  MISSING {variable}, skipping the capsule mass plot")
                 continue

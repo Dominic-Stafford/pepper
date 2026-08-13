@@ -47,8 +47,11 @@ N_JETS = 4
 RANDOM = 1 / (N_JETS - 1)
 
 
-def integrate_categories(h):
-    """Sum over every category axis, keeping only the nominal systematic."""
+def integrate_categories(h, dataset=None):
+    """Sum over every category axis, keeping only the nominal systematic.
+    If `dataset` is given, keep only that dataset instead of summing them."""
+    if dataset is not None and "dataset" in h.axes.name:
+        h = h[{"dataset": dataset}]
     if "sys" in h.axes.name:
         h = h[{"sys": "nominal"}]
     for ax in list(h.axes):
@@ -189,6 +192,10 @@ def main():
     parser.add_argument("--binomial", type=float, default=None, action="append",
                         metavar="P", help="Overlay an extra binomial "
                         "expectation for this per-jet probability")
+    parser.add_argument("--split-datasets", action="store_true",
+                        help="Make a separate set of plots for every dataset "
+                        "instead of summing them, in a subdirectory per "
+                        "dataset")
     args = parser.parse_args()
 
     if args.ext is None:
@@ -207,7 +214,16 @@ def main():
     if len(cuts) == 0:
         raise SystemExit(f"None of {variables} found in {args.histfile}")
 
-    for cutname in cuts:
+    # None means sum over all datasets
+    datasets = [None]
+    if args.split_datasets:
+        first = next(k for k in hists.keys() if k[1] in variables)
+        axes = hists.load(first).axes
+        if "dataset" in axes.name:
+            datasets = list(axes["dataset"])
+            print(f"Making a set of plots for each of: {datasets}")
+
+    for cutname, dataset in ((c, d) for c in cuts for d in datasets):
         dist_entries = []      # pull angle, for the 0 to 4 distribution plot
         pairing_results = []   # W mass, for the success/failure plot
 
@@ -215,7 +231,7 @@ def main():
             key = (cutname, variable)
             if key not in hists.keys():
                 continue
-            h = integrate_categories(hists.load(key))
+            h = integrate_categories(hists.load(key), dataset)
             counts, variances = h.values(), h.variances()
             if len(counts) != N_JETS + 1:
                 print(f"Skipping {variable} ({cutname}): expected "
@@ -224,7 +240,8 @@ def main():
             eff, eff_err, fractions, var_n, n_eff = \
                 get_efficiency(counts, variances)
 
-            print(f"[{cutname}] {label}")
+            tag = cutname if dataset is None else f"{cutname}, {dataset}"
+            print(f"[{tag}] {label}")
             print(f"  effective n events    : {n_eff:.0f}")
             print(f"  per-jet efficiency    : {eff:.4f} +- {eff_err:.4f}"
                   f"   (random = {RANDOM:.4f})")
@@ -244,6 +261,8 @@ def main():
                       f"{fractions[-1]:.1%} of events")
 
         cut_outdir = os.path.join(outdir, cutname)
+        if dataset is not None:
+            cut_outdir = os.path.join(cut_outdir, dataset)
         if len(dist_entries) > 0 or len(pairing_results) > 0:
             os.makedirs(cut_outdir, exist_ok=True)
 
