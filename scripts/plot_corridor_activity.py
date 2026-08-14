@@ -41,10 +41,10 @@ plt.style.use(mplhep.style.CMS)
 W_MASS = 80.4
 WINDOW = 10.0   # half width of the window around the W mass, in GeV
 
-# Corridor mass, connected against unconnected
+# Corridor pt density, connected against unconnected
 CORRIDOR_CURVES = [
-    ("corridor_mass_connected", "Colour connected", "tab:blue"),
-    ("corridor_mass_unconnected", "Not colour connected", "tab:red"),
+    ("corridor_ptdens_connected", "Colour connected", "tab:blue"),
+    ("corridor_ptdens_unconnected", "Not colour connected", "tab:red"),
 ]
 # The two jets alone against the two jets plus the corridor
 CAPSULE_CURVES = [
@@ -125,8 +125,10 @@ def cms_label(ax, config):
         **label_kwargs)
 
 
-def overlay(entries, axis, xlabel, outfile, exts, config, wline=False):
-    """Overlay normalised distributions as step lines."""
+def overlay(entries, axis, xlabel, outfile, exts, config, wline=False,
+            show_mean=False):
+    """Overlay normalised distributions as step lines. With `show_mean` the
+    mean of each distribution is added to its legend entry."""
     fig, ax = plt.subplots()
     edges = axis.edges
     widths = np.diff(edges)
@@ -134,6 +136,9 @@ def overlay(entries, axis, xlabel, outfile, exts, config, wline=False):
         area = np.sum(counts * widths)
         if area == 0:
             continue
+        if show_mean:
+            mean = np.average(axis.centers, weights=counts)
+            label = f"{label}, mean {mean:.1f} GeV"
         mplhep.histplot(counts / area, edges, yerr=np.sqrt(variances) / area,
                         histtype="step", edges=False, linewidth=1.5,
                         color=color, label=label, ax=ax)
@@ -225,12 +230,13 @@ def main():
             axis, counts, variances = got
             entries.append((label, color, counts, variances))
         if len(entries) == 2:
-            overlay(entries, axis, "$m$(corridor particles) [GeV]",
-                    os.path.join(cut_outdir, f"corridor_mass_{cutname}"),
+            overlay(entries, axis,
+                    "Corridor $\\Sigma p_{T}$ per unit area [GeV]",
+                    os.path.join(cut_outdir, f"corridor_ptdens_{cutname}"),
                     args.ext, config)
             auc = roc_auc(entries[0][2], entries[1][2])
             for label, _, counts, _ in entries:
-                print(f"  mean corridor mass, {label:<22}: "
+                print(f"  mean corridor pt density, {label:<22}: "
                       f"{np.average(axis.centers, weights=counts):7.2f} GeV")
             print(f"  separation, area under ROC     : {auc:.4f}"
                   f"   (0.5 = none)")
@@ -247,7 +253,7 @@ def main():
         if len(entries) == 2:
             overlay(entries, axis, "Invariant mass [GeV]",
                     os.path.join(cut_outdir, f"capsule_mass_{cutname}"),
-                    args.ext, config, wline=True)
+                    args.ext, config, wline=True, show_mean=True)
             stats = {}
             for label, _, counts, _ in entries:
                 s = summarise(axis.centers, counts)

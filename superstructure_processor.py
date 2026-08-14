@@ -228,8 +228,9 @@ class Processor(pepper.ProcessorBasicPhysics):
                 & (across < self.corridor_half_width))
 
     def corridor_activity(self, jet_a, jet_b, cands, cand_y, jets, jet_y):
-        """Invariant mass of the particles in the corridor between two jets,
-        the mass of the two jets alone, and the mass of both together.
+        """Summed pt per unit area of the particles in the corridor between
+        two jets, the mass of the two jets alone, and the mass of both
+        together.
 
         Pairs whose corridor contains another jet are vetoed, as are pairs too
         close together to have a corridor at all. The veto flag is returned as
@@ -243,7 +244,11 @@ class Processor(pepper.ProcessorBasicPhysics):
                                        cand_y, cands.phi)]
         px, py = ak.sum(sel.px, axis=1), ak.sum(sel.py, axis=1)
         pz, energy = ak.sum(sel.pz, axis=1), ak.sum(sel.energy, axis=1)
-        mass = np.sqrt(np.maximum(energy**2 - px**2 - py**2 - pz**2, 0))
+        # Radiation density: the summed pt divided by the corridor area, which
+        # is an exact rectangle of length (L - 2R) and width twice the half
+        # width, so that pairs further apart are not favoured
+        area = 2 * self.corridor_half_width * (length - 2 * self.jet_radius)
+        ptdens = ak.sum(sel.pt, axis=1) / area
         # The two jets on their own, and the whole capsule. Invariant mass is
         # not additive, so the capsule has to be built by adding up all the
         # four-momenta rather than by combining the masses.
@@ -260,16 +265,16 @@ class Processor(pepper.ProcessorBasicPhysics):
         has_corridor = length > 2 * self.jet_radius
         vetoed = n_other > 0
         keep = has_corridor & ~vetoed
-        return (ak.mask(mass, keep), ak.mask(dijet.mass, keep),
+        return (ak.mask(ptdens, keep), ak.mask(dijet.mass, keep),
                 ak.mask(capsule, keep),
                 ak.mask(ak.values_astype(vetoed, np.int64), has_corridor))
 
     # In the order corridor_activity returns them
-    corridor_observables = ["mass", "dijet", "capsule", "vetoed"]
+    corridor_observables = ["ptdens", "dijet", "capsule", "vetoed"]
 
     def set_corridor_activity(self, data):
-        """Corridor mass for colour connected pairs and for every kind of
-        unconnected pair, plus the two masses needed to see whether the
+        """Corridor pt density for colour connected pairs and for every kind
+        of unconnected pair, plus the two masses needed to see whether the
         corridor particles belong to the W."""
         cands = data["GenCands"]
         if self.corridor_exclude_neutrinos and "pdgId" in cands.fields:
