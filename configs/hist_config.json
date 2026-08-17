@@ -383,4 +383,84 @@
             ]
         }
     },
+    "Wplus_pt": {
+        "bins": [
+            {
+                "name": "pt",
+                "label": "$p_{T}(W^{+})$ [GeV]",
+                "n_or_arr": 60,
+                "lo": 0,
+                "hi": 600
+            }
+        ],
+        "fill": {
+            "pt": [
+                "Wplus_pt"
+            ]
+        }
+    },
+    "Wminus_pt": {
+        "bins": [
+            {
+                "name": "pt",
+                "label": "$p_{T}(W^{-})$ [GeV]",
+                "n_or_arr": 60,
+                "lo": 0,
+                "hi": 600
+            }
+        ],
+        "fill": {
+            "pt": [
+                "Wminus_pt"
+            ]
+        }
+    },
+    "pull_angle_Wplus_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "phi",
+                "label": "Pull angle ($W^{+}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "Wplus_pt"
+            ],
+            "phi": [
+                "forward_pull_angle_Wplus"
+            ]
+        }
+    },
+    "pull_angle_Wminus_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "phi",
+                "label": "Pull angle ($W^{-}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "Wminus_pt"
+            ],
+            "phi": [
+                "forward_pull_angle_Wminus"
+            ]
+        }
+    },
 }

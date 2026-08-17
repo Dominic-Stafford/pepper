@@ -21,6 +21,7 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.set_multiple_columns(self.find_progenitor_quarks)
         self.unload_column("GenPart")
         selector.add_cut("Require_genparts", self.require_HP_genparts)
+        selector.set_multiple_columns(self.set_W_pt)
         selector.add_cut("Require_quarks_in_eta", self.require_HP_eta_threshold)
         selector.add_cut("Require_quarks_min_pt", self.require_HP_pt_threshold)
         selector.set_column("GenJet", self.calculate_genjet_pull)
@@ -50,6 +51,15 @@ class Processor(pepper.ProcessorBasicPhysics):
             gen_parts[(abs(gen_parts.pdgId)<6) & (gen_parts.parent.pdgId==24) & (gen_parts.parent.distinctParent.pdgId==6)])) # q and qbar from W+ (originally from top)
         new_cols["gen_HP_qfromWminus"] = ak.to_packed(ak.drop_none(
             gen_parts[(abs(gen_parts.pdgId)<6) & (gen_parts.parent.pdgId==-24) & (gen_parts.parent.distinctParent.pdgId==-6)])) # q and qbar from W- (originally from antitop)
+        return new_cols
+
+    def set_W_pt(self, data):
+        """Transverse momentum of each W, taken as the sum of its two decay
+        quarks, which is the W four-momentum at gen level."""
+        new_cols = {}
+        for sign in ["plus", "minus"]:
+            quarks = data["gen_HP_qfromW" + sign]
+            new_cols[f"W{sign}_pt"] = (quarks[:, 0] + quarks[:, 1]).pt
         return new_cols
 
     def require_HP_genparts(self, data):
