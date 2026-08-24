@@ -287,102 +287,6 @@
             ]
         }
     },
-    "corridor_ptdens_connected": {
-        "bins": [
-            {
-                "name": "dens",
-                "label": "Corridor $\\Sigma p_{T}$ per unit area, colour connected [GeV]",
-                "n_or_arr": 60,
-                "lo": 0,
-                "hi": 20
-            }
-        ],
-        "fill": {
-            "dens": [
-                "corridor_ptdens_connected"
-            ]
-        }
-    },
-    "corridor_ptdens_unconnected": {
-        "bins": [
-            {
-                "name": "dens",
-                "label": "Corridor $\\Sigma p_{T}$ per unit area, not connected [GeV]",
-                "n_or_arr": 60,
-                "lo": 0,
-                "hi": 20
-            }
-        ],
-        "fill": {
-            "dens": [
-                "corridor_ptdens_unconnected"
-            ]
-        }
-    },
-    "corridor_dijet_connected": {
-        "bins": [
-            {
-                "name": "m",
-                "label": "$m$(two jets) [GeV]",
-                "n_or_arr": 120,
-                "lo": 40,
-                "hi": 160
-            }
-        ],
-        "fill": {
-            "m": [
-                "corridor_dijet_connected"
-            ]
-        }
-    },
-    "corridor_capsule_connected": {
-        "bins": [
-            {
-                "name": "m",
-                "label": "$m$(two jets + corridor) [GeV]",
-                "n_or_arr": 120,
-                "lo": 40,
-                "hi": 160
-            }
-        ],
-        "fill": {
-            "m": [
-                "corridor_capsule_connected"
-            ]
-        }
-    },
-    "corridor_vetoed_connected": {
-        "bins": [
-            {
-                "name": "v",
-                "label": "Pair vetoed by a third jet (connected)",
-                "n_or_arr": 2,
-                "lo": -0.5,
-                "hi": 1.5
-            }
-        ],
-        "fill": {
-            "v": [
-                "corridor_vetoed_connected"
-            ]
-        }
-    },
-    "corridor_vetoed_unconnected": {
-        "bins": [
-            {
-                "name": "v",
-                "label": "Pair vetoed by a third jet (not connected)",
-                "n_or_arr": 2,
-                "lo": -0.5,
-                "hi": 1.5
-            }
-        ],
-        "fill": {
-            "v": [
-                "corridor_vetoed_unconnected"
-            ]
-        }
-    },
     "Wplus_pt": {
         "bins": [
             {
@@ -511,7 +415,23 @@
             ]
         }
     },
-                            "corridor_ptdens_connected_vs_wpt": {
+                            "corridor_ptdens_connected_r02": {
+        "bins": [
+            {
+                "name": "dens",
+                "label": "Corridor $\\Sigma p_{T}$ per unit area [GeV], R = 0.2",
+                "n_or_arr": 60,
+                "lo": 0,
+                "hi": 20
+            }
+        ],
+        "fill": {
+            "dens": [
+                "corridor_ptdens_connected_r02"
+            ]
+        }
+    },
+    "corridor_ptdens_connected_r02_vs_wpt": {
         "bins": [
             {
                 "name": "wpt",
@@ -520,7 +440,7 @@
             },
             {
                 "name": "dens",
-                "label": "Corridor $\\Sigma p_{T}$ per unit area [GeV]",
+                "label": "Corridor $\\Sigma p_{T}$ per unit area [GeV], R = 0.2",
                 "n_or_arr": 60,
                 "lo": 0,
                 "hi": 20
@@ -528,14 +448,78 @@
         ],
         "fill": {
             "wpt": [
-                "corridor_wpt_connected"
+                "corridor_wpt_connected_r02"
             ],
             "dens": [
-                "corridor_ptdens_connected"
+                "corridor_ptdens_connected_r02"
             ]
         }
     },
-    "corridor_dijet_connected_vs_wpt": {
+    "corridor_ptdens_unconnected_r02": {
+        "bins": [
+            {
+                "name": "dens",
+                "label": "Corridor $\\Sigma p_{T}$ per unit area [GeV], R = 0.2",
+                "n_or_arr": 60,
+                "lo": 0,
+                "hi": 20
+            }
+        ],
+        "fill": {
+            "dens": [
+                "corridor_ptdens_unconnected_r02"
+            ]
+        }
+    },
+    "corridor_vetoed_connected_r02": {
+        "bins": [
+            {
+                "name": "v",
+                "label": "Pair vetoed by a third jet, R = 0.2",
+                "n_or_arr": 2,
+                "lo": -0.5,
+                "hi": 1.5
+            }
+        ],
+        "fill": {
+            "v": [
+                "corridor_vetoed_connected_r02"
+            ]
+        }
+    },
+    "corridor_vetoed_unconnected_r02": {
+        "bins": [
+            {
+                "name": "v",
+                "label": "Pair vetoed by a third jet, R = 0.2",
+                "n_or_arr": 2,
+                "lo": -0.5,
+                "hi": 1.5
+            }
+        ],
+        "fill": {
+            "v": [
+                "corridor_vetoed_unconnected_r02"
+            ]
+        }
+    },
+    "corridor_dijet_connected_r02": {
+        "bins": [
+            {
+                "name": "m",
+                "label": "$m$(two jets) [GeV], R = 0.2",
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
+            }
+        ],
+        "fill": {
+            "m": [
+                "corridor_dijet_connected_r02"
+            ]
+        }
+    },
+    "corridor_dijet_connected_r02_vs_wpt": {
         "bins": [
             {
                 "name": "wpt",
@@ -544,7 +528,7 @@
             },
             {
                 "name": "m",
-                "label": "$m$(two jets) [GeV]",
+                "label": "$m$(two jets) [GeV], R = 0.2",
                 "n_or_arr": 120,
                 "lo": 40,
                 "hi": 160
@@ -552,14 +536,30 @@
         ],
         "fill": {
             "wpt": [
-                "corridor_wpt_connected"
+                "corridor_wpt_connected_r02"
             ],
             "m": [
-                "corridor_dijet_connected"
+                "corridor_dijet_connected_r02"
             ]
         }
     },
-    "corridor_capsule_connected_vs_wpt": {
+    "corridor_capsule_connected_r02": {
+        "bins": [
+            {
+                "name": "m",
+                "label": "$m$(two jets + corridor) [GeV], R = 0.2",
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
+            }
+        ],
+        "fill": {
+            "m": [
+                "corridor_capsule_connected_r02"
+            ]
+        }
+    },
+    "corridor_capsule_connected_r02_vs_wpt": {
         "bins": [
             {
                 "name": "wpt",
@@ -568,7 +568,7 @@
             },
             {
                 "name": "m",
-                "label": "$m$(two jets + corridor) [GeV]",
+                "label": "$m$(two jets + corridor) [GeV], R = 0.2",
                 "n_or_arr": 120,
                 "lo": 40,
                 "hi": 160
@@ -576,10 +576,390 @@
         ],
         "fill": {
             "wpt": [
-                "corridor_wpt_connected"
+                "corridor_wpt_connected_r02"
             ],
             "m": [
-                "corridor_capsule_connected"
+                "corridor_capsule_connected_r02"
+            ]
+        }
+    },
+    "corridor_ptdens_connected_r03": {
+        "bins": [
+            {
+                "name": "dens",
+                "label": "Corridor $\\Sigma p_{T}$ per unit area [GeV], R = 0.3",
+                "n_or_arr": 60,
+                "lo": 0,
+                "hi": 20
+            }
+        ],
+        "fill": {
+            "dens": [
+                "corridor_ptdens_connected_r03"
+            ]
+        }
+    },
+    "corridor_ptdens_connected_r03_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "dens",
+                "label": "Corridor $\\Sigma p_{T}$ per unit area [GeV], R = 0.3",
+                "n_or_arr": 60,
+                "lo": 0,
+                "hi": 20
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "corridor_wpt_connected_r03"
+            ],
+            "dens": [
+                "corridor_ptdens_connected_r03"
+            ]
+        }
+    },
+    "corridor_ptdens_unconnected_r03": {
+        "bins": [
+            {
+                "name": "dens",
+                "label": "Corridor $\\Sigma p_{T}$ per unit area [GeV], R = 0.3",
+                "n_or_arr": 60,
+                "lo": 0,
+                "hi": 20
+            }
+        ],
+        "fill": {
+            "dens": [
+                "corridor_ptdens_unconnected_r03"
+            ]
+        }
+    },
+    "corridor_vetoed_connected_r03": {
+        "bins": [
+            {
+                "name": "v",
+                "label": "Pair vetoed by a third jet, R = 0.3",
+                "n_or_arr": 2,
+                "lo": -0.5,
+                "hi": 1.5
+            }
+        ],
+        "fill": {
+            "v": [
+                "corridor_vetoed_connected_r03"
+            ]
+        }
+    },
+    "corridor_vetoed_unconnected_r03": {
+        "bins": [
+            {
+                "name": "v",
+                "label": "Pair vetoed by a third jet, R = 0.3",
+                "n_or_arr": 2,
+                "lo": -0.5,
+                "hi": 1.5
+            }
+        ],
+        "fill": {
+            "v": [
+                "corridor_vetoed_unconnected_r03"
+            ]
+        }
+    },
+    "corridor_dijet_connected_r03": {
+        "bins": [
+            {
+                "name": "m",
+                "label": "$m$(two jets) [GeV], R = 0.3",
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
+            }
+        ],
+        "fill": {
+            "m": [
+                "corridor_dijet_connected_r03"
+            ]
+        }
+    },
+    "corridor_dijet_connected_r03_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "m",
+                "label": "$m$(two jets) [GeV], R = 0.3",
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "corridor_wpt_connected_r03"
+            ],
+            "m": [
+                "corridor_dijet_connected_r03"
+            ]
+        }
+    },
+    "corridor_capsule_connected_r03": {
+        "bins": [
+            {
+                "name": "m",
+                "label": "$m$(two jets + corridor) [GeV], R = 0.3",
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
+            }
+        ],
+        "fill": {
+            "m": [
+                "corridor_capsule_connected_r03"
+            ]
+        }
+    },
+    "corridor_capsule_connected_r03_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "m",
+                "label": "$m$(two jets + corridor) [GeV], R = 0.3",
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "corridor_wpt_connected_r03"
+            ],
+            "m": [
+                "corridor_capsule_connected_r03"
+            ]
+        }
+    },
+    "corridor_ptdens_connected_r04": {
+        "bins": [
+            {
+                "name": "dens",
+                "label": "Corridor $\\Sigma p_{T}$ per unit area [GeV], R = 0.4",
+                "n_or_arr": 60,
+                "lo": 0,
+                "hi": 20
+            }
+        ],
+        "fill": {
+            "dens": [
+                "corridor_ptdens_connected_r04"
+            ]
+        }
+    },
+    "corridor_ptdens_connected_r04_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "dens",
+                "label": "Corridor $\\Sigma p_{T}$ per unit area [GeV], R = 0.4",
+                "n_or_arr": 60,
+                "lo": 0,
+                "hi": 20
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "corridor_wpt_connected_r04"
+            ],
+            "dens": [
+                "corridor_ptdens_connected_r04"
+            ]
+        }
+    },
+    "corridor_ptdens_unconnected_r04": {
+        "bins": [
+            {
+                "name": "dens",
+                "label": "Corridor $\\Sigma p_{T}$ per unit area [GeV], R = 0.4",
+                "n_or_arr": 60,
+                "lo": 0,
+                "hi": 20
+            }
+        ],
+        "fill": {
+            "dens": [
+                "corridor_ptdens_unconnected_r04"
+            ]
+        }
+    },
+    "corridor_vetoed_connected_r04": {
+        "bins": [
+            {
+                "name": "v",
+                "label": "Pair vetoed by a third jet, R = 0.4",
+                "n_or_arr": 2,
+                "lo": -0.5,
+                "hi": 1.5
+            }
+        ],
+        "fill": {
+            "v": [
+                "corridor_vetoed_connected_r04"
+            ]
+        }
+    },
+    "corridor_vetoed_unconnected_r04": {
+        "bins": [
+            {
+                "name": "v",
+                "label": "Pair vetoed by a third jet, R = 0.4",
+                "n_or_arr": 2,
+                "lo": -0.5,
+                "hi": 1.5
+            }
+        ],
+        "fill": {
+            "v": [
+                "corridor_vetoed_unconnected_r04"
+            ]
+        }
+    },
+    "corridor_dijet_connected_r04": {
+        "bins": [
+            {
+                "name": "m",
+                "label": "$m$(two jets) [GeV], R = 0.4",
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
+            }
+        ],
+        "fill": {
+            "m": [
+                "corridor_dijet_connected_r04"
+            ]
+        }
+    },
+    "corridor_dijet_connected_r04_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "m",
+                "label": "$m$(two jets) [GeV], R = 0.4",
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "corridor_wpt_connected_r04"
+            ],
+            "m": [
+                "corridor_dijet_connected_r04"
+            ]
+        }
+    },
+    "corridor_capsule_connected_r04": {
+        "bins": [
+            {
+                "name": "m",
+                "label": "$m$(two jets + corridor) [GeV], R = 0.4",
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
+            }
+        ],
+        "fill": {
+            "m": [
+                "corridor_capsule_connected_r04"
+            ]
+        }
+    },
+    "corridor_capsule_connected_r04_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "m",
+                "label": "$m$(two jets + corridor) [GeV], R = 0.4",
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "corridor_wpt_connected_r04"
+            ],
+            "m": [
+                "corridor_capsule_connected_r04"
+            ]
+        }
+    },
+    "Wplus_pt_bins": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W^{+})$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "Wplus_pt"
+            ]
+        }
+    },
+    "Wminus_pt_bins": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W^{-})$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "Wminus_pt"
+            ]
+        }
+    },
+    "ttH_pairing_correct": {
+        "bins": [
+            {
+                "name": "v",
+                "label": "W and H pairing found (ttH only)",
+                "n_or_arr": 2,
+                "lo": -0.5,
+                "hi": 1.5
+            }
+        ],
+        "fill": {
+            "v": [
+                "ttH_pairing_correct"
             ]
         }
     },

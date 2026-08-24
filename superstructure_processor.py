@@ -9,6 +9,17 @@ from coffea.nanoevents import PFNanoAODSchema
 vector.register_awkward()
 
 
+def all_pairings(items):
+    """Every way of splitting an even length list into unordered pairs"""
+    if len(items) == 0:
+        yield []
+        return
+    first, rest = items[0], items[1:]
+    for i in range(len(rest)):
+        for tail in all_pairings(rest[:i] + rest[i + 1:]):
+            yield [(first, rest[i])] + tail
+
+
 class Processor(pepper.ProcessorBasicPhysics):
     config_class = pepper.ConfigTTbarLL
     schema_class = PFNanoAODSchema
@@ -32,6 +43,7 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.set_column("genjet_connected_idx", self.assign_connected_genjets)
         selector.set_multiple_columns(self.count_correct_connections)
         selector.set_multiple_columns(self.pair_genjets_by_mass)
+        selector.set_multiple_columns(self.pair_genjets_by_mass_ttH)
         selector.set_multiple_columns(self.set_corridor_activity)
         selector.set_column("Jet", self.calculate_jet_pull)
         selector.set_multiple_columns(self.find_jets_matching_HP)
@@ -51,6 +63,13 @@ class Processor(pepper.ProcessorBasicPhysics):
             gen_parts[(abs(gen_parts.pdgId)<6) & (gen_parts.parent.pdgId==24) & (gen_parts.parent.distinctParent.pdgId==6)])) # q and qbar from W+ (originally from top)
         new_cols["gen_HP_qfromWminus"] = ak.to_packed(ak.drop_none(
             gen_parts[(abs(gen_parts.pdgId)<6) & (gen_parts.parent.pdgId==-24) & (gen_parts.parent.distinctParent.pdgId==-6)])) # q and qbar from W- (originally from antitop)
+        # Only present in ttH, empty in ttbar. The Higgs is a colour singlet,
+        # so these two are colour connected to each other the same way the two
+        # quarks from a W are.
+        new_cols["gen_HP_bfromH"] = ak.to_packed(ak.drop_none(
+            gen_parts[(gen_parts.pdgId==5) & (gen_parts.parent.pdgId==25)])) # b from Higgs
+        new_cols["gen_HP_bbarfromH"] = ak.to_packed(ak.drop_none(
+            gen_parts[(gen_parts.pdgId==-5) & (gen_parts.parent.pdgId==25)])) # Anti-b from Higgs
         return new_cols
 
     def set_W_pt(self, data):
@@ -170,6 +189,9 @@ class Processor(pepper.ProcessorBasicPhysics):
         new_cols["genjet_from_HP_bbar"] = ak.drop_none(data["gen_HP_bbar"].nearest(gen_jets, threshold=0.3))
         new_cols["genjet_from_HP_qfromWplus"] = ak.drop_none(data["gen_HP_qfromWplus"].nearest(gen_jets, threshold=0.3))
         new_cols["genjet_from_HP_qfromWminus"] = ak.drop_none(data["gen_HP_qfromWminus"].nearest(gen_jets, threshold=0.3))
+        # Empty in ttbar, since the quarks they are matched to are empty there
+        new_cols["genjet_from_HP_bfromH"] = ak.drop_none(data["gen_HP_bfromH"].nearest(gen_jets, threshold=0.3))
+        new_cols["genjet_from_HP_bbarfromH"] = ak.drop_none(data["gen_HP_bbarfromH"].nearest(gen_jets, threshold=0.3))
         return new_cols
 
     def find_jets_matching_HP(self, data):
@@ -211,90 +233,117 @@ class Processor(pepper.ProcessorBasicPhysics):
         true_partner = ak.where(pos % 2 == 0, pos + 1, pos - 1)
         return {"n_correct_connections": ak.sum(connected == true_partner, axis=1)}
 
-    # Corridor between two jets: a rectangle in the (rapidity, phi) plane
-    # running from the edge of one jet cone to the edge of the other. Since a
-    # particle's distance from a jet is at least its projection onto the line
-    # joining them, requiring the projection to exceed the jet radius already
-    # excludes both cones, and the corridor is an exact rectangle.
+    # Corridor between two jets: the rectangle in the (rapidity, phi) plane
+    # spanning centre to centre, of half width `radius`, with the parts that
+    # fall inside either jet cone removed.
     jet_radius = 0.4
-    corridor_half_width = 0.4
+    corridor_radii = [0.2, 0.3, 0.4]
     corridor_use_rapidity = True
     # Gen jets are clustered without neutrinos, so leave them out of the
     # corridor too, otherwise the capsule mass gains momentum the jets never had
     corridor_exclude_neutrinos = True
 
+    @staticmethod
+    def radius_tag(radius):
+        """Suffix used in the column names, 0.3 becomes r03"""
+        return "r%02d" % round(radius * 10)
+
+    def cone_overlap_area(self, radius):
+        """Area a jet cone takes out of one end of the corridor.
+
+        The cone reaches from the centre, so half of it lies inside the
+        rectangle. If the corridor is narrower than the jet it only cuts a
+        slice out of that half disc.
+        """
+        jet_r = self.jet_radius
+        if radius >= jet_r:
+            return np.pi * jet_r**2 / 2
+        return (radius * np.sqrt(jet_r**2 - radius**2)
+                + jet_r**2 * np.arcsin(radius / jet_r))
+
     def corridor_coord(self, obj):
         return obj.rapidity if self.corridor_use_rapidity else obj.eta
 
-    def corridor_mask(self, jet_a, dy, dphi, length, obj_y, obj_phi):
-        """Which of the objects at (obj_y, obj_phi) lie inside the corridor"""
+    def corridor_geometry(self, jet_a, dy, dphi, length, obj_y, obj_phi):
+        """Position of objects relative to the line joining the two jets.
+
+        Returns the distance along that line, the perpendicular distance from
+        it, and whether the object is between the two centres and outside both
+        jet cones. The width cut is left out so that several corridor radii
+        can reuse the same geometry.
+        """
         vy = obj_y - self.corridor_coord(jet_a)
         vphi = self.rectify_angle(obj_phi - jet_a.phi)
-        # Distance along the line joining the jets, and perpendicular to it
         along = (vy * dy + vphi * dphi) / length
         across = abs(vy * dphi - vphi * dy) / length
-        return ((along > self.jet_radius)
-                & (along < length - self.jet_radius)
-                & (across < self.corridor_half_width))
+        in_span = ((along > 0) & (along < length)
+                   & (np.sqrt(along**2 + across**2) > self.jet_radius)
+                   & (np.sqrt((length - along)**2 + across**2)
+                      > self.jet_radius))
+        return across, in_span
 
     def corridor_activity(self, jet_a, jet_b, cands, cand_y, jets, jet_y,
                           wpt=None):
-        """Summed pt per unit area of the particles in the corridor between
-        two jets, the mass of the two jets alone, and the mass of both
-        together.
+        """Corridor quantities for every radius in ``corridor_radii``.
 
-        Pairs whose corridor contains another jet are vetoed, as are pairs too
-        close together to have a corridor at all. The veto flag is returned as
-        well so that the rejected fraction can be reported.
+        Returns a dict of radius to (pt per unit area, mass of the two jets,
+        mass of the two jets plus the corridor, veto flag, W pt). Pairs whose
+        corridor contains another jet are vetoed, as are pairs too close
+        together to have a corridor at all.
 
         ``wpt`` is the W transverse momentum to bin this pair by, for the
-        colour connected pairs where there is one. It is returned masked the
-        same way as everything else so that it stays aligned. Pairs without a
-        W fall back to the transverse momentum of the pair itself.
+        colour connected pairs where there is one. Pairs without a W fall back
+        to the transverse momentum of the pair itself.
         """
         dy = self.corridor_coord(jet_b) - self.corridor_coord(jet_a)
         dphi = self.rectify_angle(jet_b.phi - jet_a.phi)
         length = np.sqrt(dy**2 + dphi**2)
-
-        sel = cands[self.corridor_mask(jet_a, dy, dphi, length,
-                                       cand_y, cands.phi)]
-        px, py = ak.sum(sel.px, axis=1), ak.sum(sel.py, axis=1)
-        pz, energy = ak.sum(sel.pz, axis=1), ak.sum(sel.energy, axis=1)
-        # Radiation density: the summed pt divided by the corridor area, which
-        # is an exact rectangle of length (L - 2R) and width twice the half
-        # width, so that pairs further apart are not favoured
-        area = 2 * self.corridor_half_width * (length - 2 * self.jet_radius)
-        ptdens = ak.sum(sel.pt, axis=1) / area
-        # The two jets on their own, and the whole capsule. Invariant mass is
-        # not additive, so the capsule has to be built by adding up all the
-        # four-momenta rather than by combining the masses.
+        # The geometry does not depend on the corridor radius, so it is worked
+        # out once and only the width cut is applied per radius
+        cand_across, cand_in_span = self.corridor_geometry(
+            jet_a, dy, dphi, length, cand_y, cands.phi)
+        jet_across, jet_in_span = self.corridor_geometry(
+            jet_a, dy, dphi, length, jet_y, jets.phi)
         dijet = jet_a + jet_b
-        capsule = np.sqrt(np.maximum(
-            (dijet.energy + energy)**2 - (dijet.px + px)**2
-            - (dijet.py + py)**2 - (dijet.pz + pz)**2, 0))
-
-        # A third jet inside the corridor spoils the measurement. The two jets
-        # of the pair sit at the ends of the line, outside the corridor, so
-        # they never veto themselves.
-        n_other = ak.sum(self.corridor_mask(jet_a, dy, dphi, length,
-                                            jet_y, jets.phi), axis=1)
         has_corridor = length > 2 * self.jet_radius
-        vetoed = n_other > 0
-        keep = has_corridor & ~vetoed
         if wpt is None:
             wpt = dijet.pt
-        return (ak.mask(ptdens, keep), ak.mask(dijet.mass, keep),
+
+        out = {}
+        for radius in self.corridor_radii:
+            sel = cands[cand_in_span & (cand_across < radius)]
+            px, py = ak.sum(sel.px, axis=1), ak.sum(sel.py, axis=1)
+            pz, energy = ak.sum(sel.pz, axis=1), ak.sum(sel.energy, axis=1)
+            area = (2 * radius * length - 2 * self.cone_overlap_area(radius))
+            ptdens = ak.sum(sel.pt, axis=1) / area
+            # Invariant mass is not additive, so the capsule has to be built
+            # from the four-momenta rather than by combining masses
+            capsule = np.sqrt(np.maximum(
+                (dijet.energy + energy)**2 - (dijet.px + px)**2
+                - (dijet.py + py)**2 - (dijet.pz + pz)**2, 0))
+            # A third jet inside the corridor spoils the measurement. The two
+            # jets of the pair sit at the ends, outside their own cones, so
+            # they never veto themselves.
+            n_other = ak.sum(jet_in_span & (jet_across < radius), axis=1)
+            vetoed = n_other > 0
+            # fill_none so that a pair with a missing jet, which only happens
+            # for the Higgs pair outside ttH, simply drops out
+            keep = ak.fill_none(has_corridor & ~vetoed, False)
+            has = ak.fill_none(has_corridor, False)
+            out[radius] = (
+                ak.mask(ptdens, keep), ak.mask(dijet.mass, keep),
                 ak.mask(capsule, keep),
-                ak.mask(ak.values_astype(vetoed, np.int64), has_corridor),
+                ak.mask(ak.values_astype(ak.fill_none(vetoed, False),
+                                         np.int64), has),
                 ak.mask(wpt, keep))
+        return out
 
     # In the order corridor_activity returns them
     corridor_observables = ["ptdens", "dijet", "capsule", "vetoed", "wpt"]
 
     def set_corridor_activity(self, data):
-        """Corridor pt density for colour connected pairs and for every kind
-        of unconnected pair, plus the two masses needed to see whether the
-        corridor particles belong to the W."""
+        """Corridor quantities for colour connected pairs and for every kind
+        of unconnected pair, at each corridor radius."""
         cands = data["GenCands"]
         if self.corridor_exclude_neutrinos and "pdgId" in cands.fields:
             pdg = abs(cands.pdgId)
@@ -310,9 +359,16 @@ class Processor(pepper.ProcessorBasicPhysics):
         # the same W are colour connected. Everything else is a control: the
         # cross W pairs, every b with every W jet, and b with bbar.
         # Each entry is (jet a, jet b, W pt to bin by or None for no W)
+        # H -> bb is a colour singlet decay just like W -> qq, so it is a
+        # connected pair too. pad_none keeps one slot per event even in ttbar
+        # where these are empty, and the empty ones drop out downstream.
+        b_h = ak.firsts(ak.pad_none(data["genjet_from_HP_bfromH"], 1, axis=1))
+        bbar_h = ak.firsts(
+            ak.pad_none(data["genjet_from_HP_bbarfromH"], 1, axis=1))
         groups = {
             "connected": [(w[:, 0], w[:, 1], data["Wplus_pt"]),
-                          (w[:, 2], w[:, 3], data["Wminus_pt"])],
+                          (w[:, 2], w[:, 3], data["Wminus_pt"]),
+                          (b_h, bbar_h, None)],
             "unconnected": (
                 [(w[:, i], w[:, j], None)
                  for i, j in [(0, 2), (0, 3), (1, 2), (1, 3)]]
@@ -325,15 +381,55 @@ class Processor(pepper.ProcessorBasicPhysics):
                                               jet_y, wpt)
                        for a, b_, wpt in pairs]
             # ak.singletons drops the pairs that were vetoed or had no corridor
-            for k, obs in enumerate(self.corridor_observables):
-                new_cols[f"corridor_{obs}_{name}"] = ak.concatenate(
-                    [ak.singletons(r[k]) for r in results], axis=1)
+            for radius in self.corridor_radii:
+                tag = self.radius_tag(radius)
+                for k, obs in enumerate(self.corridor_observables):
+                    new_cols[f"corridor_{obs}_{name}_{tag}"] = ak.concatenate(
+                        [ak.singletons(r[radius][k]) for r in results], axis=1)
         return new_cols
 
     # The only three ways to split four jets into two pairs. The first one is
     # the true pairing, as get_W_genjets orders the jets [W+, W+, W-, W-].
     pairings = [((0, 1), (2, 3)), ((0, 2), (1, 3)), ((0, 3), (1, 2))]
     w_mass = 80.4
+
+    higgs_mass = 125.
+    # Six jets ordered [W+, W+, W-, W-, bH, bbarH] split into three pairs, 15
+    # ways, times which of the three is taken to be the Higgs, so 45 options.
+    # The true one is pairs (0,1) (2,3) (4,5) with (4,5) as the Higgs.
+    higgs_options = [(pairing, k)
+                     for pairing in all_pairings(list(range(6)))
+                     for k in range(3)]
+
+    def pair_genjets_by_mass_ttH(self, data):
+        """Same idea as pair_genjets_by_mass but with the two Higgs jets in
+        the pool, so three pairs have to be found and one of them assigned to
+        the Higgs. Empty outside ttH."""
+        jets = ak.concatenate(
+            [self.get_W_genjets(data),
+             ak.pad_none(data["genjet_from_HP_bfromH"], 1, axis=1),
+             ak.pad_none(data["genjet_from_HP_bbarfromH"], 1, axis=1)], axis=1)
+        # The fifteen distinct two jet masses, each used by several options
+        mass = {}
+        for i in range(6):
+            for j in range(i + 1, 6):
+                mass[(i, j)] = (jets[:, i] + jets[:, j]).mass
+        scores = []
+        for pairing, k in self.higgs_options:
+            total = None
+            for m, pair in enumerate(pairing):
+                target = self.higgs_mass if m == k else self.w_mass
+                dev = abs(mass[tuple(sorted(pair))] - target)
+                total = dev if total is None else total + dev
+            scores.append(ak.singletons(total))
+        best = ak.argmin(ak.concatenate(scores, axis=1), axis=1)
+        truth = self.higgs_options.index(([(0, 1), (2, 3), (4, 5)], 2))
+        correct = ak.values_astype(best == truth, np.int64)
+        # Only defined where both Higgs jets were found, so ttH only
+        has_higgs = ((ak.num(data["genjet_from_HP_bfromH"]) == 1)
+                     & (ak.num(data["genjet_from_HP_bbarfromH"]) == 1))
+        return {"ttH_pairing_correct":
+                ak.singletons(ak.mask(correct, has_higgs))}
 
     def pair_genjets_by_mass(self, data):
         """Pick the pairing of the four W decay jets whose two invariant masses

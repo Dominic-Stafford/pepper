@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
 """
-Everything about the corridor between two jets.
+Everything about the corridor between two jets, at several corridor radii.
 
-Makes two plots per cut:
-  corridor_mass_<cut>    invariant mass of the particles in the corridor, for
-                         colour connected and for unconnected jet pairs
-  capsule_mass_<cut>     m(two jets) against m(two jets + corridor) for
-                         connected pairs, to see whether sweeping in the soft
-                         particles sharpens the W peak
+The corridor is the rectangle in the (rapidity, phi) plane spanning the two
+jet centres, of half width R, with the parts inside either jet cone removed.
 
-Also prints, for each cut:
-  - how large a fraction of pairs was vetoed for having a third jet in the
-    corridor
-  - the separation between connected and unconnected, as an area under ROC
-  - the peak, width and W window fraction of the two mass distributions
+Plots per cut, and per dataset with --split-datasets:
+  corridor_ptdens_<cut>          one panel per corridor radius, colour
+                                 connected pairs split by W pt, with the
+                                 unconnected pairs over all pt for comparison
+  capsule_mass_<cut>             a grid of panels, one row per corridor radius
+                                 and one column per W pt bin, comparing
+                                 m(two jets) with m(two jets + corridor)
+
+Also prints, for every radius: the fraction of pairs vetoed for containing a
+third jet, the separation between connected and unconnected as an area under
+ROC, and the peak, width and W window fraction of the two masses.
 
 Usage
 -----
     python scripts/plot_corridor_activity.py configs/plot_config.json \\
-        output/hists/hists.json -o output/plots
+        output/hists/hists.json -o output/plots --split-datasets
 """
 import os
 from argparse import ArgumentParser
@@ -41,38 +43,16 @@ plt.style.use(mplhep.style.CMS)
 W_MASS = 80.4
 WINDOW = 10.0   # half width of the window around the W mass, in GeV
 
-# Corridor pt density, connected against unconnected
-CORRIDOR_CURVES = [
-    ("corridor_ptdens_connected", "Colour connected", "tab:blue"),
-    ("corridor_ptdens_unconnected", "Not colour connected", "tab:red"),
-]
-# The two jets alone against the two jets plus the corridor
-CAPSULE_CURVES = [
-    ("corridor_dijet_connected", "Two jets", "tab:blue"),
-    ("corridor_capsule_connected", "Two jets + corridor", "tab:orange"),
-]
-VETO_VARIABLES = [
-    ("corridor_vetoed_connected", "connected"),
-    ("corridor_vetoed_unconnected", "not connected"),
-]
+# Corridor radii to look for, matching corridor_radii in the processor
+RADII = [0.2, 0.3, 0.4]
 
-# W pt groups for the binned plots. Only the colour connected pairs are split
-# this way, since an unconnected pair has no W to bin it by. Boundaries must
-# fall on edges of the fine binning used when filling.
+# W pt groups, one column of the capsule grid and one curve of the pt density
+# plot each. Boundaries must fall on edges of the fine binning used to fill.
 WPT_GROUPS = [(0, 60), (60, 120), (120, 200), (200, None)]
-# Each binned plot: (title, list of (variable, line style, legend suffix),
-#                    optional inclusive extra curve, x axis label)
-BINNED_PLOTS = [
-    ("corridor_ptdens_vs_wpt",
-     [("corridor_ptdens_connected_vs_wpt", "-", "")],
-     ("corridor_ptdens_unconnected", "Not connected, all $p_{T}$"),
-     "Corridor $\\Sigma p_{T}$ per unit area [GeV]"),
-    ("capsule_mass_vs_wpt",
-     [("corridor_capsule_connected_vs_wpt", "-", " (jets + corridor)"),
-      ("corridor_dijet_connected_vs_wpt", "--", " (jets only)")],
-     None,
-     "Invariant mass [GeV]"),
-]
+
+
+def radius_tag(radius):
+    return "r%02d" % round(radius * 10)
 
 
 def integrate_categories(h, dataset=None):
@@ -95,7 +75,8 @@ def load(hists, cutname, variable, dataset=None):
         return None
     h = integrate_categories(hists.load(key), dataset)
     dense = [a for a in h.axes
-             if not isinstance(a, (hist.axis.StrCategory, hist.axis.IntCategory))]
+             if not isinstance(a, (hist.axis.StrCategory,
+                                   hist.axis.IntCategory))]
     if len(dense) != 1:
         return None
     return dense[0], h.values(), h.variances()
@@ -134,52 +115,11 @@ def group_wpt(wpt_axis, values, variances):
     return grouped
 
 
-def plot_binned(curves, extra, axis, xlabel, outfile, exts, config, wline):
-    """Colour for the W pt bin, line style for the kind of curve.
-
-    `curves` is a list of (style, suffix, grouped) and `extra` an optional
-    (label, counts, variances) drawn in black over all pt.
-    """
-    fig, ax = plt.subplots()
-    edges = axis.edges
-    widths = np.diff(edges)
-    n_bins = max(len(g) for _, _, g in curves)
-    # Hex strings, not RGBA: mplhep reads a sequence kwarg as one per histogram
-    colors = [matplotlib.colors.to_hex(c) for c in
-              plt.cm.viridis(np.linspace(0., 0.85, n_bins))]
-    for style, suffix, grouped in curves:
-        for i, (label, counts, var) in enumerate(grouped):
-            area = np.sum(counts * widths)
-            if area == 0:
-                continue
-            mplhep.histplot(counts / area, edges, yerr=np.sqrt(var) / area,
-                            histtype="step", edges=False, linewidth=1.5,
-                            linestyle=style, color=colors[i], ax=ax,
-                            label=f"{label}{suffix}")
-    if extra is not None:
-        label, counts, var = extra
-        area = np.sum(counts * widths)
-        if area > 0:
-            mplhep.histplot(counts / area, edges, yerr=np.sqrt(var) / area,
-                            histtype="step", edges=False, linewidth=2,
-                            linestyle=":", color="black", ax=ax, label=label)
-    if wline:
-        ax.axvline(W_MASS, color="black", linestyle="--", linewidth=1.2)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel("Normalised pairs")
-    ax.set_xlim(edges[0], edges[-1])
-    # Enough headroom for a legend that can run to eight entries
-    highest = max((c / np.sum(c * widths)).max()
-                  for _, _, g in curves for _, c, _ in g
-                  if np.sum(c * widths) > 0)
-    ax.set_ylim(0, highest * (1.75 if len(curves) > 1 else 1.45))
-    ax.legend(title="$p_{T}(W)$", fontsize=12, title_fontsize=12,
-              ncol=2 if len(curves) > 1 else 1, loc="upper left")
-    cms_label(ax, config)
-    plt.tight_layout()
-    for ext in exts:
-        fig.savefig(outfile + "." + ext)
-    plt.close(fig)
+def bin_colors(n):
+    """One colour per W pt bin. Hex strings, not RGBA tuples, because mplhep
+    reads a sequence valued kwarg as one entry per histogram."""
+    return [matplotlib.colors.to_hex(c)
+            for c in plt.cm.viridis(np.linspace(0., 0.85, n))]
 
 
 def roc_auc(signal, background):
@@ -210,13 +150,15 @@ def summarise(centers, counts):
             / counts.sum()}
 
 
-def cms_label(ax, config):
+def cms_label(ax, config, fontsize=None):
     if "year" not in config:
         return
     label_kwargs = {}
     cmslabel = config["cmslabel"] if "cmslabel" in config else None
     if cmslabel is not None and cmslabel.strip().lower() != "simulation":
         label_kwargs["label"] = cmslabel
+    if fontsize is not None:
+        label_kwargs["fontsize"] = fontsize
     mplhep.cms.label(
         ax=ax, data=False, year=config["year"],
         lumi=f"{config['luminosity']:.1f}" if "luminosity" in config else None,
@@ -224,33 +166,88 @@ def cms_label(ax, config):
         **label_kwargs)
 
 
-def overlay(entries, axis, xlabel, outfile, exts, config, wline=False,
-            show_mean=False):
-    """Overlay normalised distributions as step lines. With `show_mean` the
-    mean of each distribution is added to its legend entry."""
-    fig, ax = plt.subplots()
+def step(ax, counts, variances, edges, **kwargs):
+    """Draw one normalised step line, doing nothing if it is empty."""
+    area = np.sum(counts * np.diff(edges))
+    if area == 0:
+        return 0.
+    mplhep.histplot(counts / area, edges, yerr=np.sqrt(variances) / area,
+                    histtype="step", edges=False, ax=ax, **kwargs)
+    return (counts / area).max()
+
+
+def plot_ptdens_panels(per_radius, outfile, exts, config):
+    """One panel per corridor radius. In each, the connected pairs split by
+    W pt plus the unconnected pairs over all pt.
+
+    `per_radius` is a list of (radius, axis, grouped, unconnected or None).
+    """
+    n = len(per_radius)
+    fig, axes = plt.subplots(1, n, figsize=(7 * n, 7), squeeze=False)
+    for ax, (radius, axis, grouped, unconn) in zip(axes[0], per_radius):
+        edges = axis.edges
+        colors = bin_colors(len(grouped))
+        highest = 0.
+        for i, (label, counts, var) in enumerate(grouped):
+            highest = max(highest, step(ax, counts, var, edges, linewidth=1.5,
+                                        color=colors[i], label=label))
+        if unconn is not None:
+            highest = max(highest, step(
+                ax, unconn[0], unconn[1], edges, linewidth=2, linestyle=":",
+                color="black", label="Not connected, all $p_{T}$"))
+        ax.set_title(f"Corridor R = {radius}", fontsize=17)
+        ax.set_xlabel("Corridor $\\Sigma p_{T}$ per unit area [GeV]",
+                      fontsize=17)
+        ax.set_xlim(edges[0], edges[-1])
+        ax.set_ylim(0, highest * 1.35)
+        ax.tick_params(labelsize=14)
+    axes[0][0].set_ylabel("Normalised pairs", fontsize=17)
+    axes[0][0].legend(title="$p_{T}(W)$", fontsize=12, title_fontsize=12)
+    cms_label(axes[0][0], config, fontsize=16)
+    plt.tight_layout()
+    for ext in exts:
+        fig.savefig(outfile + "." + ext)
+    plt.close(fig)
+
+
+def plot_capsule_grid(grid, axis, outfile, exts, config):
+    """A panel per (corridor radius, W pt bin), comparing the two masses.
+
+    `grid` maps radius to a list over W pt bins of
+    (label, dijet counts, dijet variances, capsule counts, capsule variances).
+    """
+    radii = list(grid)
+    n_rows, n_cols = len(radii), max(len(v) for v in grid.values())
+    fig, axes = plt.subplots(n_rows, n_cols, squeeze=False,
+                             figsize=(4.6 * n_cols, 4.4 * n_rows),
+                             sharex=True)
     edges = axis.edges
-    widths = np.diff(edges)
-    for label, color, counts, variances in entries:
-        area = np.sum(counts * widths)
-        if area == 0:
-            continue
-        if show_mean:
-            mean = np.average(axis.centers, weights=counts)
-            label = f"{label}, mean {mean:.1f} GeV"
-        mplhep.histplot(counts / area, edges, yerr=np.sqrt(variances) / area,
-                        histtype="step", edges=False, linewidth=1.5,
-                        color=color, label=label, ax=ax)
-    if wline:
-        ax.axvline(W_MASS, color="black", linestyle="--", linewidth=1.5)
-        ax.text(W_MASS + 2, 0.97, f"$m_W$ = {W_MASS} GeV", fontsize=15,
-                va="top", ha="left", transform=ax.get_xaxis_transform())
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel("Normalised pairs")
-    ax.set_xlim(edges[0], edges[-1])
-    ax.set_ylim(bottom=0)
-    ax.legend(fontsize=17)
-    cms_label(ax, config)
+    colors = bin_colors(n_cols)
+    for r, radius in enumerate(radii):
+        for c in range(n_cols):
+            ax = axes[r][c]
+            if c >= len(grid[radius]):
+                ax.axis("off")
+                continue
+            label, d_counts, d_var, c_counts, c_var = grid[radius][c]
+            highest = max(
+                step(ax, d_counts, d_var, edges, linewidth=1.5,
+                     linestyle="--", color=colors[c], label="Jets only"),
+                step(ax, c_counts, c_var, edges, linewidth=1.5,
+                     linestyle="-", color=colors[c], label="Jets + corridor"))
+            ax.axvline(W_MASS, color="black", linestyle=":", linewidth=1.2)
+            ax.set_xlim(edges[0], edges[-1])
+            ax.set_ylim(0, highest * 1.45)
+            ax.tick_params(labelsize=12)
+            if r == 0:
+                ax.set_title(label, fontsize=15)
+            if c == 0:
+                ax.set_ylabel(f"R = {radius}", fontsize=15)
+            if r == n_rows - 1:
+                ax.set_xlabel("Invariant mass [GeV]", fontsize=14)
+    axes[0][0].legend(fontsize=11)
+    fig.suptitle("Columns: $p_{T}(W)$ bin.   Rows: corridor radius",
+                 fontsize=15, y=0.998)
     plt.tight_layout()
     for ext in exts:
         fig.savefig(outfile + "." + ext)
@@ -258,7 +255,7 @@ def overlay(entries, axis, xlabel, outfile, exts, config, wline=False,
 
 
 def main():
-    parser = ArgumentParser(description="Corridor mass and capsule mass plots")
+    parser = ArgumentParser(description="Corridor plots at several radii")
     parser.add_argument("plot_config", help="Plotting config, used for the "
                         "CMS label only")
     parser.add_argument("histfile", help="hists.json written by runproc")
@@ -283,17 +280,13 @@ def main():
     if outdir is None:
         outdir = os.path.dirname(os.path.realpath(args.histfile))
 
-    wanted = ({v for v, _, _ in CORRIDOR_CURVES}
-              | {v for v, _, _ in CAPSULE_CURVES}
-              | {v for v, _ in VETO_VARIABLES})
-    cuts = sorted({k[0] for k in hists.keys() if k[1] in wanted})
+    cuts = sorted({k[0] for k in hists.keys() if k[1].startswith("corridor_")})
     if len(cuts) == 0:
         raise SystemExit(f"No corridor histograms found in {args.histfile}")
 
-    # None means sum over all datasets
     datasets = [None]
     if args.split_datasets:
-        first = next(k for k in hists.keys() if k[1] in wanted)
+        first = next(k for k in hists.keys() if k[1].startswith("corridor_"))
         axes = hists.load(first).axes
         if "dataset" in axes.name:
             datasets = list(axes["dataset"])
@@ -306,88 +299,78 @@ def main():
             cut_outdir = os.path.join(cut_outdir, dataset)
         os.makedirs(cut_outdir, exist_ok=True)
 
-        # --- how many pairs lost a third jet in their corridor ---
-        for variable, name in VETO_VARIABLES:
-            got = load(hists, cutname, variable, dataset)
-            if got is None:
-                continue
-            _, counts, variances = got
-            total = counts.sum()
-            if total > 0:
-                # Entries are weighted, so use the effective number of pairs
-                n_eff = total**2 / variances.sum()
-                print(f"  vetoed, {name:<20}: {counts[1]/total:6.1%} of "
-                      f"{n_eff:.0f} pairs that had a corridor")
+        ptdens_panels, capsule_grid, mass_axis = [], {}, None
+        for radius in RADII:
+            tag = radius_tag(radius)
+            print(f"  corridor R = {radius}")
 
-        # --- corridor mass, connected against unconnected ---
-        entries, axis = [], None
-        for variable, label, color in CORRIDOR_CURVES:
-            got = load(hists, cutname, variable, dataset)
-            if got is None:
-                print(f"  MISSING {variable}, skipping the corridor mass plot")
-                continue
-            axis, counts, variances = got
-            entries.append((label, color, counts, variances))
-        if len(entries) == 2:
-            overlay(entries, axis,
-                    "Corridor $\\Sigma p_{T}$ per unit area [GeV]",
-                    os.path.join(cut_outdir, f"corridor_ptdens_{cutname}"),
-                    args.ext, config)
-            auc = roc_auc(entries[0][2], entries[1][2])
-            for label, _, counts, _ in entries:
-                print(f"  mean corridor pt density, {label:<22}: "
-                      f"{np.average(axis.centers, weights=counts):7.2f} GeV")
-            print(f"  separation, area under ROC     : {auc:.4f}"
-                  f"   (0.5 = none)")
-
-        # --- two jets against two jets plus corridor ---
-        entries, axis = [], None
-        for variable, label, color in CAPSULE_CURVES:
-            got = load(hists, cutname, variable, dataset)
-            if got is None:
-                print(f"  MISSING {variable}, skipping the capsule mass plot")
-                continue
-            axis, counts, variances = got
-            entries.append((label, color, counts, variances))
-        if len(entries) == 2:
-            overlay(entries, axis, "Invariant mass [GeV]",
-                    os.path.join(cut_outdir, f"capsule_mass_{cutname}"),
-                    args.ext, config, wline=True, show_mean=True)
-            stats = {}
-            for label, _, counts, _ in entries:
-                s = summarise(axis.centers, counts)
-                stats[label] = s
-                print(f"  {label:<22} peak {s['peak']:6.1f}   "
-                      f"median {s['median']:6.1f}   IQR {s['iqr']:6.1f}   "
-                      f"within {WINDOW:.0f} GeV of W: {s['in_window']:.1%}")
-            first, second = entries[0][0], entries[1][0]
-            d_median = stats[second]["median"] - stats[first]["median"]
-            d_iqr = stats[second]["iqr"] - stats[first]["iqr"]
-            print(f"  -> median moves {d_median:+.1f} GeV, IQR changes "
-                  f"{d_iqr:+.1f} GeV "
-                  f"({'sharper' if d_iqr < 0 else 'broader'})")
-
-        # --- the same quantities split into W pt bins ---
-        for name, specs, extra_spec, xlabel in BINNED_PLOTS:
-            curves, axis = [], None
-            for variable, style, suffix in specs:
-                got = load_2d(hists, cutname, variable, dataset)
+            for group in ("connected", "unconnected"):
+                got = load(hists, cutname, f"corridor_vetoed_{group}_{tag}",
+                           dataset)
                 if got is None:
-                    print(f"  MISSING {variable}, skipping {name}")
                     continue
-                wpt_axis, axis, values, variances = got
-                curves.append((style, suffix,
-                               group_wpt(wpt_axis, values, variances)))
-            if len(curves) == 0:
+                _, counts, variances = got
+                total = counts.sum()
+                if total > 0:
+                    n_eff = total**2 / variances.sum()
+                    print(f"    vetoed, {group:<12}: {counts[1]/total:6.1%} "
+                          f"of {n_eff:.0f} pairs with a corridor")
+
+            conn = load(hists, cutname, f"corridor_ptdens_connected_{tag}",
+                        dataset)
+            unconn = load(hists, cutname,
+                          f"corridor_ptdens_unconnected_{tag}", dataset)
+            if conn is not None and unconn is not None:
+                print(f"    mean pt density, connected  : "
+                      f"{np.average(conn[0].centers, weights=conn[1]):7.2f} GeV")
+                print(f"    mean pt density, unconnected: "
+                      f"{np.average(unconn[0].centers, weights=unconn[1]):7.2f} GeV")
+                print(f"    separation, area under ROC  : "
+                      f"{roc_auc(conn[1], unconn[1]):.4f}   (0.5 = none)")
+
+            binned = load_2d(hists, cutname,
+                             f"corridor_ptdens_connected_{tag}_vs_wpt", dataset)
+            if binned is not None:
+                wpt_axis, axis, values, variances = binned
+                ptdens_panels.append((
+                    radius, axis, group_wpt(wpt_axis, values, variances),
+                    (unconn[1], unconn[2]) if unconn is not None else None))
+            else:
+                print(f"    MISSING corridor_ptdens_connected_{tag}_vs_wpt")
+
+            dj = load_2d(hists, cutname,
+                         f"corridor_dijet_connected_{tag}_vs_wpt", dataset)
+            cp = load_2d(hists, cutname,
+                         f"corridor_capsule_connected_{tag}_vs_wpt", dataset)
+            if dj is None or cp is None:
+                print(f"    MISSING the pt binned masses for {tag}")
                 continue
-            extra = None
-            if extra_spec is not None:
-                got = load(hists, cutname, extra_spec[0], dataset)
-                if got is not None:
-                    extra = (extra_spec[1], got[1], got[2])
-            plot_binned(curves, extra, axis, xlabel,
-                        os.path.join(cut_outdir, f"{name}_{cutname}"),
-                        args.ext, config, wline="mass" in name)
+            mass_axis = dj[1]
+            d_grouped = group_wpt(dj[0], dj[2], dj[3])
+            c_grouped = group_wpt(cp[0], cp[2], cp[3])
+            capsule_grid[radius] = [
+                (d[0], d[1], d[2], c[1], c[2])
+                for d, c in zip(d_grouped, c_grouped)]
+            for d, c in zip(d_grouped, c_grouped):
+                if d[1].sum() == 0 or c[1].sum() == 0:
+                    continue
+                sd = summarise(mass_axis.centers, d[1])
+                sc = summarise(mass_axis.centers, c[1])
+                print(f"    {d[0]:<16} median {sd['median']:6.1f} -> "
+                      f"{sc['median']:6.1f} GeV, IQR {sd['iqr']:5.1f} -> "
+                      f"{sc['iqr']:5.1f} "
+                      f"({'sharper' if sc['iqr'] < sd['iqr'] else 'broader'})")
+
+        if len(ptdens_panels) > 0:
+            plot_ptdens_panels(
+                ptdens_panels,
+                os.path.join(cut_outdir, f"corridor_ptdens_{cutname}"),
+                args.ext, config)
+        if len(capsule_grid) > 0 and mass_axis is not None:
+            plot_capsule_grid(
+                capsule_grid, mass_axis,
+                os.path.join(cut_outdir, f"capsule_mass_{cutname}"),
+                args.ext, config)
 
     print(f"\nWrote plots to {outdir}")
 
