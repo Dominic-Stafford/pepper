@@ -237,7 +237,8 @@ class Processor(pepper.ProcessorBasicPhysics):
                 & (along < length - self.jet_radius)
                 & (across < self.corridor_half_width))
 
-    def corridor_activity(self, jet_a, jet_b, cands, cand_y, jets, jet_y):
+    def corridor_activity(self, jet_a, jet_b, cands, cand_y, jets, jet_y,
+                          wpt=None):
         """Summed pt per unit area of the particles in the corridor between
         two jets, the mass of the two jets alone, and the mass of both
         together.
@@ -245,6 +246,11 @@ class Processor(pepper.ProcessorBasicPhysics):
         Pairs whose corridor contains another jet are vetoed, as are pairs too
         close together to have a corridor at all. The veto flag is returned as
         well so that the rejected fraction can be reported.
+
+        ``wpt`` is the W transverse momentum to bin this pair by, for the
+        colour connected pairs where there is one. It is returned masked the
+        same way as everything else so that it stays aligned. Pairs without a
+        W fall back to the transverse momentum of the pair itself.
         """
         dy = self.corridor_coord(jet_b) - self.corridor_coord(jet_a)
         dphi = self.rectify_angle(jet_b.phi - jet_a.phi)
@@ -275,12 +281,15 @@ class Processor(pepper.ProcessorBasicPhysics):
         has_corridor = length > 2 * self.jet_radius
         vetoed = n_other > 0
         keep = has_corridor & ~vetoed
+        if wpt is None:
+            wpt = dijet.pt
         return (ak.mask(ptdens, keep), ak.mask(dijet.mass, keep),
                 ak.mask(capsule, keep),
-                ak.mask(ak.values_astype(vetoed, np.int64), has_corridor))
+                ak.mask(ak.values_astype(vetoed, np.int64), has_corridor),
+                ak.mask(wpt, keep))
 
     # In the order corridor_activity returns them
-    corridor_observables = ["ptdens", "dijet", "capsule", "vetoed"]
+    corridor_observables = ["ptdens", "dijet", "capsule", "vetoed", "wpt"]
 
     def set_corridor_activity(self, data):
         """Corridor pt density for colour connected pairs and for every kind
@@ -300,17 +309,21 @@ class Processor(pepper.ProcessorBasicPhysics):
         # get_W_genjets orders the jets [W+, W+, W-, W-], so only pairs within
         # the same W are colour connected. Everything else is a control: the
         # cross W pairs, every b with every W jet, and b with bbar.
+        # Each entry is (jet a, jet b, W pt to bin by or None for no W)
         groups = {
-            "connected": [(w[:, 0], w[:, 1]), (w[:, 2], w[:, 3])],
+            "connected": [(w[:, 0], w[:, 1], data["Wplus_pt"]),
+                          (w[:, 2], w[:, 3], data["Wminus_pt"])],
             "unconnected": (
-                [(w[:, i], w[:, j]) for i, j in [(0, 2), (0, 3), (1, 2), (1, 3)]]
-                + [(q, w[:, i]) for q in (b, bbar) for i in range(4)]
-                + [(b, bbar)]),
+                [(w[:, i], w[:, j], None)
+                 for i, j in [(0, 2), (0, 3), (1, 2), (1, 3)]]
+                + [(q, w[:, i], None) for q in (b, bbar) for i in range(4)]
+                + [(b, bbar, None)]),
         }
         new_cols = {}
         for name, pairs in groups.items():
-            results = [self.corridor_activity(a, b_, cands, cand_y, jets, jet_y)
-                       for a, b_ in pairs]
+            results = [self.corridor_activity(a, b_, cands, cand_y, jets,
+                                              jet_y, wpt)
+                       for a, b_, wpt in pairs]
             # ak.singletons drops the pairs that were vetoed or had no corridor
             for k, obs in enumerate(self.corridor_observables):
                 new_cols[f"corridor_{obs}_{name}"] = ak.concatenate(

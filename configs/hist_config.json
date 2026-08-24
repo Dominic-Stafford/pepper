@@ -463,4 +463,124 @@
             ]
         }
     },
+    "reco_pull_angle_Wplus_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "phi",
+                "label": "Reco pull angle ($W^{+}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "Wplus_pt"
+            ],
+            "phi": [
+                "reco_forward_pull_angle_Wplus"
+            ]
+        }
+    },
+    "reco_pull_angle_Wminus_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "phi",
+                "label": "Reco pull angle ($W^{-}$ decay products)",
+                "n_or_arr": 40,
+                "lo": -3.14,
+                "hi": 3.14
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "Wminus_pt"
+            ],
+            "phi": [
+                "reco_forward_pull_angle_Wminus"
+            ]
+        }
+    },
+                            "corridor_ptdens_connected_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "dens",
+                "label": "Corridor $\\Sigma p_{T}$ per unit area [GeV]",
+                "n_or_arr": 60,
+                "lo": 0,
+                "hi": 20
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "corridor_wpt_connected"
+            ],
+            "dens": [
+                "corridor_ptdens_connected"
+            ]
+        }
+    },
+    "corridor_dijet_connected_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "m",
+                "label": "$m$(two jets) [GeV]",
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "corridor_wpt_connected"
+            ],
+            "m": [
+                "corridor_dijet_connected"
+            ]
+        }
+    },
+    "corridor_capsule_connected_vs_wpt": {
+        "bins": [
+            {
+                "name": "wpt",
+                "label": "$p_{T}(W)$ [GeV]",
+                "n_or_arr": [0, 15, 25, 40, 60, 85, 120, 160, 200, 260, 340, 450, 600, 2000]
+            },
+            {
+                "name": "m",
+                "label": "$m$(two jets + corridor) [GeV]",
+                "n_or_arr": 120,
+                "lo": 40,
+                "hi": 160
+            }
+        ],
+        "fill": {
+            "wpt": [
+                "corridor_wpt_connected"
+            ],
+            "m": [
+                "corridor_capsule_connected"
+            ]
+        }
+    },
 }

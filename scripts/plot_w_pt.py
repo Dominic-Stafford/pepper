@@ -40,8 +40,13 @@ CURVES = [
     ("Wplus_pt", "$W^{+}$", "tab:blue"),
     ("Wminus_pt", "$W^{-}$", "tab:red"),
 ]
-# Two dimensional pt against pull angle, summed over the two W charges
-PULL_VS_WPT = ["pull_angle_Wplus_vs_wpt", "pull_angle_Wminus_vs_wpt"]
+# Two dimensional pt against pull angle, summed over the two W charges. The
+# same gen level W pt is used for every variant so they stay comparable.
+# variant name -> (histogram prefix, axis label)
+PULL_VARIANTS = {
+    "gen":  ("",      "Gen pull angle"),
+    "reco": ("reco_", "Reco pull angle"),
+}
 
 # W pt groups to draw one curve for. The histogram is filled with a finer
 # binning than this, so these can be changed freely without rerunning the
@@ -115,12 +120,15 @@ def group_wpt(wpt_axis, values, variances):
     return grouped
 
 
-def plot_pull_vs_wpt(grouped, phi_axis, outfile, exts, config):
+def plot_pull_vs_wpt(grouped, phi_axis, outfile, exts, config, xlabel):
     """One pull angle distribution per W pt group, all in the same plot."""
     fig, ax = plt.subplots()
     edges = phi_axis.edges
     widths = np.diff(edges)
-    colors = plt.cm.viridis(np.linspace(0., 0.85, len(grouped)))
+    # Hex strings, not RGBA tuples: mplhep treats a sequence valued kwarg as
+    # one entry per histogram and would index off the end of a single one
+    colors = [matplotlib.colors.to_hex(c) for c in
+              plt.cm.viridis(np.linspace(0., 0.85, len(grouped)))]
     for i, (label, counts, var) in enumerate(grouped):
         area = np.sum(counts * widths)
         if area == 0:
@@ -128,7 +136,7 @@ def plot_pull_vs_wpt(grouped, phi_axis, outfile, exts, config):
         mplhep.histplot(counts / area, edges, yerr=np.sqrt(var) / area,
                         histtype="step", edges=False, linewidth=1.5,
                         color=colors[i], ax=ax, label=label)
-    ax.set_xlabel("Pull angle")
+    ax.set_xlabel(xlabel)
     ax.set_ylabel("Normalised events")
     ax.set_xlim(edges[0], edges[-1])
     ax.set_ylim(bottom=0)
@@ -211,6 +219,10 @@ def main():
     parser.add_argument("--split-datasets", action="store_true",
                         help="Make a separate plot for every dataset instead "
                         "of summing them, in a subdirectory per dataset")
+    parser.add_argument("--variant", choices=sorted(PULL_VARIANTS),
+                        default=None, action="append",
+                        help="Which pull angle to bin in W pt. Can be given "
+                        "several times. Defaults to all that are present.")
     args = parser.parse_args()
 
     if args.ext is None:
@@ -266,24 +278,32 @@ def main():
              args.ext, config, args.log)
 
         # Pull angle split into W pt bins, the two W charges added together
-        got = [load_2d(hists, cutname, v, dataset) for v in PULL_VS_WPT]
-        got = [g for g in got if g is not None]
-        if len(got) == 0:
-            continue
-        wpt_axis, phi_axis = got[0][0], got[0][1]
-        values = sum(g[2] for g in got)
-        variances = sum(g[3] for g in got)
-        grouped = group_wpt(wpt_axis, values, variances)
-        plot_pull_vs_wpt(
-            grouped, phi_axis,
-            os.path.join(cut_outdir, f"pull_angle_vs_wpt_{cutname}"),
-            args.ext, config)
-        for label, counts, _ in grouped:
-            if counts.sum() == 0:
+        for variant in (args.variant or sorted(PULL_VARIANTS)):
+            prefix, xlabel = PULL_VARIANTS[variant]
+            names = [f"{prefix}pull_angle_W{c}_vs_wpt"
+                     for c in ("plus", "minus")]
+            got = [load_2d(hists, cutname, v, dataset) for v in names]
+            got = [g for g in got if g is not None]
+            if len(got) == 0:
                 continue
-            central = counts[np.abs(phi_axis.centers) < 1.].sum() / counts.sum()
-            print(f"  pt {label:<18}: {counts.sum()/values.sum():6.1%} of "
-                  f"events, |pull angle| < 1 for {central:.1%}")
+            wpt_axis, phi_axis = got[0][0], got[0][1]
+            values = sum(g[2] for g in got)
+            variances = sum(g[3] for g in got)
+            grouped = group_wpt(wpt_axis, values, variances)
+            plot_pull_vs_wpt(
+                grouped, phi_axis,
+                os.path.join(cut_outdir,
+                             f"{prefix}pull_angle_vs_wpt_{cutname}"),
+                args.ext, config, xlabel)
+            print(f"  {xlabel}:")
+            for label, counts, _ in grouped:
+                if counts.sum() == 0:
+                    continue
+                central = (counts[np.abs(phi_axis.centers) < 1.].sum()
+                           / counts.sum())
+                print(f"    pt {label:<18}: "
+                      f"{counts.sum()/values.sum():6.1%} of events, "
+                      f"|pull angle| < 1 for {central:.1%}")
 
     print(f"\nWrote plots to {outdir}")
 

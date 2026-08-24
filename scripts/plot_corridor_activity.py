@@ -56,6 +56,24 @@ VETO_VARIABLES = [
     ("corridor_vetoed_unconnected", "not connected"),
 ]
 
+# W pt groups for the binned plots. Only the colour connected pairs are split
+# this way, since an unconnected pair has no W to bin it by. Boundaries must
+# fall on edges of the fine binning used when filling.
+WPT_GROUPS = [(0, 60), (60, 120), (120, 200), (200, None)]
+# Each binned plot: (title, list of (variable, line style, legend suffix),
+#                    optional inclusive extra curve, x axis label)
+BINNED_PLOTS = [
+    ("corridor_ptdens_vs_wpt",
+     [("corridor_ptdens_connected_vs_wpt", "-", "")],
+     ("corridor_ptdens_unconnected", "Not connected, all $p_{T}$"),
+     "Corridor $\\Sigma p_{T}$ per unit area [GeV]"),
+    ("capsule_mass_vs_wpt",
+     [("corridor_capsule_connected_vs_wpt", "-", " (jets + corridor)"),
+      ("corridor_dijet_connected_vs_wpt", "--", " (jets only)")],
+     None,
+     "Invariant mass [GeV]"),
+]
+
 
 def integrate_categories(h, dataset=None):
     """Sum over every category axis, keeping only the nominal systematic.
@@ -81,6 +99,87 @@ def load(hists, cutname, variable, dataset=None):
     if len(dense) != 1:
         return None
     return dense[0], h.values(), h.variances()
+
+
+def load_2d(hists, cutname, variable, dataset=None):
+    """Return (wpt axis, other axis, values, variances), or None."""
+    key = (cutname, variable)
+    if key not in hists.keys():
+        return None
+    h = integrate_categories(hists.load(key), dataset)
+    names = list(h.axes.name)
+    if "wpt" not in names or len(names) != 2:
+        return None
+    other = [n for n in names if n != "wpt"][0]
+    h = h.project("wpt", other)
+    return h.axes["wpt"], h.axes[other], h.values(), h.variances()
+
+
+def group_wpt(wpt_axis, values, variances):
+    """Merge the fine W pt bins into the groups given by WPT_GROUPS."""
+    edges = wpt_axis.edges
+    grouped = []
+    for lo, hi in WPT_GROUPS:
+        top = edges[-1] if hi is None else hi
+        for value in (lo, top):
+            if not np.any(np.isclose(edges, value)):
+                print(f"  WARNING: {value:g} GeV is not a bin edge")
+        keep = (edges[:-1] >= lo - 1e-9) & (edges[1:] <= top + 1e-9)
+        if not keep.any():
+            continue
+        label = (f"$>$ {lo:.0f} GeV" if hi is None
+                 else f"{lo:.0f} to {hi:.0f} GeV")
+        grouped.append((label, values[keep].sum(axis=0),
+                        variances[keep].sum(axis=0)))
+    return grouped
+
+
+def plot_binned(curves, extra, axis, xlabel, outfile, exts, config, wline):
+    """Colour for the W pt bin, line style for the kind of curve.
+
+    `curves` is a list of (style, suffix, grouped) and `extra` an optional
+    (label, counts, variances) drawn in black over all pt.
+    """
+    fig, ax = plt.subplots()
+    edges = axis.edges
+    widths = np.diff(edges)
+    n_bins = max(len(g) for _, _, g in curves)
+    # Hex strings, not RGBA: mplhep reads a sequence kwarg as one per histogram
+    colors = [matplotlib.colors.to_hex(c) for c in
+              plt.cm.viridis(np.linspace(0., 0.85, n_bins))]
+    for style, suffix, grouped in curves:
+        for i, (label, counts, var) in enumerate(grouped):
+            area = np.sum(counts * widths)
+            if area == 0:
+                continue
+            mplhep.histplot(counts / area, edges, yerr=np.sqrt(var) / area,
+                            histtype="step", edges=False, linewidth=1.5,
+                            linestyle=style, color=colors[i], ax=ax,
+                            label=f"{label}{suffix}")
+    if extra is not None:
+        label, counts, var = extra
+        area = np.sum(counts * widths)
+        if area > 0:
+            mplhep.histplot(counts / area, edges, yerr=np.sqrt(var) / area,
+                            histtype="step", edges=False, linewidth=2,
+                            linestyle=":", color="black", ax=ax, label=label)
+    if wline:
+        ax.axvline(W_MASS, color="black", linestyle="--", linewidth=1.2)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Normalised pairs")
+    ax.set_xlim(edges[0], edges[-1])
+    # Enough headroom for a legend that can run to eight entries
+    highest = max((c / np.sum(c * widths)).max()
+                  for _, _, g in curves for _, c, _ in g
+                  if np.sum(c * widths) > 0)
+    ax.set_ylim(0, highest * (1.75 if len(curves) > 1 else 1.45))
+    ax.legend(title="$p_{T}(W)$", fontsize=12, title_fontsize=12,
+              ncol=2 if len(curves) > 1 else 1, loc="upper left")
+    cms_label(ax, config)
+    plt.tight_layout()
+    for ext in exts:
+        fig.savefig(outfile + "." + ext)
+    plt.close(fig)
 
 
 def roc_auc(signal, background):
@@ -267,6 +366,28 @@ def main():
             print(f"  -> median moves {d_median:+.1f} GeV, IQR changes "
                   f"{d_iqr:+.1f} GeV "
                   f"({'sharper' if d_iqr < 0 else 'broader'})")
+
+        # --- the same quantities split into W pt bins ---
+        for name, specs, extra_spec, xlabel in BINNED_PLOTS:
+            curves, axis = [], None
+            for variable, style, suffix in specs:
+                got = load_2d(hists, cutname, variable, dataset)
+                if got is None:
+                    print(f"  MISSING {variable}, skipping {name}")
+                    continue
+                wpt_axis, axis, values, variances = got
+                curves.append((style, suffix,
+                               group_wpt(wpt_axis, values, variances)))
+            if len(curves) == 0:
+                continue
+            extra = None
+            if extra_spec is not None:
+                got = load(hists, cutname, extra_spec[0], dataset)
+                if got is not None:
+                    extra = (extra_spec[1], got[1], got[2])
+            plot_binned(curves, extra, axis, xlabel,
+                        os.path.join(cut_outdir, f"{name}_{cutname}"),
+                        args.ext, config, wline="mass" in name)
 
     print(f"\nWrote plots to {outdir}")
 
