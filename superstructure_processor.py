@@ -238,6 +238,10 @@ class Processor(pepper.ProcessorBasicPhysics):
     # fall inside either jet cone removed.
     jet_radius = 0.4
     corridor_radii = [0.2, 0.3, 0.4]
+    # Two jets barely further apart than 2 * jet_radius leave only a sliver of
+    # corridor, whose area divides into a meaningless density. Require a
+    # sensible minimum so those pairs are dropped rather than blowing up.
+    corridor_min_area = 0.05
     corridor_use_rapidity = True
     # Gen jets are clustered without neutrinos, so leave them out of the
     # corridor too, otherwise the capsule mass gains momentum the jets never had
@@ -305,7 +309,8 @@ class Processor(pepper.ProcessorBasicPhysics):
         jet_across, jet_in_span = self.corridor_geometry(
             jet_a, dy, dphi, length, jet_y, jets.phi)
         dijet = jet_a + jet_b
-        has_corridor = length > 2 * self.jet_radius
+        # Cones that overlap each other would be subtracted twice
+        cones_apart = length > 2 * self.jet_radius
         if wpt is None:
             wpt = dijet.pt
 
@@ -315,7 +320,10 @@ class Processor(pepper.ProcessorBasicPhysics):
             px, py = ak.sum(sel.px, axis=1), ak.sum(sel.py, axis=1)
             pz, energy = ak.sum(sel.pz, axis=1), ak.sum(sel.energy, axis=1)
             area = (2 * radius * length - 2 * self.cone_overlap_area(radius))
-            ptdens = ak.sum(sel.pt, axis=1) / area
+            has_corridor = cones_apart & (area > self.corridor_min_area)
+            # Never divide by a vanishing area, those pairs are dropped anyway
+            ptdens = ak.sum(sel.pt, axis=1) / ak.where(
+                area > self.corridor_min_area, area, 1.)
             # Invariant mass is not additive, so the capsule has to be built
             # from the four-momenta rather than by combining masses
             capsule = np.sqrt(np.maximum(
