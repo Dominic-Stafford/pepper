@@ -46,6 +46,32 @@ LEVELS = [
 N_JETS = 4
 RANDOM = 1 / (N_JETS - 1)
 
+# The eight jet problem: three connected pairs picked out of eight jets, with
+# two left over, and one of the three assigned to the Higgs.
+# C(8,2) * 15 * 3 = 1260 options, so guessing gets it right 1/1260 of the time.
+EIGHT_OPTIONS = 1260
+EIGHT_METHODS = [
+    ("eight_pairing_correct_jetmass", "Jet mass", "tab:blue"),
+    ("eight_pairing_correct_capsule_r02", "Capsule mass, R = 0.2", "tab:orange"),
+    ("eight_pairing_correct_capsule_r03", "Capsule mass, R = 0.3", "tab:green"),
+]
+
+
+def load_binary(hists, cutname, variable, dataset=None):
+    """Fraction of entries in the upper bin of a two bin histogram, with its
+    uncertainty from the effective number of entries."""
+    key = (cutname, variable)
+    if key not in hists.keys():
+        return None
+    h = integrate_categories(hists.load(key), dataset)
+    counts, variances = h.values(), h.variances()
+    total = counts.sum()
+    if total <= 0 or len(counts) != 2:
+        return None
+    frac = counts[1] / total
+    n_eff = total**2 / variances.sum()
+    return frac, np.sqrt(max(frac * (1 - frac), 0) / n_eff)
+
 
 def integrate_categories(h, dataset=None):
     """Sum over every category axis, keeping only the nominal systematic.
@@ -179,6 +205,42 @@ def plot_pairing(results, outfile, exts, config):
     plt.close(fig)
 
 
+def plot_eight(results, outfile, exts, config, level):
+    """Success rate of the eight jet assignment, one bar per method.
+
+    This is a much harder problem than the four jet one: 1260 combinations
+    rather than 3, so the baseline sits at 0.08 percent rather than 33.
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    labels = [r[0] for r in results]
+    colors = [r[1] for r in results]
+    fracs = np.array([r[2] for r in results])
+    errs = np.array([r[3] for r in results])
+    x = np.arange(len(results))
+
+    ax.bar(x, fracs, yerr=errs, width=0.6, color=colors, alpha=0.8,
+           edgecolor=colors, linewidth=1.5,
+           error_kw={"ecolor": "black", "capsize": 5})
+    for xi, f, e in zip(x, fracs, errs):
+        ax.text(xi, f + e + max(fracs) * 0.03, f"{f:.1%}", ha="center",
+                va="bottom", fontsize=17)
+    ax.axhline(1 / EIGHT_OPTIONS, color="black", linestyle="--", linewidth=1.5)
+    ax.text(len(results) - 0.5, 1 / EIGHT_OPTIONS, 
+            f"  random = {1/EIGHT_OPTIONS:.2%}", fontsize=14, va="bottom",
+            ha="right")
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=15)
+    ax.set_ylabel("Events with all three pairs correct", fontsize=16)
+    ax.set_ylim(0, max(fracs) * 1.35 if max(fracs) > 0 else 1.)
+    cms_label(ax, config)
+    fig.suptitle(f"Three connected pairs from eight jets, {level} level",
+                 fontsize=16, y=0.995)
+    plt.tight_layout(rect=(0, 0, 1, 0.95))
+    for ext in exts:
+        fig.savefig(outfile + "." + ext)
+    plt.close(fig)
+
+
 def main():
     parser = ArgumentParser(
         description="Plot the colour connection assignment efficiency")
@@ -259,6 +321,28 @@ def main():
                 pairing_results.append((label, fractions[-1], eff_err))
                 print(f"  all-or-nothing method, correct pairing in "
                       f"{fractions[-1]:.1%} of events")
+
+        # --- the eight jet assignment, jet mass against capsule mass ---
+        for level, pre in [("gen", ""), ("reco", "reco_")]:
+            eight = []
+            for variable, label, color in EIGHT_METHODS:
+                got = load_binary(hists, cutname, pre + variable, dataset)
+                if got is None:
+                    continue
+                frac, err = got
+                eight.append((label, color, frac, err))
+                tag = cutname if dataset is None else f"{cutname}, {dataset}"
+                print(f"[{tag}] {level} eight jet, {label:<22}: "
+                      f"{frac:.2%} +- {err:.2%}   "
+                      f"(random {1/EIGHT_OPTIONS:.2%})")
+            if len(eight) > 0:
+                out = os.path.join(outdir, cutname)
+                if dataset is not None:
+                    out = os.path.join(out, dataset)
+                os.makedirs(out, exist_ok=True)
+                plot_eight(eight,
+                           os.path.join(out, f"{pre}eight_pairing_{cutname}"),
+                           args.ext, config, level)
 
         cut_outdir = os.path.join(outdir, cutname)
         if dataset is not None:

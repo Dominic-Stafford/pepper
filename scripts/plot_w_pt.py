@@ -35,10 +35,11 @@ matplotlib.use("Agg")
 plt.set_loglevel("error")
 plt.style.use(mplhep.style.CMS)
 
-# (variable, legend label, colour)
+# (variable, legend label, colour, include in the combined curve)
 CURVES = [
-    ("Wplus_pt", "$W^{+}$", "tab:blue"),
-    ("Wminus_pt", "$W^{-}$", "tab:red"),
+    ("Wplus_pt", "$W^{+}$", "tab:blue", True),
+    ("Wminus_pt", "$W^{-}$", "tab:red", True),
+    ("H_pt", "$H$", "tab:green", False),
 ]
 # Two dimensional pt against pull angle, summed over the two W charges. The
 # same gen level W pt is used for every variant so they stay comparable.
@@ -121,27 +122,42 @@ def group_wpt(wpt_axis, values, variances):
 
 
 def plot_pull_vs_wpt(grouped, phi_axis, outfile, exts, config, xlabel):
-    """One pull angle distribution per W pt group, all in the same plot."""
-    fig, ax = plt.subplots()
+    """One panel per W pt group, laid out as a grid so the four are easy to
+    compare without eight lines on top of each other."""
+    n = len(grouped)
+    n_cols = 2 if n > 1 else 1
+    n_rows = int(np.ceil(n / n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, squeeze=False, sharex=True,
+                             sharey=True, figsize=(6.2 * n_cols, 5.2 * n_rows))
     edges = phi_axis.edges
     widths = np.diff(edges)
     # Hex strings, not RGBA tuples: mplhep treats a sequence valued kwarg as
     # one entry per histogram and would index off the end of a single one
     colors = [matplotlib.colors.to_hex(c) for c in
-              plt.cm.viridis(np.linspace(0., 0.85, len(grouped)))]
-    for i, (label, counts, var) in enumerate(grouped):
+              plt.cm.viridis(np.linspace(0., 0.85, n))]
+    highest = 0.
+    for i in range(n_rows * n_cols):
+        ax = axes[i // n_cols][i % n_cols]
+        if i >= n:
+            ax.axis("off")
+            continue
+        label, counts, var = grouped[i]
         area = np.sum(counts * widths)
         if area == 0:
             continue
         mplhep.histplot(counts / area, edges, yerr=np.sqrt(var) / area,
                         histtype="step", edges=False, linewidth=1.5,
                         color=colors[i], ax=ax, label=label)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel("Normalised events")
-    ax.set_xlim(edges[0], edges[-1])
-    ax.set_ylim(bottom=0)
-    ax.legend(title="$p_{T}(W)$", fontsize=15, title_fontsize=15)
-    cms_label(ax, config)
+        highest = max(highest, (counts / area).max())
+        ax.set_xlim(edges[0], edges[-1])
+        ax.legend(title="$p_{T}(W)$", fontsize=13, title_fontsize=13)
+        ax.tick_params(labelsize=13)
+        if i // n_cols == n_rows - 1:
+            ax.set_xlabel(xlabel, fontsize=15)
+        if i % n_cols == 0:
+            ax.set_ylabel("Normalised events", fontsize=15)
+    axes[0][0].set_ylim(0, highest * 1.35)
+    cms_label(axes[0][0], config)
     plt.tight_layout()
     for ext in exts:
         fig.savefig(outfile + "." + ext)
@@ -177,10 +193,11 @@ def plot(entries, axis, outfile, exts, config, log):
     fig, ax = plt.subplots()
     edges = axis.edges
     widths = np.diff(edges)
-    if len(entries) > 1:
+    combine = [e for e in entries if e[0] in ("$W^{+}$", "$W^{-}$")]
+    if len(combine) > 1:
         entries = entries + [("$W^{+}$ and $W^{-}$", "black",
-                              sum(e[2] for e in entries),
-                              sum(e[3] for e in entries))]
+                              sum(e[2] for e in combine),
+                              sum(e[3] for e in combine))]
     for label, color, counts, variances in entries:
         area = np.sum(counts * widths)
         if area == 0:
@@ -236,7 +253,7 @@ def main():
     if outdir is None:
         outdir = os.path.dirname(os.path.realpath(args.histfile))
 
-    wanted = {v for v, _, _ in CURVES}
+    wanted = {v for v, _, _, _ in CURVES}
     cuts = sorted({k[0] for k in hists.keys() if k[1] in wanted})
     if len(cuts) == 0:
         raise SystemExit(f"None of {sorted(wanted)} found in {args.histfile}")
@@ -252,7 +269,7 @@ def main():
 
     for cutname, dataset in ((c, d) for c in cuts for d in datasets):
         entries, axis = [], None
-        for variable, label, color in CURVES:
+        for variable, label, color, _ in CURVES:
             got = load(hists, cutname, variable, dataset)
             if got is None:
                 print(f"  MISSING {variable}, skipping")

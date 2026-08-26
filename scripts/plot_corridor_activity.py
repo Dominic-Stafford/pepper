@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
 """
-Everything about the corridor between two jets, at several corridor radii.
+Everything about the corridor between two jets.
 
-The corridor is the rectangle in the (rapidity, phi) plane spanning the two
-jet centres, of half width R, with the parts inside either jet cone removed.
+The corridor comes in two shapes, both of half width R:
+  ctr   the rectangle spanning the two jet centres, minus the parts inside
+        either jet cone
+  edge  the rectangle running from one cone edge to the other
 
 Plots per cut, and per dataset with --split-datasets:
-  corridor_ptdens_<cut>          one panel per corridor radius, colour
-                                 connected pairs split by W pt, with the
-                                 unconnected pairs over all pt for comparison
-  capsule_mass_<cut>             a grid of panels, one row per corridor radius
-                                 and one column per W pt bin, comparing
-                                 m(two jets) with m(two jets + corridor)
+  corridor_ptdens_<cut>     one panel per radius, colour connected W pairs
+                            split by W pt, with the unconnected pairs shown
+                            over all pt for comparison
+  corridor_shapes_<cut>     one panel per radius, the two corridor shapes
+                            overlaid, to see how much the definition matters
+  capsule_mass_W_<cut>      rows are corridor radius, columns are W pt bin,
+                            m(two jets) against m(two jets + corridor) for the
+                            W pairs, with a line at the W mass
+  capsule_mass_H_<cut>      the same for the Higgs pair, binned in H pt and
+                            with a line at the Higgs mass
 
-Also prints, for every radius: the fraction of pairs vetoed for containing a
-third jet, the separation between connected and unconnected as an area under
-ROC, and the peak, width and W window fraction of the two masses.
+Use --level reco for the versions built from reco jets and PF candidates.
 
 Usage
 -----
@@ -41,14 +45,21 @@ plt.set_loglevel("error")
 plt.style.use(mplhep.style.CMS)
 
 W_MASS = 80.4
-WINDOW = 10.0   # half width of the window around the W mass, in GeV
+H_MASS = 125.0
+WINDOW = 10.0          # half width of the mass window used in the printout
+PTDENS_YMAX = 0.25     # fixed so the panels can be compared by eye
 
-# Corridor radii to look for, matching corridor_radii in the processor
 RADII = [0.2, 0.3, 0.4]
+DEFINITIONS = ["ctr", "edge"]
+LEVEL_PREFIX = {"gen": "", "reco": "reco_"}
 
-# W pt groups, one column of the capsule grid and one curve of the pt density
-# plot each. Boundaries must fall on edges of the fine binning used to fill.
+# W pt groups, or H pt groups for the Higgs pair. Boundaries must fall on
+# edges of the fine binning used when filling.
 WPT_GROUPS = [(0, 60), (60, 120), (120, 200), (200, None)]
+
+# group suffix -> (legend name, reference mass, pt symbol)
+PARENTS = {"connectedW": ("W", W_MASS, "$p_{T}(W)$"),
+           "connectedH": ("H", H_MASS, "$p_{T}(H)$")}
 
 
 def radius_tag(radius):
@@ -56,8 +67,7 @@ def radius_tag(radius):
 
 
 def integrate_categories(h, dataset=None):
-    """Sum over every category axis, keeping only the nominal systematic.
-    If `dataset` is given, keep only that dataset instead of summing them."""
+    """Sum over every category axis, keeping only the nominal systematic."""
     if dataset is not None and "dataset" in h.axes.name:
         h = h[{"dataset": dataset}]
     if "sys" in h.axes.name:
@@ -83,7 +93,7 @@ def load(hists, cutname, variable, dataset=None):
 
 
 def load_2d(hists, cutname, variable, dataset=None):
-    """Return (wpt axis, other axis, values, variances), or None."""
+    """Return (pt axis, other axis, values, variances), or None."""
     key = (cutname, variable)
     if key not in hists.keys():
         return None
@@ -96,15 +106,15 @@ def load_2d(hists, cutname, variable, dataset=None):
     return h.axes["wpt"], h.axes[other], h.values(), h.variances()
 
 
-def group_wpt(wpt_axis, values, variances):
-    """Merge the fine W pt bins into the groups given by WPT_GROUPS."""
-    edges = wpt_axis.edges
+def group_pt(pt_axis, values, variances):
+    """Merge the fine pt bins into the groups given by WPT_GROUPS."""
+    edges = pt_axis.edges
     grouped = []
     for lo, hi in WPT_GROUPS:
         top = edges[-1] if hi is None else hi
         for value in (lo, top):
             if not np.any(np.isclose(edges, value)):
-                print(f"  WARNING: {value:g} GeV is not a bin edge")
+                print(f"    WARNING: {value:g} GeV is not a bin edge")
         keep = (edges[:-1] >= lo - 1e-9) & (edges[1:] <= top + 1e-9)
         if not keep.any():
             continue
@@ -116,15 +126,14 @@ def group_wpt(wpt_axis, values, variances):
 
 
 def bin_colors(n):
-    """One colour per W pt bin. Hex strings, not RGBA tuples, because mplhep
-    reads a sequence valued kwarg as one entry per histogram."""
+    """Hex strings, not RGBA tuples: mplhep reads a sequence valued kwarg as
+    one entry per histogram and would index off the end of a single one."""
     return [matplotlib.colors.to_hex(c)
             for c in plt.cm.viridis(np.linspace(0., 0.85, n))]
 
 
 def roc_auc(signal, background):
-    """How well a cut on this observable separates the two, as one number.
-    0.5 means no separation, 1 means perfect."""
+    """Separation as one number. 0.5 means none, 1 means perfect."""
     sig = signal / signal.sum()
     bkg = background / background.sum()
     kept_sig = np.concatenate([[0.], np.cumsum(sig[::-1])])
@@ -133,8 +142,8 @@ def roc_auc(signal, background):
         else np.trapz(kept_sig, kept_bkg)
 
 
-def summarise(centers, counts):
-    """Peak, median, interquartile range and fraction near the W mass.
+def summarise(centers, counts, reference):
+    """Peak, median, interquartile range and fraction near a reference mass.
 
     Median and IQR rather than mean and RMS, because these distributions have
     a long high mass tail that would dominate an RMS.
@@ -144,21 +153,19 @@ def summarise(centers, counts):
     def quantile(q):
         return np.interp(q, cdf, centers)
 
-    return {"peak": centers[np.argmax(counts)], "median": quantile(0.5),
+    return {"median": quantile(0.5),
             "iqr": quantile(0.75) - quantile(0.25),
-            "in_window": counts[np.abs(centers - W_MASS) < WINDOW].sum()
+            "in_window": counts[np.abs(centers - reference) < WINDOW].sum()
             / counts.sum()}
 
 
-def cms_label(ax, config, fontsize=None):
+def cms_label(ax, config, fontsize=16):
     if "year" not in config:
         return
-    label_kwargs = {}
+    label_kwargs = {"fontsize": fontsize}
     cmslabel = config["cmslabel"] if "cmslabel" in config else None
     if cmslabel is not None and cmslabel.strip().lower() != "simulation":
         label_kwargs["label"] = cmslabel
-    if fontsize is not None:
-        label_kwargs["fontsize"] = fontsize
     mplhep.cms.label(
         ax=ax, data=False, year=config["year"],
         lumi=f"{config['luminosity']:.1f}" if "luminosity" in config else None,
@@ -176,51 +183,77 @@ def step(ax, counts, variances, edges, **kwargs):
     return (counts / area).max()
 
 
-def plot_ptdens_panels(per_radius, outfile, exts, config):
-    """One panel per corridor radius. In each, the connected pairs split by
-    W pt plus the unconnected pairs over all pt.
+def panel_title(ax, text):
+    """Above the axes, high enough to clear the CMS header."""
+    ax.set_title(text, fontsize=17, pad=28)
 
-    `per_radius` is a list of (radius, axis, grouped, unconnected or None).
-    """
+
+def plot_ptdens_panels(per_radius, outfile, exts, config):
+    """One panel per radius, connected pairs split by pt plus the unconnected
+    ones over all pt. Shared y scale so the panels can be compared."""
     n = len(per_radius)
-    fig, axes = plt.subplots(1, n, figsize=(7 * n, 7), squeeze=False)
+    fig, axes = plt.subplots(1, n, figsize=(6.5 * n, 6.5), squeeze=False,
+                             sharey=True)
     for ax, (radius, axis, grouped, unconn) in zip(axes[0], per_radius):
         edges = axis.edges
         colors = bin_colors(len(grouped))
-        highest = 0.
         for i, (label, counts, var) in enumerate(grouped):
-            highest = max(highest, step(ax, counts, var, edges, linewidth=1.5,
-                                        color=colors[i], label=label))
+            step(ax, counts, var, edges, linewidth=1.5, color=colors[i],
+                 label=label)
         if unconn is not None:
-            highest = max(highest, step(
-                ax, unconn[0], unconn[1], edges, linewidth=2, linestyle=":",
-                color="black", label="Not connected, all $p_{T}$"))
-        ax.set_title(f"Corridor R = {radius}", fontsize=17)
+            step(ax, unconn[0], unconn[1], edges, linewidth=2, linestyle=":",
+                 color="black", label="Not connected, all $p_{T}$")
+        panel_title(ax, f"Corridor R = {radius}")
         ax.set_xlabel("Corridor $\\Sigma p_{T}$ per unit area [GeV]",
-                      fontsize=17)
+                      fontsize=16)
         ax.set_xlim(edges[0], edges[-1])
-        ax.set_ylim(0, highest * 1.35)
+        ax.set_ylim(0, PTDENS_YMAX)
         ax.tick_params(labelsize=14)
-    axes[0][0].set_ylabel("Normalised pairs", fontsize=17)
-    axes[0][0].legend(title="$p_{T}(W)$", fontsize=12, title_fontsize=12)
-    cms_label(axes[0][0], config, fontsize=16)
+    axes[0][0].set_ylabel("Normalised pairs", fontsize=16)
+    axes[0][0].legend(title="$p_{T}$ of the parent", fontsize=12,
+                      title_fontsize=12)
+    cms_label(axes[0][0], config)
     plt.tight_layout()
     for ext in exts:
         fig.savefig(outfile + "." + ext)
     plt.close(fig)
 
 
-def plot_capsule_grid(grid, axis, outfile, exts, config):
-    """A panel per (corridor radius, W pt bin), comparing the two masses.
+def plot_shape_panels(per_radius, outfile, exts, config):
+    """One panel per radius, the two corridor shapes overlaid."""
+    n = len(per_radius)
+    fig, axes = plt.subplots(1, n, figsize=(6.5 * n, 6.5), squeeze=False,
+                             sharey=True)
+    styles = {"ctr": ("-", "tab:blue", "Centre to centre, cones removed"),
+              "edge": ("--", "tab:orange", "Edge to edge")}
+    for ax, (radius, axis, curves) in zip(axes[0], per_radius):
+        edges = axis.edges
+        for definition, counts, var in curves:
+            ls, color, name = styles[definition]
+            mean = np.average(axis.centers, weights=counts)
+            step(ax, counts, var, edges, linewidth=1.5, linestyle=ls,
+                 color=color, label=f"{name}, mean {mean:.2f}")
+        panel_title(ax, f"Corridor R = {radius}")
+        ax.set_xlabel("Corridor $\\Sigma p_{T}$ per unit area [GeV]",
+                      fontsize=16)
+        ax.set_xlim(edges[0], edges[-1])
+        ax.set_ylim(0, PTDENS_YMAX)
+        ax.tick_params(labelsize=14)
+    axes[0][0].set_ylabel("Normalised pairs", fontsize=16)
+    axes[0][0].legend(fontsize=12)
+    cms_label(axes[0][0], config)
+    plt.tight_layout()
+    for ext in exts:
+        fig.savefig(outfile + "." + ext)
+    plt.close(fig)
 
-    `grid` maps radius to a list over W pt bins of
-    (label, dijet counts, dijet variances, capsule counts, capsule variances).
-    """
+
+def plot_capsule_grid(grid, axis, parent, reference, outfile, exts, config):
+    """A panel per (corridor radius, pt bin), comparing the two masses."""
     radii = list(grid)
     n_rows, n_cols = len(radii), max(len(v) for v in grid.values())
-    fig, axes = plt.subplots(n_rows, n_cols, squeeze=False,
-                             figsize=(4.6 * n_cols, 4.4 * n_rows),
-                             sharex=True)
+    fig, axes = plt.subplots(n_rows, n_cols, squeeze=False, sharex=True,
+                             figsize=(4.6 * n_cols, 4.4 * n_rows))
     edges = axis.edges
     colors = bin_colors(n_cols)
     for r, radius in enumerate(radii):
@@ -230,14 +263,13 @@ def plot_capsule_grid(grid, axis, outfile, exts, config):
                 ax.axis("off")
                 continue
             label, d_counts, d_var, c_counts, c_var = grid[radius][c]
-            highest = max(
-                step(ax, d_counts, d_var, edges, linewidth=1.5,
-                     linestyle="--", color=colors[c], label="Jets only"),
-                step(ax, c_counts, c_var, edges, linewidth=1.5,
-                     linestyle="-", color=colors[c], label="Jets + corridor"))
-            ax.axvline(W_MASS, color="black", linestyle=":", linewidth=1.2)
+            step(ax, d_counts, d_var, edges, linewidth=1.5, linestyle="--",
+                 color=colors[c], label="Jets only")
+            step(ax, c_counts, c_var, edges, linewidth=1.5, linestyle="-",
+                 color=colors[c], label="Jets + corridor")
+            ax.axvline(reference, color="black", linestyle=":", linewidth=1.2)
             ax.set_xlim(edges[0], edges[-1])
-            ax.set_ylim(0, highest * 1.45)
+            ax.set_ylim(bottom=0)
             ax.tick_params(labelsize=12)
             if r == 0:
                 ax.set_title(label, fontsize=15)
@@ -246,8 +278,8 @@ def plot_capsule_grid(grid, axis, outfile, exts, config):
             if r == n_rows - 1:
                 ax.set_xlabel("Invariant mass [GeV]", fontsize=14)
     axes[0][0].legend(fontsize=11)
-    fig.suptitle("Columns: $p_{T}(W)$ bin.   Rows: corridor radius",
-                 fontsize=15, y=0.998)
+    fig.suptitle(f"Jet Mass and Capsule Mass for {parent} jets",
+                 fontsize=17, y=0.999)
     plt.tight_layout()
     for ext in exts:
         fig.savefig(outfile + "." + ext)
@@ -263,6 +295,9 @@ def main():
                         "the directory containing histfile")
     parser.add_argument("--ext", choices=["pdf", "svg", "png"], default=None,
                         action="append", help="Output file format")
+    parser.add_argument("--level", choices=["gen", "reco"], default=None,
+                        action="append",
+                        help="Which jets to use. Defaults to both.")
     parser.add_argument("--split-datasets", action="store_true",
                         help="Make a separate set of plots for every dataset "
                         "instead of summing them, in a subdirectory per "
@@ -271,6 +306,7 @@ def main():
 
     if args.ext is None:
         args.ext = ["pdf"]
+    levels = args.level or ["gen", "reco"]
 
     config = Config(args.plot_config)
     with open(args.histfile) as f:
@@ -280,97 +316,118 @@ def main():
     if outdir is None:
         outdir = os.path.dirname(os.path.realpath(args.histfile))
 
-    cuts = sorted({k[0] for k in hists.keys() if k[1].startswith("corridor_")})
+    cuts = sorted({k[0] for k in hists.keys() if "corridor_" in k[1]})
     if len(cuts) == 0:
         raise SystemExit(f"No corridor histograms found in {args.histfile}")
 
     datasets = [None]
     if args.split_datasets:
-        first = next(k for k in hists.keys() if k[1].startswith("corridor_"))
+        first = next(k for k in hists.keys() if "corridor_" in k[1])
         axes = hists.load(first).axes
         if "dataset" in axes.name:
             datasets = list(axes["dataset"])
             print(f"Making a set of plots for each of: {datasets}")
 
     for cutname, dataset in ((c, d) for c in cuts for d in datasets):
-        print(f"[{cutname}]" if dataset is None else f"[{cutname}, {dataset}]")
+        head = cutname if dataset is None else f"{cutname}, {dataset}"
         cut_outdir = os.path.join(outdir, cutname)
         if dataset is not None:
             cut_outdir = os.path.join(cut_outdir, dataset)
         os.makedirs(cut_outdir, exist_ok=True)
 
-        ptdens_panels, capsule_grid, mass_axis = [], {}, None
-        for radius in RADII:
-            tag = radius_tag(radius)
-            print(f"  corridor R = {radius}")
+        for level in levels:
+            pre = LEVEL_PREFIX[level]
+            print(f"[{head}] {level} level")
+            made_any = False
 
-            for group in ("connected", "unconnected"):
-                got = load(hists, cutname, f"corridor_vetoed_{group}_{tag}",
-                           dataset)
-                if got is None:
-                    continue
-                _, counts, variances = got
-                total = counts.sum()
-                if total > 0:
-                    n_eff = total**2 / variances.sum()
-                    print(f"    vetoed, {group:<12}: {counts[1]/total:6.1%} "
-                          f"of {n_eff:.0f} pairs with a corridor")
-
-            conn = load(hists, cutname, f"corridor_ptdens_connected_{tag}",
+            # --- pt density, and the two shapes side by side ---
+            ptdens_panels, shape_panels = [], []
+            for radius in RADII:
+                rt = radius_tag(radius)
+                unconn = load(hists, cutname,
+                              f"{pre}corridor_ptdens_unconnected_ctr_{rt}",
+                              dataset)
+                conn = load(hists, cutname,
+                            f"{pre}corridor_ptdens_connectedW_ctr_{rt}",
+                            dataset)
+                if conn is not None and unconn is not None:
+                    print(f"  R = {radius}  mean density  connected "
+                          f"{np.average(conn[0].centers, weights=conn[1]):6.2f}"
+                          f"   unconnected "
+                          f"{np.average(unconn[0].centers, weights=unconn[1]):6.2f}"
+                          f"   AUC {roc_auc(conn[1], unconn[1]):.4f}")
+                binned = load_2d(
+                    hists, cutname,
+                    f"{pre}corridor_ptdens_connectedW_ctr_{rt}_vs_pt", dataset)
+                if binned is not None:
+                    pt_axis, axis, values, variances = binned
+                    ptdens_panels.append((
+                        radius, axis, group_pt(pt_axis, values, variances),
+                        (unconn[1], unconn[2]) if unconn is not None else None))
+                shapes = []
+                for definition in DEFINITIONS:
+                    got = load(
+                        hists, cutname,
+                        f"{pre}corridor_ptdens_connectedW_{definition}_{rt}",
                         dataset)
-            unconn = load(hists, cutname,
-                          f"corridor_ptdens_unconnected_{tag}", dataset)
-            if conn is not None and unconn is not None:
-                print(f"    mean pt density, connected  : "
-                      f"{np.average(conn[0].centers, weights=conn[1]):7.2f} GeV")
-                print(f"    mean pt density, unconnected: "
-                      f"{np.average(unconn[0].centers, weights=unconn[1]):7.2f} GeV")
-                print(f"    separation, area under ROC  : "
-                      f"{roc_auc(conn[1], unconn[1]):.4f}   (0.5 = none)")
+                    if got is not None:
+                        shapes.append((definition, got[1], got[2]))
+                        axis_s = got[0]
+                if len(shapes) == 2:
+                    shape_panels.append((radius, axis_s, shapes))
 
-            binned = load_2d(hists, cutname,
-                             f"corridor_ptdens_connected_{tag}_vs_wpt", dataset)
-            if binned is not None:
-                wpt_axis, axis, values, variances = binned
-                ptdens_panels.append((
-                    radius, axis, group_wpt(wpt_axis, values, variances),
-                    (unconn[1], unconn[2]) if unconn is not None else None))
-            else:
-                print(f"    MISSING corridor_ptdens_connected_{tag}_vs_wpt")
+            if ptdens_panels:
+                plot_ptdens_panels(
+                    ptdens_panels,
+                    os.path.join(cut_outdir, f"{pre}corridor_ptdens_{cutname}"),
+                    args.ext, config)
+                made_any = True
+            if shape_panels:
+                plot_shape_panels(
+                    shape_panels,
+                    os.path.join(cut_outdir, f"{pre}corridor_shapes_{cutname}"),
+                    args.ext, config)
+                made_any = True
 
-            dj = load_2d(hists, cutname,
-                         f"corridor_dijet_connected_{tag}_vs_wpt", dataset)
-            cp = load_2d(hists, cutname,
-                         f"corridor_capsule_connected_{tag}_vs_wpt", dataset)
-            if dj is None or cp is None:
-                print(f"    MISSING the pt binned masses for {tag}")
-                continue
-            mass_axis = dj[1]
-            d_grouped = group_wpt(dj[0], dj[2], dj[3])
-            c_grouped = group_wpt(cp[0], cp[2], cp[3])
-            capsule_grid[radius] = [
-                (d[0], d[1], d[2], c[1], c[2])
-                for d, c in zip(d_grouped, c_grouped)]
-            for d, c in zip(d_grouped, c_grouped):
-                if d[1].sum() == 0 or c[1].sum() == 0:
-                    continue
-                sd = summarise(mass_axis.centers, d[1])
-                sc = summarise(mass_axis.centers, c[1])
-                print(f"    {d[0]:<16} median {sd['median']:6.1f} -> "
-                      f"{sc['median']:6.1f} GeV, IQR {sd['iqr']:5.1f} -> "
-                      f"{sc['iqr']:5.1f} "
-                      f"({'sharper' if sc['iqr'] < sd['iqr'] else 'broader'})")
+            # --- capsule mass, once for the W pairs and once for the H pair ---
+            for group, (parent, reference, ptsym) in PARENTS.items():
+                grid, mass_axis = {}, None
+                for radius in RADII:
+                    rt = radius_tag(radius)
+                    dj = load_2d(hists, cutname,
+                                 f"{pre}corridor_dijet_{group}_ctr_{rt}_vs_pt",
+                                 dataset)
+                    cp = load_2d(hists, cutname,
+                                 f"{pre}corridor_capsule_{group}_ctr_{rt}_vs_pt",
+                                 dataset)
+                    if dj is None or cp is None:
+                        continue
+                    mass_axis = dj[1]
+                    d_grouped = group_pt(dj[0], dj[2], dj[3])
+                    c_grouped = group_pt(cp[0], cp[2], cp[3])
+                    grid[radius] = [(d[0], d[1], d[2], c[1], c[2])
+                                    for d, c in zip(d_grouped, c_grouped)]
+                    for d, c in zip(d_grouped, c_grouped):
+                        if d[1].sum() == 0 or c[1].sum() == 0:
+                            continue
+                        sd = summarise(mass_axis.centers, d[1], reference)
+                        sc = summarise(mass_axis.centers, c[1], reference)
+                        print(f"  {parent} R={radius} {d[0]:<16} "
+                              f"median {sd['median']:6.1f} -> "
+                              f"{sc['median']:6.1f}   IQR {sd['iqr']:5.1f} -> "
+                              f"{sc['iqr']:5.1f} "
+                              f"({'sharper' if sc['iqr'] < sd['iqr'] else 'broader'})")
+                if grid and mass_axis is not None:
+                    os.makedirs(cut_outdir, exist_ok=True)
+                    plot_capsule_grid(
+                        grid, mass_axis, parent, reference,
+                        os.path.join(cut_outdir,
+                                     f"{pre}capsule_mass_{parent}_{cutname}"),
+                        args.ext, config)
+                    made_any = True
 
-        if len(ptdens_panels) > 0:
-            plot_ptdens_panels(
-                ptdens_panels,
-                os.path.join(cut_outdir, f"corridor_ptdens_{cutname}"),
-                args.ext, config)
-        if len(capsule_grid) > 0 and mass_axis is not None:
-            plot_capsule_grid(
-                capsule_grid, mass_axis,
-                os.path.join(cut_outdir, f"capsule_mass_{cutname}"),
-                args.ext, config)
+            if not made_any:
+                print(f"  nothing found for the {level} level")
 
     print(f"\nWrote plots to {outdir}")
 

@@ -20,6 +20,23 @@ def all_pairings(items):
             yield [(first, rest[i])] + tail
 
 
+def eight_jet_options():
+    """Every way of picking three connected pairs out of eight jets.
+
+    Two jets are left over, since the b and the bbar are connected to the tops
+    rather than to each other. One of the three pairs is taken to be the
+    Higgs, the other two Ws, so there are C(8,2) * 15 * 3 = 1260 options.
+    """
+    from itertools import combinations
+    options = []
+    for left_out in combinations(range(8), 2):
+        rest = [i for i in range(8) if i not in left_out]
+        for pairing in all_pairings(rest):
+            for higgs in range(3):
+                options.append((pairing, higgs))
+    return options
+
+
 class Processor(pepper.ProcessorBasicPhysics):
     config_class = pepper.ConfigTTbarLL
     schema_class = PFNanoAODSchema
@@ -45,11 +62,14 @@ class Processor(pepper.ProcessorBasicPhysics):
         selector.set_multiple_columns(self.pair_genjets_by_mass)
         selector.set_multiple_columns(self.pair_genjets_by_mass_ttH)
         selector.set_multiple_columns(self.set_corridor_activity)
+        selector.set_multiple_columns(self.assign_eight_genjets)
         selector.set_column("Jet", self.calculate_jet_pull)
         selector.set_multiple_columns(self.find_jets_matching_HP)
         self.unload_column("Jet")
         selector.add_cut("Require_all_jets", self.require_all_jets)
         selector.add_cut("Require_distinct_jets", self.require_unmerged_jets)
+        selector.set_multiple_columns(self.set_reco_corridor_activity)
+        selector.set_multiple_columns(self.assign_eight_recojets)
         selector.set_multiple_columns(self.set_pull_angles)
 
     def find_progenitor_quarks(self, data):
@@ -79,6 +99,11 @@ class Processor(pepper.ProcessorBasicPhysics):
         for sign in ["plus", "minus"]:
             quarks = data["gen_HP_qfromW" + sign]
             new_cols[f"W{sign}_pt"] = (quarks[:, 0] + quarks[:, 1]).pt
+        # Same for the Higgs, which only exists in ttH. pad_none keeps one
+        # slot per event so the column has a value, None, everywhere else.
+        b_h = ak.firsts(ak.pad_none(data["gen_HP_bfromH"], 1, axis=1))
+        bbar_h = ak.firsts(ak.pad_none(data["gen_HP_bbarfromH"], 1, axis=1))
+        new_cols["H_pt"] = (b_h + bbar_h).pt
         return new_cols
 
     def require_HP_genparts(self, data):
@@ -202,6 +227,9 @@ class Processor(pepper.ProcessorBasicPhysics):
         new_cols["jet_from_HP_bbar"] = ak.drop_none(data["gen_HP_bbar"].nearest(jets, threshold=0.3))
         new_cols["jet_from_HP_qfromWplus"] = ak.drop_none(data["gen_HP_qfromWplus"].nearest(jets, threshold=0.3))
         new_cols["jet_from_HP_qfromWminus"] = ak.drop_none(data["gen_HP_qfromWminus"].nearest(jets, threshold=0.3))
+        # Empty in ttbar
+        new_cols["jet_from_HP_bfromH"] = ak.drop_none(data["gen_HP_bfromH"].nearest(jets, threshold=0.3))
+        new_cols["jet_from_HP_bbarfromH"] = ak.drop_none(data["gen_HP_bbarfromH"].nearest(jets, threshold=0.3))
         return new_cols
 
     @staticmethod
@@ -233,14 +261,17 @@ class Processor(pepper.ProcessorBasicPhysics):
         true_partner = ak.where(pos % 2 == 0, pos + 1, pos - 1)
         return {"n_correct_connections": ak.sum(connected == true_partner, axis=1)}
 
-    # Corridor between two jets: the rectangle in the (rapidity, phi) plane
-    # spanning centre to centre, of half width `radius`, with the parts that
-    # fall inside either jet cone removed.
+    # Corridor between two jets, in the (rapidity, phi) plane. Two shapes are
+    # compared:
+    #   "ctr"  the rectangle spanning centre to centre, minus the parts inside
+    #          either jet cone
+    #   "edge" the rectangle running from one cone edge to the other, which is
+    #          what was used before
     jet_radius = 0.4
     corridor_radii = [0.2, 0.3, 0.4]
-    # Two jets barely further apart than 2 * jet_radius leave only a sliver of
-    # corridor, whose area divides into a meaningless density. Require a
-    # sensible minimum so those pairs are dropped rather than blowing up.
+    corridor_definitions = ["ctr", "edge"]
+    # A pair barely wider than two jet radii leaves a sliver whose area makes
+    # the density meaningless, so require a sensible minimum
     corridor_min_area = 0.05
     corridor_use_rapidity = True
     # Gen jets are clustered without neutrinos, so leave them out of the
@@ -253,11 +284,11 @@ class Processor(pepper.ProcessorBasicPhysics):
         return "r%02d" % round(radius * 10)
 
     def cone_overlap_area(self, radius):
-        """Area a jet cone takes out of one end of the corridor.
+        """Area a jet cone takes out of one end of a centre to centre corridor.
 
         The cone reaches from the centre, so half of it lies inside the
-        rectangle. If the corridor is narrower than the jet it only cuts a
-        slice out of that half disc.
+        rectangle. A corridor narrower than the jet only cuts a slice out of
+        that half disc.
         """
         jet_r = self.jet_radius
         if radius >= jet_r:
@@ -265,136 +296,157 @@ class Processor(pepper.ProcessorBasicPhysics):
         return (radius * np.sqrt(jet_r**2 - radius**2)
                 + jet_r**2 * np.arcsin(radius / jet_r))
 
+    def corridor_area(self, definition, radius, length):
+        if definition == "edge":
+            return 2 * radius * (length - 2 * self.jet_radius)
+        return 2 * radius * length - 2 * self.cone_overlap_area(radius)
+
     def corridor_coord(self, obj):
         return obj.rapidity if self.corridor_use_rapidity else obj.eta
 
     def corridor_geometry(self, jet_a, dy, dphi, length, obj_y, obj_phi):
-        """Position of objects relative to the line joining the two jets.
-
-        Returns the distance along that line, the perpendicular distance from
-        it, and whether the object is between the two centres and outside both
-        jet cones. The width cut is left out so that several corridor radii
-        can reuse the same geometry.
-        """
+        """Distance along the line joining the two jets and perpendicular to
+        it. Independent of the corridor radius and shape, so worked out once."""
         vy = obj_y - self.corridor_coord(jet_a)
         vphi = self.rectify_angle(obj_phi - jet_a.phi)
         along = (vy * dy + vphi * dphi) / length
         across = abs(vy * dphi - vphi * dy) / length
-        in_span = ((along > 0) & (along < length)
-                   & (np.sqrt(along**2 + across**2) > self.jet_radius)
-                   & (np.sqrt((length - along)**2 + across**2)
-                      > self.jet_radius))
-        return across, in_span
+        return along, across
+
+    def span_mask(self, definition, along, across, length):
+        """Whether an object is lengthwise inside the corridor, ignoring width"""
+        if definition == "edge":
+            return ((along > self.jet_radius)
+                    & (along < length - self.jet_radius))
+        return ((along > 0) & (along < length)
+                & (np.sqrt(along**2 + across**2) > self.jet_radius)
+                & (np.sqrt((length - along)**2 + across**2) > self.jet_radius))
+
+    # In the order corridor_activity returns them
+    corridor_observables = ["ptdens", "dijet", "capsule", "vetoed", "wpt"]
+    # For the edge definition only the density is kept, it exists purely to
+    # compare shapes against the centre to centre one
+    corridor_edge_observables = ["ptdens"]
 
     def corridor_activity(self, jet_a, jet_b, cands, cand_y, jets, jet_y,
                           wpt=None):
-        """Corridor quantities for every radius in ``corridor_radii``.
+        """Corridor quantities for every shape and radius.
 
-        Returns a dict of radius to (pt per unit area, mass of the two jets,
-        mass of the two jets plus the corridor, veto flag, W pt). Pairs whose
-        corridor contains another jet are vetoed, as are pairs too close
-        together to have a corridor at all.
-
-        ``wpt`` is the W transverse momentum to bin this pair by, for the
-        colour connected pairs where there is one. Pairs without a W fall back
-        to the transverse momentum of the pair itself.
+        Returns a dict of (definition, radius) to (pt per unit area, mass of
+        the two jets, mass of the two jets plus the corridor, veto flag, W pt).
+        Pairs whose corridor holds another jet are vetoed, as are pairs too
+        close together to leave a usable corridor.
         """
         dy = self.corridor_coord(jet_b) - self.corridor_coord(jet_a)
         dphi = self.rectify_angle(jet_b.phi - jet_a.phi)
         length = np.sqrt(dy**2 + dphi**2)
-        # The geometry does not depend on the corridor radius, so it is worked
-        # out once and only the width cut is applied per radius
-        cand_across, cand_in_span = self.corridor_geometry(
+        cand_along, cand_across = self.corridor_geometry(
             jet_a, dy, dphi, length, cand_y, cands.phi)
-        jet_across, jet_in_span = self.corridor_geometry(
+        jet_along, jet_across = self.corridor_geometry(
             jet_a, dy, dphi, length, jet_y, jets.phi)
         dijet = jet_a + jet_b
-        # Cones that overlap each other would be subtracted twice
         cones_apart = length > 2 * self.jet_radius
         if wpt is None:
             wpt = dijet.pt
 
         out = {}
-        for radius in self.corridor_radii:
-            sel = cands[cand_in_span & (cand_across < radius)]
-            px, py = ak.sum(sel.px, axis=1), ak.sum(sel.py, axis=1)
-            pz, energy = ak.sum(sel.pz, axis=1), ak.sum(sel.energy, axis=1)
-            area = (2 * radius * length - 2 * self.cone_overlap_area(radius))
-            has_corridor = cones_apart & (area > self.corridor_min_area)
-            # Never divide by a vanishing area, those pairs are dropped anyway
-            ptdens = ak.sum(sel.pt, axis=1) / ak.where(
-                area > self.corridor_min_area, area, 1.)
-            # Invariant mass is not additive, so the capsule has to be built
-            # from the four-momenta rather than by combining masses
-            capsule = np.sqrt(np.maximum(
-                (dijet.energy + energy)**2 - (dijet.px + px)**2
-                - (dijet.py + py)**2 - (dijet.pz + pz)**2, 0))
-            # A third jet inside the corridor spoils the measurement. The two
-            # jets of the pair sit at the ends, outside their own cones, so
-            # they never veto themselves.
-            n_other = ak.sum(jet_in_span & (jet_across < radius), axis=1)
-            vetoed = n_other > 0
-            # fill_none so that a pair with a missing jet, which only happens
-            # for the Higgs pair outside ttH, simply drops out
-            keep = ak.fill_none(has_corridor & ~vetoed, False)
-            has = ak.fill_none(has_corridor, False)
-            out[radius] = (
-                ak.mask(ptdens, keep), ak.mask(dijet.mass, keep),
-                ak.mask(capsule, keep),
-                ak.mask(ak.values_astype(ak.fill_none(vetoed, False),
-                                         np.int64), has),
-                ak.mask(wpt, keep))
+        for definition in self.corridor_definitions:
+            cand_span = self.span_mask(definition, cand_along, cand_across,
+                                       length)
+            jet_span = self.span_mask(definition, jet_along, jet_across,
+                                      length)
+            for radius in self.corridor_radii:
+                sel = cands[cand_span & (cand_across < radius)]
+                px, py = ak.sum(sel.px, axis=1), ak.sum(sel.py, axis=1)
+                pz = ak.sum(sel.pz, axis=1)
+                energy = ak.sum(sel.energy, axis=1)
+                area = self.corridor_area(definition, radius, length)
+                big_enough = area > self.corridor_min_area
+                # Never divide by a vanishing area, those pairs are dropped
+                ptdens = ak.sum(sel.pt, axis=1) / ak.where(big_enough, area, 1.)
+                # Invariant mass is not additive, so the capsule is built from
+                # the four-momenta rather than by combining masses
+                capsule = np.sqrt(np.maximum(
+                    (dijet.energy + energy)**2 - (dijet.px + px)**2
+                    - (dijet.py + py)**2 - (dijet.pz + pz)**2, 0))
+                n_other = ak.sum(jet_span & (jet_across < radius), axis=1)
+                vetoed = n_other > 0
+                has_corridor = ak.fill_none(cones_apart & big_enough, False)
+                keep = ak.fill_none(has_corridor & ~vetoed, False)
+                out[(definition, radius)] = (
+                    ak.mask(ptdens, keep), ak.mask(dijet.mass, keep),
+                    ak.mask(capsule, keep),
+                    ak.mask(ak.values_astype(ak.fill_none(vetoed, False),
+                                             np.int64), has_corridor),
+                    ak.mask(wpt, keep))
         return out
 
-    # In the order corridor_activity returns them
-    corridor_observables = ["ptdens", "dijet", "capsule", "vetoed", "wpt"]
-
-    def set_corridor_activity(self, data):
-        """Corridor quantities for colour connected pairs and for every kind
-        of unconnected pair, at each corridor radius."""
-        cands = data["GenCands"]
+    def corridor_inputs(self, data, level):
+        """Candidates and jets to build corridors from, at gen or reco level"""
+        if level == "gen":
+            cands, jets = data["GenCands"], data["GenJet"]
+        else:
+            cands, jets = data["PFCands"], data["Jet"]
         if self.corridor_exclude_neutrinos and "pdgId" in cands.fields:
             pdg = abs(cands.pdgId)
             cands = cands[(pdg != 12) & (pdg != 14) & (pdg != 16)]
-        # Computed once rather than per pair, rapidity is not a cheap property
-        cand_y = self.corridor_coord(cands)
-        jets = data["GenJet"]
-        jet_y = self.corridor_coord(jets)
+        # Worked out once rather than per pair, rapidity is not cheap
+        return cands, self.corridor_coord(cands), jets, self.corridor_coord(jets)
 
-        w = self.get_W_genjets(data)
-        b, bbar = data["genjet_from_HP_b"][:, 0], data["genjet_from_HP_bbar"][:, 0]
-        # get_W_genjets orders the jets [W+, W+, W-, W-], so only pairs within
-        # the same W are colour connected. Everything else is a control: the
-        # cross W pairs, every b with every W jet, and b with bbar.
-        # Each entry is (jet a, jet b, W pt to bin by or None for no W)
-        # H -> bb is a colour singlet decay just like W -> qq, so it is a
-        # connected pair too. pad_none keeps one slot per event even in ttbar
-        # where these are empty, and the empty ones drop out downstream.
-        b_h = ak.firsts(ak.pad_none(data["genjet_from_HP_bfromH"], 1, axis=1))
-        bbar_h = ak.firsts(
-            ak.pad_none(data["genjet_from_HP_bbarfromH"], 1, axis=1))
-        groups = {
-            "connected": [(w[:, 0], w[:, 1], data["Wplus_pt"]),
-                          (w[:, 2], w[:, 3], data["Wminus_pt"]),
-                          (b_h, bbar_h, None)],
+    def corridor_pairs(self, data, level):
+        """The jet pairs to build corridors for, grouped by what they are.
+
+        W pairs and the H pair are colour connected, everything else is a
+        control. The Higgs entries are empty outside ttH and drop out later.
+        """
+        prefix = "genjet_from_HP_" if level == "gen" else "jet_from_HP_"
+        w = ak.concatenate([data[prefix + "qfromWplus"],
+                            data[prefix + "qfromWminus"]], axis=1)
+        b, bbar = data[prefix + "b"][:, 0], data[prefix + "bbar"][:, 0]
+        b_h = ak.firsts(ak.pad_none(data[prefix + "bfromH"], 1, axis=1))
+        bbar_h = ak.firsts(ak.pad_none(data[prefix + "bbarfromH"], 1, axis=1))
+        return {
+            "connectedW": [(w[:, 0], w[:, 1], data["Wplus_pt"]),
+                           (w[:, 2], w[:, 3], data["Wminus_pt"])],
+            "connectedH": [(b_h, bbar_h, data["H_pt"])],
             "unconnected": (
                 [(w[:, i], w[:, j], None)
                  for i, j in [(0, 2), (0, 3), (1, 2), (1, 3)]]
                 + [(q, w[:, i], None) for q in (b, bbar) for i in range(4)]
                 + [(b, bbar, None)]),
         }
+
+    def set_corridor_activity_level(self, data, level):
+        cands, cand_y, jets, jet_y = self.corridor_inputs(data, level)
+        tag = "" if level == "gen" else "reco_"
         new_cols = {}
-        for name, pairs in groups.items():
+        for name, pairs in self.corridor_pairs(data, level).items():
             results = [self.corridor_activity(a, b_, cands, cand_y, jets,
                                               jet_y, wpt)
                        for a, b_, wpt in pairs]
-            # ak.singletons drops the pairs that were vetoed or had no corridor
-            for radius in self.corridor_radii:
-                tag = self.radius_tag(radius)
-                for k, obs in enumerate(self.corridor_observables):
-                    new_cols[f"corridor_{obs}_{name}_{tag}"] = ak.concatenate(
-                        [ak.singletons(r[radius][k]) for r in results], axis=1)
+            for definition in self.corridor_definitions:
+                observables = (self.corridor_observables if definition == "ctr"
+                               else self.corridor_edge_observables)
+                for radius in self.corridor_radii:
+                    rtag = self.radius_tag(radius)
+                    for k, obs in enumerate(self.corridor_observables):
+                        if obs not in observables:
+                            continue
+                        # ak.singletons drops vetoed and missing pairs
+                        col = (f"{tag}corridor_{obs}_{name}_"
+                               f"{definition}_{rtag}")
+                        new_cols[col] = ak.concatenate(
+                            [ak.singletons(r[(definition, radius)][k])
+                             for r in results], axis=1)
         return new_cols
+
+    def set_corridor_activity(self, data):
+        """Corridor quantities from gen jets and gen candidates"""
+        return self.set_corridor_activity_level(data, "gen")
+
+    def set_reco_corridor_activity(self, data):
+        """The same from reco jets and PF candidates"""
+        return self.set_corridor_activity_level(data, "reco")
 
     # The only three ways to split four jets into two pairs. The first one is
     # the true pairing, as get_W_genjets orders the jets [W+, W+, W-, W-].
@@ -438,6 +490,96 @@ class Processor(pepper.ProcessorBasicPhysics):
                      & (ak.num(data["genjet_from_HP_bbarfromH"]) == 1))
         return {"ttH_pairing_correct":
                 ak.singletons(ak.mask(correct, has_higgs))}
+
+    # Eight jets ordered [W+, W+, W-, W-, H, H, b, bbar]. Three connected
+    # pairs are looked for and two jets are left over, since b and bbar are
+    # connected to the tops rather than to each other.
+    eight_options = eight_jet_options()
+    eight_truth = eight_options.index(([(0, 1), (2, 3), (4, 5)], 2))
+    # Radii to redo the assignment with, using capsule masses instead
+    capsule_assignment_radii = [0.2, 0.3]
+
+    def get_eight_genjets(self, data, level="gen"):
+        """The eight jets in the fixed order the options above assume"""
+        prefix = "genjet_from_HP_" if level == "gen" else "jet_from_HP_"
+        return [data[prefix + "qfromWplus"][:, 0],
+                data[prefix + "qfromWplus"][:, 1],
+                data[prefix + "qfromWminus"][:, 0],
+                data[prefix + "qfromWminus"][:, 1],
+                ak.firsts(ak.pad_none(data[prefix + "bfromH"], 1, axis=1)),
+                ak.firsts(ak.pad_none(data[prefix + "bbarfromH"], 1, axis=1)),
+                data[prefix + "b"][:, 0],
+                data[prefix + "bbar"][:, 0]]
+
+    def choose_eight(self, pair_mass):
+        """Pick the option whose three masses sit closest to their targets.
+
+        `pair_mass` maps a sorted index pair to the mass to use for it, which
+        is either the two jet mass or the capsule mass. The best option is
+        tracked as it goes rather than building all 1260 score arrays, which
+        would not fit in memory.
+        """
+        best_score = best_index = None
+        for n, (pairing, higgs) in enumerate(self.eight_options):
+            total = None
+            for m, pair in enumerate(pairing):
+                target = self.higgs_mass if m == higgs else self.w_mass
+                # A missing jet must never win, so its deviation is huge
+                dev = ak.fill_none(
+                    abs(pair_mass[tuple(sorted(pair))] - target), 1e6)
+                total = dev if total is None else total + dev
+            if best_score is None:
+                best_score = total
+                best_index = ak.zeros_like(total, dtype=np.int64)
+            else:
+                better = total < best_score
+                best_index = ak.where(better, n, best_index)
+                best_score = ak.where(better, total, best_score)
+        return best_index
+
+    def assign_eight_jets(self, data, level="gen"):
+        """Find the three connected pairs among eight jets, once from the jet
+        masses alone and once from the capsule masses at each radius."""
+        jets = self.get_eight_genjets(data, level)
+        prefix = "genjet_from_HP_" if level == "gen" else "jet_from_HP_"
+        tag = "" if level == "gen" else "reco_"
+        # Only meaningful where the Higgs jets were found, so ttH only
+        complete = ((ak.num(data[prefix + "bfromH"]) == 1)
+                    & (ak.num(data[prefix + "bbarfromH"]) == 1))
+
+        new_cols = {}
+        plain = {(i, j): (jets[i] + jets[j]).mass
+                 for i in range(8) for j in range(i + 1, 8)}
+        correct = ak.values_astype(
+            self.choose_eight(plain) == self.eight_truth, np.int64)
+        new_cols[f"{tag}eight_pairing_correct_jetmass"] = \
+            ak.singletons(ak.mask(correct, complete))
+
+        cands, cand_y, alljets, alljet_y = self.corridor_inputs(data, level)
+        for radius in self.capsule_assignment_radii:
+            capsule = {}
+            for i in range(8):
+                for j in range(i + 1, 8):
+                    out = self.corridor_activity(jets[i], jets[j], cands,
+                                                 cand_y, alljets, alljet_y)
+                    # index 2 is the capsule mass. Where there was no usable
+                    # corridor, fall back to the two jet mass so the pair is
+                    # still a candidate rather than silently disqualified.
+                    capsule[(i, j)] = ak.where(
+                        ak.is_none(out[("ctr", radius)][2]),
+                        plain[(i, j)], out[("ctr", radius)][2])
+            correct = ak.values_astype(
+                self.choose_eight(capsule) == self.eight_truth, np.int64)
+            rtag = self.radius_tag(radius)
+            new_cols[f"{tag}eight_pairing_correct_capsule_{rtag}"] = \
+                ak.singletons(ak.mask(correct, complete))
+        return new_cols
+
+    def assign_eight_genjets(self, data):
+        return self.assign_eight_jets(data, "gen")
+
+    def assign_eight_recojets(self, data):
+        return self.assign_eight_jets(data, "reco")
 
     def pair_genjets_by_mass(self, data):
         """Pick the pairing of the four W decay jets whose two invariant masses
