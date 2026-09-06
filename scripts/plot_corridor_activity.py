@@ -67,8 +67,12 @@ def radius_tag(radius):
 
 
 def integrate_categories(h, dataset=None):
-    """Sum over every category axis, keeping only the nominal systematic."""
+    """Sum over every category axis, keeping only the nominal systematic.
+    Returns None if `dataset` never filled this histogram, which happens for
+    the Higgs columns in a sample that has no Higgs."""
     if dataset is not None and "dataset" in h.axes.name:
+        if dataset not in list(h.axes["dataset"]):
+            return None
         h = h[{"dataset": dataset}]
     if "sys" in h.axes.name:
         h = h[{"sys": "nominal"}]
@@ -84,6 +88,8 @@ def load(hists, cutname, variable, dataset=None):
     if key not in hists.keys():
         return None
     h = integrate_categories(hists.load(key), dataset)
+    if h is None:
+        return None
     dense = [a for a in h.axes
              if not isinstance(a, (hist.axis.StrCategory,
                                    hist.axis.IntCategory))]
@@ -98,6 +104,8 @@ def load_2d(hists, cutname, variable, dataset=None):
     if key not in hists.keys():
         return None
     h = integrate_categories(hists.load(key), dataset)
+    if h is None:
+        return None
     names = list(h.axes.name)
     if "wpt" not in names or len(names) != 2:
         return None
@@ -322,10 +330,18 @@ def main():
 
     datasets = [None]
     if args.split_datasets:
-        first = next(k for k in hists.keys() if "corridor_" in k[1])
-        axes = hists.load(first).axes
-        if "dataset" in axes.name:
-            datasets = list(axes["dataset"])
+        # Union over the corridor histograms: the connectedH ones are filled
+        # for ttH only, so one histogram alone would not list every dataset.
+        found = []
+        for key in hists.keys():
+            if "corridor_" not in key[1]:
+                continue
+            axes = hists.load(key).axes
+            if "dataset" not in axes.name:
+                continue
+            found += [d for d in axes["dataset"] if d not in found]
+        if found:
+            datasets = found
             print(f"Making a set of plots for each of: {datasets}")
 
     for cutname, dataset in ((c, d) for c in cuts for d in datasets):

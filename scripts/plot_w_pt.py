@@ -58,8 +58,12 @@ WPT_GROUPS = [(0, 60), (60, 120), (120, 200), (200, None)]
 
 def integrate_categories(h, dataset=None):
     """Sum over every category axis, keeping only the nominal systematic.
-    If `dataset` is given, keep only that dataset instead of summing them."""
+    If `dataset` is given, keep only that dataset instead of summing them.
+    Returns None if `dataset` never filled this histogram, which happens for
+    the Higgs columns in a sample that has no Higgs."""
     if dataset is not None and "dataset" in h.axes.name:
+        if dataset not in list(h.axes["dataset"]):
+            return None
         h = h[{"dataset": dataset}]
     if "sys" in h.axes.name:
         h = h[{"sys": "nominal"}]
@@ -75,6 +79,8 @@ def load(hists, cutname, variable, dataset=None):
     if key not in hists.keys():
         return None
     h = integrate_categories(hists.load(key), dataset)
+    if h is None:
+        return None
     dense = [a for a in h.axes
              if not isinstance(a, (hist.axis.StrCategory,
                                    hist.axis.IntCategory))]
@@ -90,6 +96,8 @@ def load_2d(hists, cutname, variable, dataset=None):
     if key not in hists.keys():
         return None
     h = integrate_categories(hists.load(key), dataset)
+    if h is None:
+        return None
     if set(h.axes.name) != {"wpt", "phi"}:
         return None
     h = h.project("wpt", "phi")
@@ -261,10 +269,18 @@ def main():
     # None means sum over all datasets
     datasets = [None]
     if args.split_datasets:
-        first = next(k for k in hists.keys() if k[1] in wanted)
-        axes = hists.load(first).axes
-        if "dataset" in axes.name:
-            datasets = list(axes["dataset"])
+        # Union over the histograms used here: H_pt is filled for ttH only,
+        # so one histogram alone would not list every dataset.
+        found = []
+        for key in hists.keys():
+            if key[1] not in wanted:
+                continue
+            axes = hists.load(key).axes
+            if "dataset" not in axes.name:
+                continue
+            found += [d for d in axes["dataset"] if d not in found]
+        if found:
+            datasets = found
             print(f"Making a plot for each of: {datasets}")
 
     for cutname, dataset in ((c, d) for c in cuts for d in datasets):

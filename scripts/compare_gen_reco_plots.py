@@ -64,8 +64,13 @@ def integrate_categories(h, dataset=None):
 
     For the `sys` axis only the nominal is kept, if it is present. If
     `dataset` is given, only that dataset is kept instead of summing them.
+
+    Returns None if `dataset` never filled this histogram, which happens for
+    the Higgs columns in a sample that has no Higgs.
     """
     if dataset is not None and "dataset" in h.axes.name:
+        if dataset not in list(h.axes["dataset"]):
+            return None
         h = h[{"dataset": dataset}]
     if "sys" in h.axes.name:
         h = h[{"sys": "nominal"}]
@@ -251,9 +256,17 @@ def main():
     # Which datasets to make plots for. None means sum over all of them.
     datasets = [None]
     if args.split_datasets:
-        first = hists.load(todo[0][2][BASE_PREFIX])
-        if "dataset" in first.axes.name:
-            datasets = list(first.axes["dataset"])
+        # Union over everything to be plotted: the Higgs histograms are
+        # filled for ttH only, so the first one alone would not list every
+        # dataset and the tt only plots would silently go missing.
+        found = []
+        for _, _, keys in todo:
+            axes = hists.load(keys[BASE_PREFIX]).axes
+            if "dataset" not in axes.name:
+                continue
+            found += [d for d in axes["dataset"] if d not in found]
+        if found:
+            datasets = found
             print(f"Making a set of plots for each of: {datasets}")
 
     for cutname, variable, keys in tqdm.tqdm(todo):
@@ -267,6 +280,8 @@ def main():
                 if prefix not in keys:
                     continue
                 h = integrate_categories(hists.load(keys[prefix]), dataset)
+                if h is None:
+                    continue
                 axis = get_dense_axis(h)
                 if axis is None:
                     print(f"Skipping {prefix}{variable} ({cutname}): not "

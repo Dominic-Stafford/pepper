@@ -64,6 +64,8 @@ def load_binary(hists, cutname, variable, dataset=None):
     if key not in hists.keys():
         return None
     h = integrate_categories(hists.load(key), dataset)
+    if h is None:
+        return None
     counts, variances = h.values(), h.variances()
     total = counts.sum()
     if total <= 0 or len(counts) != 2:
@@ -75,8 +77,12 @@ def load_binary(hists, cutname, variable, dataset=None):
 
 def integrate_categories(h, dataset=None):
     """Sum over every category axis, keeping only the nominal systematic.
-    If `dataset` is given, keep only that dataset instead of summing them."""
+    If `dataset` is given, keep only that dataset instead of summing them.
+    Returns None if `dataset` never filled this histogram, which happens for
+    the Higgs columns in a sample that has no Higgs."""
     if dataset is not None and "dataset" in h.axes.name:
+        if dataset not in list(h.axes["dataset"]):
+            return None
         h = h[{"dataset": dataset}]
     if "sys" in h.axes.name:
         h = h[{"sys": "nominal"}]
@@ -279,10 +285,21 @@ def main():
     # None means sum over all datasets
     datasets = [None]
     if args.split_datasets:
-        first = next(k for k in hists.keys() if k[1] in variables)
-        axes = hists.load(first).axes
-        if "dataset" in axes.name:
-            datasets = list(axes["dataset"])
+        # Take the union over the histograms this script uses: some of them
+        # are filled for only one sample, so one histogram alone would not
+        # list every dataset.
+        wanted = set(variables) | {p + v for p in ("", "reco_")
+                                   for v, _, _ in EIGHT_METHODS}
+        found = []
+        for key in hists.keys():
+            if key[1] not in wanted:
+                continue
+            axes = hists.load(key).axes
+            if "dataset" not in axes.name:
+                continue
+            found += [d for d in axes["dataset"] if d not in found]
+        if found:
+            datasets = found
             print(f"Making a set of plots for each of: {datasets}")
 
     for cutname, dataset in ((c, d) for c in cuts for d in datasets):
@@ -294,6 +311,8 @@ def main():
             if key not in hists.keys():
                 continue
             h = integrate_categories(hists.load(key), dataset)
+            if h is None:
+                continue
             counts, variances = h.values(), h.variances()
             if len(counts) != N_JETS + 1:
                 print(f"Skipping {variable} ({cutname}): expected "

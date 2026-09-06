@@ -38,8 +38,12 @@ def group_label(lo, hi):
 
 
 def integrate_categories(h, dataset=None):
-    """Sum over every category axis, keeping only the nominal systematic."""
+    """Sum over every category axis, keeping only the nominal systematic.
+    Returns None if `dataset` never filled this histogram, which happens for
+    the Higgs columns in a sample that has no Higgs."""
     if dataset is not None and "dataset" in h.axes.name:
+        if dataset not in list(h.axes["dataset"]):
+            return None
         h = h[{"dataset": dataset}]
     if "sys" in h.axes.name:
         h = h[{"sys": "nominal"}]
@@ -58,6 +62,8 @@ def wpt_totals(hists, cutname, dataset):
         if key not in hists.keys():
             continue
         h = integrate_categories(hists.load(key), dataset)
+        if h is None:
+            continue
         dense = [a for a in h.axes
                  if not isinstance(a, (hist.axis.StrCategory,
                                        hist.axis.IntCategory))]
